@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -46,6 +48,8 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -57,10 +61,22 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
+import org.jetbrains.compose.resources.stringResource
 import ovh.verbois.retrohub.AppContainer
 import ovh.verbois.retrohub.account.AuthState
+import ovh.verbois.retrohub.account.QrCameraException
+import ovh.verbois.retrohub.account.pairingCodeFromQr
 import ovh.verbois.retrohub.api.ApiException
+import ovh.verbois.retrohub.resources.Res
+import ovh.verbois.retrohub.resources.action_start
+import ovh.verbois.retrohub.resources.qr_camera_permission
+import ovh.verbois.retrohub.resources.qr_invalid
+import ovh.verbois.retrohub.resources.qr_opening
+import ovh.verbois.retrohub.resources.qr_scan
+import ovh.verbois.retrohub.resources.welcome_description
+import ovh.verbois.retrohub.resources.welcome_title
 import ovh.verbois.retrohub.ui.components.AutoFocus
 import ovh.verbois.retrohub.ui.components.FilterChip
 import ovh.verbois.retrohub.ui.components.GlassButton
@@ -107,14 +123,22 @@ fun Onboarding(container: AppContainer, state: AuthState.SignedOut) {
     }
     LaunchedEffect(Unit) { if (step == Step.LOGIN) checkServer(next = false) }
 
-    Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing).imePadding()) {
+    Box(
+        Modifier.fillMaxSize().background(
+            Brush.verticalGradient(listOf(Palette.SkyTop, Palette.SkyLow)),
+        ).windowInsetsPadding(WindowInsets.safeDrawing).imePadding(),
+    ) {
         BoxWithConstraints(Modifier.fillMaxSize()) {
+            if (step == Step.WELCOME) {
+                WelcomeScreen { step = Step.SERVER }
+                return@BoxWithConstraints
+            }
             val wide = maxWidth > maxHeight && maxWidth > 640.dp
             val brand: @Composable (Modifier) -> Unit = { modifier -> Brand(modifier, compact = !wide && step != Step.WELCOME) }
             val form: @Composable () -> Unit = {
                 AnimatedContent(step, transitionSpec = { fadeIn() togetherWith fadeOut() }, label = "step") { current ->
                     when (current) {
-                        Step.WELCOME -> WelcomeStep { step = Step.SERVER }
+                        Step.WELCOME -> Unit
 
                         Step.SERVER ->
                             ServerStep(server, {
@@ -190,16 +214,41 @@ private fun Brand(modifier: Modifier, compact: Boolean) {
 @Composable
 private fun FormCard(content: @Composable () -> Unit) {
     GlassPanel(Modifier.widthIn(max = 480.dp).fillMaxWidth()) {
-        Column(Modifier.padding(22.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) { content() }
+        Column(Modifier.background(MaterialTheme.colorScheme.surface).padding(22.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) { content() }
     }
 }
 
 @Composable
-private fun WelcomeStep(onStart: () -> Unit) {
+fun WelcomeScreen(onStart: () -> Unit) {
     val focus = remember { FocusRequester() }
-    FormCard {
-        Text("Bienvenue", style = MaterialTheme.typography.headlineMedium)
-        PrimaryButton("Commencer", onStart, Modifier.fillMaxWidth().focusRequester(focus), icon = Lucide.ChevronRight)
+    Column(
+        Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Palette.SkyTop, Palette.SkyLow)))
+            .verticalScroll(rememberScrollState()).padding(horizontal = 32.dp, vertical = 32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(24.dp, Alignment.CenterVertically),
+    ) {
+        Logo(88.dp)
+        Text(
+            stringResource(Res.string.welcome_title),
+            Modifier.widthIn(max = 480.dp).semantics {
+                heading()
+            },
+            style = MaterialTheme.typography.displayMedium,
+            textAlign = TextAlign.Center,
+        )
+        Text(
+            stringResource(Res.string.welcome_description),
+            Modifier.widthIn(max = 360.dp),
+            style = MaterialTheme.typography.bodyLarge,
+            color = Palette.TextDim,
+            textAlign = TextAlign.Center,
+        )
+        PrimaryButton(
+            stringResource(Res.string.action_start),
+            onStart,
+            Modifier.widthIn(max = 360.dp).fillMaxWidth().focusRequester(focus),
+            icon = Lucide.ChevronRight,
+        )
     }
     AutoFocus(focus)
 }
@@ -251,6 +300,7 @@ private fun ServerStep(server: String, onChange: (String) -> Unit, checking: Boo
     AutoFocus(focus)
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun LoginStep(container: AppContainer, server: String, message: String?, onChangeServer: () -> Unit) {
     var withCode by remember { mutableStateOf(true) }
@@ -260,9 +310,12 @@ private fun LoginStep(container: AppContainer, server: String, message: String?,
     var password by remember { mutableStateOf("") }
     var device by remember { mutableStateOf(container.settings.settings.value.deviceName.ifBlank { container.platform.defaultDeviceName }) }
     var busy by remember { mutableStateOf(false) }
+    var scanning by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
     val focus = remember { FocusRequester() }
+    val invalidQr = stringResource(Res.string.qr_invalid)
+    val cameraDenied = stringResource(Res.string.qr_camera_permission)
     fun submit() {
         busy = true
         error = null
@@ -301,7 +354,7 @@ private fun LoginStep(container: AppContainer, server: String, message: String?,
             GlassButton("Changer", onChangeServer, height = 38.dp)
         }
         message?.let { MessageBanner(it, MessageKind.WARNING, Modifier.fillMaxWidth()) }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             FilterChip("Code d’appairage", withCode, {
                 withCode = true
                 error = null
@@ -312,6 +365,36 @@ private fun LoginStep(container: AppContainer, server: String, message: String?,
             })
         }
         if (withCode) {
+            if (container.platform.canScanQrCode) {
+                GlassButton(
+                    stringResource(if (scanning) Res.string.qr_opening else Res.string.qr_scan),
+                    {
+                        if (!scanning) {
+                            scope.launch {
+                                scanning = true
+                                error = null
+                                try {
+                                    container.platform.scanQrCode()?.let { payload ->
+                                        val scanned = pairingCodeFromQr(payload)
+                                        if (scanned == null) error = invalidQr else codeField = TextFieldValue(scanned, TextRange(scanned.length))
+                                    }
+                                } catch (e: CancellationException) {
+                                    throw e
+                                } catch (e: QrCameraException) {
+                                    error = cameraDenied
+                                } catch (e: Exception) {
+                                    error = cameraDenied
+                                } finally {
+                                    scanning = false
+                                }
+                            }
+                        }
+                    },
+                    Modifier.fillMaxWidth(),
+                    icon = Lucide.Camera,
+                    enabled = !busy && !scanning,
+                )
+            }
             Text(
                 "Sur le web : Paramètres → Applications et appareils → Relier un appareil. Le code est valable 10 minutes.",
                 style = MaterialTheme.typography.bodyMedium,

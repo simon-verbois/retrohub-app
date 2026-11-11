@@ -19,14 +19,21 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import coil3.ImageLoader
 import coil3.compose.setSingletonImageLoaderFactory
 import coil3.disk.DiskCache
 import coil3.network.ktor3.KtorNetworkFetcherFactory
 import coil3.request.crossfade
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import ovh.verbois.retrohub.AppContainer
 import ovh.verbois.retrohub.account.AuthState
+import ovh.verbois.retrohub.api.FEATURE_LIBRARY_EVENTS
 import ovh.verbois.retrohub.ui.components.AnimatedBackground
 import ovh.verbois.retrohub.ui.components.LocalServer
 import ovh.verbois.retrohub.ui.components.PinDialog
@@ -46,7 +53,7 @@ import ovh.verbois.retrohub.ui.theme.consoleColor
 
 /** Point d’entrée de l’interface partagée (Android aujourd’hui, iOS demain). */
 @Composable
-fun RetroHubRoot(container: AppContainer, onController: (UiController) -> Unit = {}) {
+fun RetroHubRoot(container: AppContainer, onExit: () -> Unit = {}, onController: (UiController) -> Unit = {}) {
     val scope = rememberCoroutineScope()
     val controller = remember { UiController(container, scope).also(onController) }
     setSingletonImageLoaderFactory { context ->
@@ -58,6 +65,23 @@ fun RetroHubRoot(container: AppContainer, onController: (UiController) -> Unit =
     }
     val auth by container.account.auth.collectAsState()
     val settings by container.settings.settings.collectAsState()
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    val activeAccount = (auth as? AuthState.SignedIn)?.account
+    val libraryVisible = settings.setupDone && when (controller.nav.current) {
+        Route.Home, is Route.Library, Route.Favorites, Route.Downloads, Route.Search -> true
+        else -> false
+    }
+    LaunchedEffect(activeAccount?.server, activeAccount?.userId, activeAccount?.deviceId, libraryVisible, lifecycle) {
+        if (activeAccount != null && libraryVisible) {
+            lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+                combine(container.platform.online, container.serverStatus) { online, status ->
+                    online to (status?.features?.contains(FEATURE_LIBRARY_EVENTS) == true)
+                }.distinctUntilChanged().collectLatest { (online, events) ->
+                    if (online) container.foregroundLibrary.run(useEvents = events)
+                }
+            }
+        }
+    }
     RetroHubTheme(settings.theme) {
         val sound = if (settings.navigationSounds) ({ container.platform.playClick() }) else null
         val density = LocalDensity.current
@@ -76,6 +100,19 @@ fun RetroHubRoot(container: AppContainer, onController: (UiController) -> Unit =
                         animated = settings.animatedBackground && !settings.reduceMotion && !container.platform.reducedMotion,
                         hero = controller.backdrop.hero,
                     )
+                    if (controller.exitRequested) {
+                        ovh.verbois.retrohub.ui.components.ConfirmDialog(
+                            "Quitter RetroHub ?",
+                            "Votre progression est conservée.",
+                            "Quitter",
+                            onConfirm = {
+                                controller.exitRequested = false
+                                onExit()
+                            },
+                            onDismiss = { controller.exitRequested = false },
+                            focusDismiss = true,
+                        )
+                    }
                     when (val state = auth) {
                         AuthState.Loading -> Box(Modifier.fillMaxSize())
 
@@ -116,6 +153,10 @@ private fun Screen(controller: UiController, route: Route) {
         Route.Favorites -> LibraryScreen(controller, null, favoritesOnly = true)
 
         Route.Downloads -> DownloadsScreen(controller)
+
+        Route.Search, Route.User -> Unit
+
+        // Rendered by the shell, with the section bar.
 
         is Route.Conflict -> WithBack(controller) { ConflictScreen(controller, route.gameId) }
 

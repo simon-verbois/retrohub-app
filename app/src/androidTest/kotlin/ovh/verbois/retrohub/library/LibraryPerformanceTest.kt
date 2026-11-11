@@ -7,8 +7,9 @@ import androidx.test.filters.SdkSuppress
 import androidx.test.platform.app.InstrumentationRegistry
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import mockwebserver3.MockResponse
@@ -80,8 +81,8 @@ class LibraryPerformanceTest {
     }
 
     @After
-    fun close() {
-        scope.cancel()
+    fun close() = runBlocking {
+        scope.coroutineContext[Job]!!.cancelAndJoin()
         db.close()
         http.close()
         server.close()

@@ -112,6 +112,35 @@ class RetroHubApi(
         request(HttpMethod.Delete, api("/auth/token")) { }
     }
 
+    /** Consume the native event stream inside the response scope so cancellation closes it. */
+    suspend fun libraryEvents(lastEventId: String?, receive: suspend (LibraryEvent) -> Unit) {
+        val headers = listOfNotNull(
+            HttpHeaders.Accept to "text/event-stream",
+            lastEventId?.takeIf { it.length <= 256 }?.let { "Last-Event-ID" to it },
+        )
+        request(HttpMethod.Get, api("/native/events"), headers = headers, streaming = true) { response ->
+            val type = response.headers[HttpHeaders.ContentType]?.substringBefore(';')?.trim()
+            if (response.status.value != 200 || !type.equals("text/event-stream", ignoreCase = true)) {
+                throw ApiException.UnsupportedServer("Le serveur ne propose pas les mises à jour instantanées.")
+            }
+            readLibraryEvents(response.bodyAsChannel(), lastEventId, receive) {
+                session.onUnauthorized("Cet appareil n’est plus connecté. Reliez-le de nouveau à votre compte.")
+            }
+        }
+    }
+
+    /** Proposed routes: callers require the account_avatars capability (server request 8). */
+    suspend fun avatarCatalog(): AvatarCatalog = get("/account/avatars", AvatarCatalog.serializer())
+
+    suspend fun accountAvatar(): AvatarSelection = get("/account/avatar", AvatarSelection.serializer())
+
+    suspend fun updateAvatar(avatarId: String?): AvatarSelection {
+        // Keep an explicit null for reset even though other API models omit nullable fields.
+        val value = avatarId?.let { JsonPrimitive(it) } ?: kotlinx.serialization.json.JsonNull
+        val body = JsonObject(mapOf("avatar_id" to value))
+        return decode(request(HttpMethod.Put, api("/account/avatar"), json = body.toString()) { it.bodyAsText() }, AvatarSelection.serializer())
+    }
+
     suspend fun devices(): List<DeviceItem> = get("/account/devices", kotlinx.serialization.builtins.ListSerializer(DeviceItem.serializer()))
 
     // ---- Compte ----
@@ -306,6 +335,7 @@ class RetroHubApi(
         json: String? = null,
         body: OutgoingContent? = null,
         okStatuses: Set<Int> = emptySet(),
+        streaming: Boolean = false,
         handle: suspend (HttpResponse) -> T,
     ): T {
         var retries = 0
@@ -329,7 +359,7 @@ class RetroHubApi(
                     }
                 }
             } catch (error: ApiException.Maintenance) {
-                if (retries >= maxMaintenanceRetries || error.retryAfterSeconds > maxInlineWaitSeconds) throw error
+                if (streaming || retries >= maxMaintenanceRetries || error.retryAfterSeconds > maxInlineWaitSeconds) throw error
                 retries++
                 wait(error.retryAfterSeconds)
             } catch (error: ApiException) {
@@ -375,7 +405,7 @@ class RetroHubApi(
             code == 409 && detail is JsonObject && detail["current_revision"] != null ->
                 ApiException.SaveConflict(detail["current_revision"]!!.jsonPrimitive.intOrNull ?: 0, message)
 
-            else -> ApiException.Http(code, message)
+            else -> ApiException.Http(code, message, response.headers[HttpHeaders.RetryAfter]?.trim()?.toLongOrNull())
         }
     }
 

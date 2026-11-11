@@ -185,6 +185,7 @@ data class AppSettings(
     // Affichage
     val orientation: Orientation = Orientation.AUTO,
     val portraitPosition: PortraitPosition = PortraitPosition.TOP,
+    val useDisplayCutout: Boolean = false,
     // Commandes
     val rumble: Boolean = true,
     val menuShortcut: MenuShortcut = MenuShortcut.SELECT_START,

@@ -70,6 +70,23 @@ class SyncCoordinator(
 
     fun markOnline() = state.update { if (it.phase == SyncPhase.OFFLINE) it.copy(phase = SyncPhase.IDLE) else it }
 
+    /** A cheap foreground catalogue check, serialized with save synchronization. */
+    suspend fun refreshLibrary() = lock.withLock {
+        try {
+            library.refresh()
+            state.update { it.copy(phase = SyncPhase.IDLE, message = null) }
+        } catch (error: ApiException) {
+            val phase = when (error) {
+                is ApiException.Unauthorized -> SyncPhase.SIGNED_OUT
+                is ApiException.Offline -> SyncPhase.OFFLINE
+                is ApiException.Maintenance -> SyncPhase.MAINTENANCE
+                else -> SyncPhase.ERROR
+            }
+            state.update { it.copy(phase = phase, message = error.message) }
+            throw error
+        }
+    }
+
     suspend fun syncNow(): SyncOutcome = lock.withLock {
         state.update { it.copy(phase = SyncPhase.SYNCING, message = null) }
         val outcome =

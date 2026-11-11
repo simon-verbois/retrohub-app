@@ -30,6 +30,10 @@ interface Platform {
     val online: StateFlow<Boolean>
     val gamepadConnected: StateFlow<Boolean>
     val deviceClass: DeviceClass
+    val canScanQrCode: Boolean get() = false
+
+    /** Read a QR code locally. Null means that the user dismissed the camera. */
+    suspend fun scanQrCode(): String? = null
 
     /** Le système demande de supprimer les animations (accessibilité). */
     val reducedMotion: Boolean

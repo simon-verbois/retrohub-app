@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- Referenced through the embedded scanner library resource aliases. -->
+    <string name="qr_camera_prompt">Placez le code QR d’appairage dans le cadre. Retour pour annuler.</string>
+    <string name="zxing_msg_camera_framework_bug" tools:ignore="UnusedResources">Impossible d’ouvrir la caméra. Fermez les autres applications qui l’utilisent, puis réessayez.</string>
+    <string name="zxing_button_ok" tools:ignore="UnusedResources">Retour</string>
+    <string name="zxing_msg_default_status" tools:ignore="UnusedResources">Placez le code QR dans le cadre.</string>
+</resources>

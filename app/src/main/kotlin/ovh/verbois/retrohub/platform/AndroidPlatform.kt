@@ -32,6 +32,10 @@ import ovh.verbois.retrohub.work.SyncWorker
 import java.io.File
 
 class AndroidPlatform(private val context: Context) : Platform {
+    internal var qrScanner: (suspend () -> String?)? = null
+    override val canScanQrCode: Boolean get() = qrScanner != null &&
+        context.packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_CAMERA_ANY)
+    override suspend fun scanQrCode(): String? = qrScanner?.invoke()
     override val name = "android"
     override val appVersion: String = BuildConfig.VERSION_NAME
     override val defaultDeviceName: String =

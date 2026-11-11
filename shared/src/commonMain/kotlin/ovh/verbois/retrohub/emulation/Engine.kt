@@ -50,13 +50,16 @@ interface EmulatorEngine {
 
     fun resume()
 
+    /** Capture any core-specific restart checkpoint before restoring the player's save. */
+    suspend fun prepareReset() = Unit
+
     suspend fun saveState(): ByteArray?
 
     suspend fun loadState(data: ByteArray): Boolean
 
     suspend fun saveSram(): ByteArray?
 
-    fun reset()
+    suspend fun reset()
 
     fun setFastForward(speed: Int)
 

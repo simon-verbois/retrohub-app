@@ -12,6 +12,10 @@ sealed interface Route {
 
     data object Downloads : Route
 
+    data object Search : Route
+
+    data object User : Route
+
     data class Conflict(val gameId: String) : Route
 
     data class Progression(val gameId: String) : Route
@@ -46,23 +50,22 @@ enum class SettingsPage(val title: String) {
     CHANGELOG("Nouveautés"),
 }
 
-/**
- * Les sections, parcourues avec LB / RB comme sur une console. Seules Accueil et Téléchargés sont
- * des onglets : la bibliothèque s’ouvre par la tuile en fin de rangée, les favoris par le cœur.
- */
+/** Sections visibles, dans l’ordre des boutons LB / RB. La bibliothèque prolonge l’accueil. */
 enum class Section(val title: String, val route: Route, val tab: Boolean = true) {
     HOME("Accueil", Route.Home),
-    LIBRARY("Bibliothèque", Route.Library(), tab = false),
-    FAVORITES("Favoris", Route.Favorites, tab = false),
+    FAVORITES("Favoris", Route.Favorites),
     DOWNLOADS("Téléchargés", Route.Downloads),
+    SEARCH("Rechercher", Route.Search, tab = false),
+    USER("Profil", Route.User, tab = false),
     ;
 
     companion object {
         fun of(route: Route): Section? = when (route) {
-            Route.Home -> HOME
-            is Route.Library -> LIBRARY
+            Route.Home, is Route.Library -> HOME
             Route.Favorites -> FAVORITES
             Route.Downloads -> DOWNLOADS
+            Route.Search -> SEARCH
+            Route.User -> USER
             else -> null
         }
     }
@@ -90,9 +93,9 @@ class Navigator(start: Route = Route.Home) {
     }
 
     fun cycleSection(step: Int) {
-        val current = Section.of(stack.first()) ?: Section.HOME
-        val entries = Section.entries
-        section(entries[(current.ordinal + step + entries.size) % entries.size])
+        val current = if (this.current is Route.Settings) Section.USER else Section.of(this.current) ?: Section.of(stack.first()) ?: Section.HOME
+        val next = Section.entries[(current.ordinal + step).coerceIn(0, Section.entries.lastIndex)]
+        if (next != current) section(next)
     }
 
     /** Retour : écran précédent, puis l’accueil ; faux à l’accueil (la plateforme décide). */

@@ -7,14 +7,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -30,6 +28,7 @@ import ovh.verbois.retrohub.ui.components.NavigationRow
 import ovh.verbois.retrohub.ui.components.PageHeader
 import ovh.verbois.retrohub.ui.components.SectionLabel
 import ovh.verbois.retrohub.ui.components.SettingsGroup
+import ovh.verbois.retrohub.ui.components.controllerVerticalScroll
 import ovh.verbois.retrohub.ui.icons.Lucide
 import ovh.verbois.retrohub.ui.nav.Route
 import ovh.verbois.retrohub.ui.nav.SettingsPage
@@ -70,7 +69,11 @@ fun SettingsScreen(controller: UiController, page: SettingsPage, console: String
     Column(Modifier.fillMaxSize()) {
         PageHeader(title, { controller.nav.back() }, backModifier = Modifier.focusRequester(first))
         Column(
-            Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(start = 24.dp, end = 24.dp, bottom = 24.dp).widthIn(max = 860.dp),
+            Modifier.weight(
+                1f,
+            ).align(
+                Alignment.CenterHorizontally,
+            ).widthIn(max = 860.dp).fillMaxWidth().controllerVerticalScroll(rememberScrollState()).padding(start = 24.dp, end = 24.dp, bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             when (page) {

@@ -7,6 +7,7 @@ libretro buildbot; their source is in each core's libretro repository.
 
 | Component | License | Role |
 |---|---|---|
+| ZXing Android Embedded 4.3.0 and ZXing Core 3.5.4 | Apache-2.0 | Offline pairing QR camera and decoder |
 | LibretroDroid 0.14.0 (Swordfish90) | GPL-3.0 | Android libretro frontend (Lemuroid's engine) |
 | fceumm | GPL-2.0 | NES |
 | snes9x | Snes9x non-commercial license | Super Nintendo |

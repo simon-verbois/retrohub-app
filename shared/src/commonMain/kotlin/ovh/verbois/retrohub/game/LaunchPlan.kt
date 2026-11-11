@@ -42,6 +42,7 @@ data class LaunchPlan(
     val dolphinUserDir: String? = null,
     val integerScale: Boolean = false,
     val portraitPosition: PortraitPosition = PortraitPosition.TOP,
+    val useDisplayCutout: Boolean = false,
     val orientation: Orientation = Orientation.AUTO,
     val turbo: Set<String> = emptySet(),
     val remap: Map<String, Int> = emptyMap(),

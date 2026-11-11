@@ -137,6 +137,8 @@ dependencies {
     implementation(libs.coroutines.android)
     implementation(libs.ktor.client.okhttp)
     implementation(libs.libretrodroid)
+    implementation(libs.zxing.embedded)
+    implementation(libs.zxing.core)
     debugImplementation(libs.compose.ui.tooling)
     debugImplementation(libs.compose.ui.test.manifest)
     add("benchmarkImplementation", libs.compose.ui.test.manifest)

@@ -3,7 +3,10 @@ package ovh.verbois.retrohub.account
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.Serializable
+import ovh.verbois.retrohub.api.AccountAvatar
 import ovh.verbois.retrohub.api.ApiException
 import ovh.verbois.retrohub.api.ApiSession
 import ovh.verbois.retrohub.api.PairRequest
@@ -25,6 +28,7 @@ data class Account(
     val username: String,
     val deviceId: String,
     val deviceName: String,
+    val avatar: AccountAvatar? = null,
 )
 
 sealed interface AuthState {
@@ -37,6 +41,7 @@ sealed interface AuthState {
 }
 
 class AccountRepository(private val platform: Platform, private val store: KeyValueStore) : ApiSession {
+    private val accountLock = Mutex()
     private val state = MutableStateFlow<AuthState>(AuthState.Loading)
     val auth: StateFlow<AuthState> = state.asStateFlow()
 
@@ -54,7 +59,7 @@ class AccountRepository(private val platform: Platform, private val store: KeyVa
 
     val account: Account? get() = (state.value as? AuthState.SignedIn)?.account
 
-    suspend fun load() {
+    suspend fun load() = accountLock.withLock {
         val account = store.get(KEY, Account.serializer())
         cachedToken = platform.tokenVault.read()
         state.value =
@@ -114,7 +119,7 @@ class AccountRepository(private val platform: Platform, private val store: KeyVa
         )
     }
 
-    private suspend fun finish(address: String, response: TokenResponse): Account {
+    private suspend fun finish(address: String, response: TokenResponse): Account = accountLock.withLock {
         val previous = store.get(KEY, Account.serializer())
         val account =
             Account(
@@ -125,22 +130,48 @@ class AccountRepository(private val platform: Platform, private val store: KeyVa
                 username = response.user.username,
                 deviceId = response.device.id,
                 deviceName = response.device.name,
+                avatar = response.user.avatar,
             )
         platform.tokenVault.write(response.token)
         cachedToken = response.token
         store.put(KEY, Account.serializer(), account)
         accountChanged = previous != null && (previous.userId != account.userId || previous.server != account.server)
         state.value = AuthState.SignedIn(account)
-        return account
+        account
     }
 
     /** Nouveau nom de cet appareil, déjà accepté par le serveur. */
-    suspend fun renamed(name: String) {
-        val current = account ?: return
+    suspend fun renamed(name: String) = accountLock.withLock {
+        val current = account ?: return@withLock
         val updated = current.copy(deviceName = name)
         store.put(KEY, Account.serializer(), updated)
         state.value = AuthState.SignedIn(updated)
     }
+
+    /** Refresh the server-owned profile only when the advertised capability is available. */
+    suspend fun refreshAvatar(supported: Boolean) {
+        if (!supported) return
+        val owner = account ?: return
+        acceptAvatar(owner, api.accountAvatar().avatar)
+    }
+
+    suspend fun chooseAvatar(avatarId: String?, supported: Boolean, owner: Account) {
+        if (!supported) throw ApiException.UnsupportedServer("Mettez le serveur à jour pour choisir une photo de profil.")
+        if (!sameAccount(account, owner)) throw ApiException.Unauthorized("Rouvrez les réglages de votre compte.")
+        val chosen = api.updateAvatar(avatarId)
+        acceptAvatar(owner, chosen.avatar)
+    }
+
+    private suspend fun acceptAvatar(owner: Account, avatar: AccountAvatar?) = accountLock.withLock {
+        val current = account ?: return@withLock
+        if (!sameAccount(current, owner) || current.avatar == avatar) return@withLock
+        val updated = current.copy(avatar = avatar)
+        store.put(KEY, Account.serializer(), updated)
+        state.value = AuthState.SignedIn(updated)
+    }
+
+    private fun sameAccount(current: Account?, owner: Account): Boolean =
+        current != null && current.server == owner.server && current.userId == owner.userId && current.deviceId == owner.deviceId
 
     /** Vrai si le compte relié n’est plus celui des données locales (elles doivent être vidées). */
     var accountChanged: Boolean = false
@@ -160,7 +191,7 @@ class AccountRepository(private val platform: Platform, private val store: KeyVa
         forget(message)
     }
 
-    private fun forget(message: String?) {
+    private suspend fun forget(message: String?) = accountLock.withLock {
         val server = server
         platform.tokenVault.clear()
         cachedToken = null

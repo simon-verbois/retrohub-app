@@ -17,8 +17,10 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -35,12 +37,21 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.semantics.toggleableState
+import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -69,7 +80,7 @@ fun SectionLabel(text: String, modifier: Modifier = Modifier) {
 /** Groupe de lignes de réglages dans une carte arrondie (séparateurs fins entre les lignes). */
 @Composable
 fun SettingsGroup(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
-    Column(modifier.fillMaxWidth().clip(CardShape).background(Palette.Glass).border(1.dp, Palette.Line, CardShape), content = content)
+    Column(modifier.fillMaxWidth().clip(CardShape).background(MaterialTheme.colorScheme.surface).border(1.dp, Palette.Line, CardShape), content = content)
 }
 
 @Composable
@@ -84,29 +95,39 @@ fun SettingRow(
     icon: ImageVector? = null,
     onClick: (() -> Unit)? = null,
     role: Role = Role.Button,
+    value: String? = null,
     trailing: @Composable (() -> Unit)? = null,
 ) {
-    Row(
-        modifier
-            .fillMaxWidth()
-            .heightIn(min = 64.dp)
+    Column(
+        modifier.fillMaxWidth().heightIn(min = 64.dp)
             .then(if (onClick != null) Modifier.consoleFocus(CardShape, onClick, focusScale = 1.01f, role = role) else Modifier)
             .padding(horizontal = 20.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        if (icon != null) Icon(icon, null, Modifier.size(24.dp), tint = Palette.Select)
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            Text(title, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            if (subtitle != null) Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = Palette.TextDim)
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            if (icon != null) Icon(icon, null, Modifier.size(24.dp), tint = Palette.Select)
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Text(title, style = MaterialTheme.typography.titleMedium)
+                if (value != null) Text(value, style = MaterialTheme.typography.bodyMedium, color = Palette.Accent)
+            }
+            trailing?.invoke()
         }
-        trailing?.invoke()
+        if (subtitle != null) Text(subtitle, Modifier.fillMaxWidth(), style = MaterialTheme.typography.bodyMedium, color = Palette.TextDim)
     }
 }
 
 @Composable
 fun SwitchRow(title: String, checked: Boolean, onChange: (Boolean) -> Unit, subtitle: String? = null, icon: ImageVector? = null) {
-    SettingRow(title, subtitle = subtitle, icon = icon, onClick = { onChange(!checked) }, role = Role.Switch) {
+    SettingRow(
+        title,
+        Modifier.semantics {
+            toggleableState = ToggleableState(checked)
+        },
+        subtitle = subtitle,
+        icon = icon,
+        onClick = { onChange(!checked) },
+        role = Role.Switch,
+    ) {
         Switch(
             checked = checked,
             onCheckedChange = null,
@@ -124,8 +145,7 @@ fun SwitchRow(title: String, checked: Boolean, onChange: (Boolean) -> Unit, subt
 
 @Composable
 fun NavigationRow(title: String, icon: ImageVector, onClick: () -> Unit, subtitle: String? = null, value: String? = null) {
-    SettingRow(title, subtitle = subtitle, icon = icon, onClick = onClick) {
-        if (value != null) Text(value, style = MaterialTheme.typography.bodyMedium, color = Palette.TextDim)
+    SettingRow(title, subtitle = subtitle, icon = icon, onClick = onClick, value = value) {
         Icon(Lucide.ChevronRight, null, Modifier.size(20.dp), tint = Palette.TextFaint)
     }
 }
@@ -145,8 +165,7 @@ fun <T> ChoiceRow(
 ) {
     var open by remember { mutableStateOf(false) }
     Column {
-        SettingRow(title, subtitle = subtitle, icon = icon, onClick = { open = !open }) {
-            Text(label(selected), style = MaterialTheme.typography.bodyMedium, color = Palette.Accent, maxLines = 1)
+        SettingRow(title, subtitle = subtitle, icon = icon, onClick = { open = !open }, value = label(selected)) {
             Icon(if (open) Lucide.ChevronUp else Lucide.ChevronDown, null, Modifier.size(20.dp), tint = Palette.TextFaint)
         }
         AnimatedVisibility(open, enter = expandVertically(), exit = shrinkVertically()) {
@@ -155,6 +174,8 @@ fun <T> ChoiceRow(
                     Row(
                         Modifier
                             .fillMaxWidth()
+                            .heightIn(min = 48.dp)
+                            .semantics { this.selected = option == selected }
                             .consoleFocus(RoundedCornerShape(14.dp), {
                                 onSelect(option)
                                 open = false
@@ -179,11 +200,9 @@ fun <T> ChoiceRow(
                         ) {
                             if (option == selected) Box(Modifier.size(10.dp).clip(CircleShape).background(Palette.Accent))
                         }
-                        Column(Modifier.weight(1f)) {
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Text(label(option), style = MaterialTheme.typography.titleSmall)
-                                if (option == recommended) Badge("Conseillé", Palette.Success)
-                            }
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text(label(option), style = MaterialTheme.typography.titleSmall)
+                            if (option == recommended) Badge("Conseillé", Palette.Success)
                             describe?.invoke(option)?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
                         }
                     }
@@ -209,10 +228,10 @@ fun SliderRow(
             if (icon != null) Icon(icon, null, Modifier.size(24.dp), tint = Palette.Select)
             Column(Modifier.weight(1f)) {
                 Text(title, style = MaterialTheme.typography.titleMedium)
-                if (subtitle != null) Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = Palette.TextDim)
             }
             Text(valueLabel, style = MaterialTheme.typography.titleSmall, color = Palette.Accent)
         }
+        if (subtitle != null) Text(subtitle, Modifier.fillMaxWidth().padding(top = 8.dp), style = MaterialTheme.typography.bodyMedium, color = Palette.TextDim)
         Slider(
             value = value,
             onValueChange = onChange,
@@ -272,22 +291,37 @@ fun ConfirmDialog(
     onDismiss: () -> Unit,
     dismiss: String = "Annuler",
     destructive: Boolean = false,
+    focusDismiss: Boolean = false,
 ) {
+    val dismissFocus = remember { FocusRequester() }
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        GlassPanel(Modifier.widthIn(max = 460.dp).padding(24.dp)) {
-            Column(Modifier.background(Palette.BackgroundHigh).padding(24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        GlassPanel(
+            Modifier.widthIn(max = 460.dp).padding(24.dp).onPreviewKeyEvent { event ->
+                if (event.key == Key.ButtonB || event.key == Key.Escape) {
+                    if (event.type == KeyEventType.KeyUp) onDismiss()
+                    true
+                } else {
+                    false
+                }
+            },
+        ) {
+            Column(
+                Modifier.background(Palette.SkyLow).verticalScroll(rememberScrollState()).padding(24.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
                 Text(title, style = MaterialTheme.typography.headlineMedium)
                 Text(text, style = MaterialTheme.typography.bodyLarge, color = Palette.TextDim)
-                Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.End)) {
-                    GlassButton(dismiss, onDismiss)
-                    if (destructive) {
-                        GlassButton(confirm, onConfirm, tint = Palette.Danger)
-                    } else {
-                        PrimaryButton(confirm, onConfirm, height = 48.dp)
-                    }
-                }
+                ActionButtons(
+                    confirm,
+                    onConfirm,
+                    Modifier.padding(top = 8.dp),
+                    secondary = dismiss,
+                    onSecondary = onDismiss,
+                    secondaryModifier = Modifier.focusRequester(dismissFocus),
+                )
             }
         }
+        if (focusDismiss) AutoFocus(dismissFocus)
     }
 }
 
@@ -326,10 +360,8 @@ fun PageHeader(title: String?, onBack: () -> Unit, modifier: Modifier = Modifier
         if (title != null) {
             Text(
                 title,
-                Modifier.semantics { heading() },
+                Modifier.weight(1f).semantics { heading() },
                 style = MaterialTheme.typography.displaySmall,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
             )
         }
     }

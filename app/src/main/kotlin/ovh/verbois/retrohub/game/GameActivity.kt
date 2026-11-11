@@ -69,6 +69,15 @@ class GameActivity : ComponentActivity() {
         val app = application as RetroHubApp
         val container = app.container
         plan = ApiJson.decodeFromString(LaunchPlan.serializer(), intent.getStringExtra(EXTRA_PLAN) ?: return finish())
+        if (android.os.Build.VERSION.SDK_INT >= 28) {
+            window.attributes = window.attributes.apply {
+                layoutInDisplayCutoutMode = if (android.os.Build.VERSION.SDK_INT >= 30) {
+                    WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
+                } else {
+                    WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+                }
+            }
+        }
         requestedOrientation =
             when (plan.orientation) {
                 Orientation.AUTO -> ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
@@ -110,7 +119,7 @@ class GameActivity : ComponentActivity() {
             }
         retroView = GLRetroView(this, data)
         lifecycle.addObserver(retroView)
-        engine = LibretroEngine(retroView).also { it.bind(this) }
+        engine = LibretroEngine(retroView, restoreOnReset = plan.core == "melonds").also { it.bind(this) }
         current = java.lang.ref.WeakReference(this)
         engine.setAudio(plan.audio)
         router =

@@ -53,8 +53,13 @@ instrumented() {
   ensure_cores
   local reports="app/build/outputs/androidTest-results/connected/$variant"
   rm -rf "$reports"
+  local result=0
   "${gradle[@]}" :app:connected${variant_task}AndroidTest \
-    -Pandroid.testInstrumentationRunnerArguments.notPackage=ovh.verbois.retrohub.e2e
+    -Pandroid.injected.androidTest.leaveApksInstalledAfterRun=true \
+    -Pandroid.testInstrumentationRunnerArguments.notPackage=ovh.verbois.retrohub.e2e || result=$?
+  mkdir -p "build/screens-instrumented/$variant"
+  adb -s "$ANDROID_SERIAL" pull "/sdcard/Android/data/$app_id/files/test-screens/." "build/screens-instrumented/$variant/" >/dev/null 2>&1 || true
+  ((result == 0)) || return "$result"
   # Some runner crashes return a successful Gradle exit code: verify the actual reports too.
   if ! grep -q '<testcase ' "$reports"/TEST-*.xml ||
      grep -Eq '<failure|<error|failures="[1-9]|errors="[1-9]' "$reports"/TEST-*.xml; then
@@ -105,7 +110,10 @@ e2e() {
   rm -rf build/screens && mkdir -p build/screens
   adb -s "$ANDROID_SERIAL" pull "/sdcard/Android/data/$app_id/files/screens/." build/screens/ >/dev/null 2>&1 || true
   echo "Screenshots: $(ls build/screens 2>/dev/null | tr '\n' ' ')"
-  for screen in home-landscape library-landscape selected-landscape game-landscape game-portrait conflict-landscape signed-out-landscape; do
+  if ! echo "$output" | grep -Eq '^OK \([1-9][0-9]* tests?\)'; then
+    adb -s "$ANDROID_SERIAL" logcat -d -t 3000 > build/e2e-failure.log 2>&1 || true
+  fi
+  for screen in welcome-portrait setup-play-portrait setup-comfort-portrait setup-ready-portrait settings-ds-portrait appearance-portrait home-landscape library-landscape selected-landscape selected-portrait game-landscape game-portrait conflict-landscape signed-out-landscape; do
     [[ -s "build/screens/$screen.png" ]] || { echo "Missing end-to-end screenshot: $screen" >&2; exit 1; }
   done
   echo "$output" | grep -Eq '^OK \([1-9][0-9]* tests?\)' || { echo "End-to-end flow failed." >&2; exit 1; }

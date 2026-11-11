@@ -68,6 +68,9 @@ class AppContainer(val platform: Platform, val database: AppDatabase, val clock:
         SyncCoordinator(library, saveSync, saveStore, SessionUploader(api, sessionStore), { database.sessions().count() }, clock) {
             afterSync()
         }
+    val foregroundLibrary = ovh.verbois.retrohub.library.ForegroundLibraryRefresh(
+        events = ovh.verbois.retrohub.api.LibraryEventSource { cursor, receive -> api.libraryEvents(cursor, receive) },
+    ) { sync.refreshLibrary() }
     val cheats = CheatsRepository(keyValues)
     val launcher =
         GameLauncher(library, downloads, saveSync, saveStore, fs, paths, platform::availableCores, platform.deviceClass, cheats::get, platform::batteryLow)
@@ -96,6 +99,9 @@ class AppContainer(val platform: Platform, val database: AppDatabase, val clock:
                 } catch (error: ovh.verbois.retrohub.api.ApiException) { /* Keep the last known version. */ }
             }
         }
+        try {
+            account.refreshAvatar(serverStatus.value?.features?.contains(ovh.verbois.retrohub.api.FEATURE_ACCOUNT_AVATARS) == true)
+        } catch (error: ovh.verbois.retrohub.api.ApiException) { /* Preserve the cached profile until the next sync. */ }
         val current = settings.settings.value
         val games = library.games.value
         if (current.autoDownloadFavorites) {

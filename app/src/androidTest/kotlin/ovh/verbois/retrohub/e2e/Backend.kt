@@ -77,6 +77,10 @@ class Backend(val server: String) {
     fun pairingCode(): String =
         parse(call("POST", "/account/devices/pairing", ByteArray(0).toRequestBody(json)).second).jsonObject["code"]!!.jsonPrimitive.content
 
+    fun avatarCatalogue(): JsonObject = parse(call("GET", "/account/avatars").second).jsonObject
+
+    fun accountAvatar(): JsonObject = parse(call("GET", "/account/avatar").second).jsonObject["avatar"]!!.jsonObject
+
     fun library(): JsonObject = parse(call("GET", "/native/library").second).jsonObject
 
     fun game(playGameId: String): JsonObject = library()["games"]!!.jsonArray.map { it.jsonObject }.first {

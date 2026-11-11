@@ -76,6 +76,7 @@ class GameSession(
         if (state.value.started || finished) return@withLock
         startedAt = clock.now()
         resumedAt = startedAt
+        engine.prepareReset()
         if (plan.analog) {
             val ports = if (plan.multiplayer) 0..3 else 0..0
             ports.forEach { engine.setControllerType(it, DUALSHOCK) }
@@ -124,6 +125,18 @@ class GameSession(
     }
 
     fun flash(message: String?) = state.update { it.copy(message = message) }
+
+    /** A reset cannot overlap a snapshot or an initial restore, and never blocks the UI caller. */
+    suspend fun reset() = lock.withLock {
+        if (finished) return@withLock
+        try {
+            engine.reset()
+            resume()
+        } catch (error: Exception) {
+            if (error is kotlinx.coroutines.CancellationException) throw error
+            flash("Le jeu n’a pas pu redémarrer. Quittez la partie puis relancez-la.")
+        }
+    }
 
     private var cheatCount = 0
 

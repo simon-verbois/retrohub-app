@@ -147,3 +147,22 @@ nothing required otherwise.
   APIs reached from the separate instrumentation APK and their package boundaries. Production builds
   only keep JNI entry points.
   This is a functional regression check, not a hardware performance benchmark.
+
+
+## Safe DS restart and Android pause ownership
+
+An emulator regression with a generated DS cartridge reproduced a native segmentation fault inside
+`retro_reset`, after backgrounding and resuming. Legacy melonDS caches the pointer to
+`retro_game_info`, while LibretroDroid 0.14.0 supplies that structure on its loading function's stack.
+The reset callback later reloads the cartridge from invalid metadata. The app avoids that callback
+for melonDS: it captures the initial machine state before restoring the player's snapshot, then
+restarts from that checkpoint while retaining the current battery save. A failed restore rolls back
+to the previous state. The checkpoint is transient, stays local and is never synced.
+
+The view's lifecycle owns EGL and native pause/resume. Opening the pause menu only stops continuous
+rendering and mutes audio, instead of invoking the view and native lifecycle a second time. Native
+snapshot, restore and reset commands suspend callers on the emulation queue; viewport updates do
+not wait for that queue on Android's main thread. Session resets share the snapshot lock.
+
+References: [legacy melonDS reset](https://github.com/libretro/melonDS/blob/master/src/libretro/libretro.cpp),
+[LibretroDroid 0.14.0 game loading](https://github.com/Swordfish90/LibretroDroid/blob/0.14.0/libretrodroid/src/main/cpp/libretrodroid.cpp).

@@ -22,7 +22,7 @@ sealed class ApiException(message: String, cause: Throwable? = null) : Exception
     class UnsupportedServer(message: String) : ApiException(message)
 
     /** Toute autre réponse en erreur, avec le message du serveur. */
-    class Http(val status: Int, message: String) : ApiException(message)
+    class Http(val status: Int, message: String, val retryAfterSeconds: Long? = null) : ApiException(message)
 }
 
 val ApiException.isNotFound: Boolean get() = this is ApiException.Http && status == 404

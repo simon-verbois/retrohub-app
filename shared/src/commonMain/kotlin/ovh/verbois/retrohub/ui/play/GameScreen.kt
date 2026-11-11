@@ -17,10 +17,12 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
@@ -54,6 +56,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
@@ -158,7 +161,9 @@ fun GameScreen(
         }
     }
     val showTouch = !(gamepad && plan.hideTouchWithGamepad)
-    BoxWithConstraints(Modifier.fillMaxSize().background(Color.Black)) {
+    BoxWithConstraints(
+        Modifier.fillMaxSize().background(Color.Black).then(if (!plan.useDisplayCutout) Modifier.windowInsetsPadding(WindowInsets.displayCutout) else Modifier),
+    ) {
         val density = LocalDensity.current
         val portrait = maxHeight > maxWidth
         val dsLayout = if (portrait) dsPortrait else dsLandscape
@@ -170,11 +175,26 @@ fun GameScreen(
                     maxHeight.toPx(),
                     aspect,
                     showTouch || editing,
-                    topInset = if (portrait) 36.dp.toPx() else 0f,
+                    topInset = if (portrait && !plan.useDisplayCutout) 36.dp.toPx() else 0f,
                     native = if (plan.integerScale) Consoles.nativeSize(plan.console, if (spec.dualScreen) dsLayout else null) else null,
                     portraitCentered = plan.portraitPosition == PortraitPosition.CENTER,
                 )
             }
+        val cutout = WindowInsets.displayCutout
+        val direction = LocalLayoutDirection.current
+        val controlsLeft = if (plan.useDisplayCutout) cutout.getLeft(density, direction).toFloat() else 0f
+        val controlsTop = if (plan.useDisplayCutout) cutout.getTop(density).toFloat() else 0f
+        val controlsRight = if (plan.useDisplayCutout) cutout.getRight(density, direction).toFloat() else 0f
+        val controlsBottom = if (plan.useDisplayCutout) cutout.getBottom(density).toFloat() else 0f
+        val screenWidth = with(density) { maxWidth.toPx() }
+        val screenHeight = with(density) { maxHeight.toPx() }
+        val safeGameBottom = (
+            (layout.game.bottom * screenHeight - controlsTop) / (screenHeight - controlsTop - controlsBottom).coerceAtLeast(
+                1f,
+            )
+            ).coerceIn(0f, 1f)
+        val safeGameLeft = ((layout.game.left * screenWidth - controlsLeft) / (screenWidth - controlsLeft - controlsRight).coerceAtLeast(1f)).coerceIn(0f, 1f)
+        val controlsModifier = if (plan.useDisplayCutout) Modifier.windowInsetsPadding(cutout) else Modifier
         val suffix = if (portrait) "@p" else "@l"
         val groupLayout = touchLayout.filterKeys { it.endsWith(suffix) }.mapKeys { it.key.removeSuffix(suffix) }
         LaunchedEffect(layout.game) { engine.setViewport(layout.game) }
@@ -221,8 +241,9 @@ fun GameScreen(
                 onStick = { _, _, _ -> },
                 onScreenTouch = {},
                 onHaptic = {},
-                gameBottom = layout.game.bottom,
-                gameLeft = layout.game.left,
+                modifier = controlsModifier,
+                gameBottom = safeGameBottom,
+                gameLeft = safeGameLeft,
                 layout = groupLayout,
                 editing = true,
                 onLayout = { id, place -> touchLayout = touchLayout + (id + suffix to place) },
@@ -245,10 +266,11 @@ fun GameScreen(
                 plan.touchScale,
                 onKey = { key, down -> router.key(key, down) },
                 onStick = { stick, x, y -> router.stick(stick, x, y) },
-                onScreenTouch = { point -> engine.touch(point?.x, point?.y) },
+                onScreenTouch = { point -> engine.touch(point?.x?.plus(controlsLeft), point?.y?.plus(controlsTop)) },
                 onHaptic = { if (plan.haptics) haptic() },
-                gameBottom = layout.game.bottom,
-                gameLeft = layout.game.left,
+                modifier = controlsModifier,
+                gameBottom = safeGameBottom,
+                gameLeft = safeGameLeft,
                 layout = groupLayout,
             ) {
                 InGameButtons(ui.fastForward, onMenu = {
@@ -361,8 +383,7 @@ fun GameScreen(
                 "Redémarrer",
                 onConfirm = {
                     confirmReset = false
-                    engine.reset()
-                    session.resume()
+                    scope.launch { session.reset() }
                 },
                 onDismiss = { confirmReset = false },
             )
@@ -589,24 +610,16 @@ private fun MenuEntry(
     onClick: () -> Unit,
 ) {
     Row(
-        modifier.fillMaxWidth().height(
-            if (subtitle !=
-                null
-            ) {
-                68.dp
-            } else {
-                56.dp
-            },
-        ).consoleFocus(
+        modifier.fillMaxWidth().heightIn(min = if (subtitle != null) 68.dp else 56.dp).consoleFocus(
             RoundedCornerShape(16.dp),
             onClick,
             focusScale = 1.02f,
-        ).clip(RoundedCornerShape(16.dp)).background(Color(0x14FFFFFF)).padding(horizontal = 18.dp),
+        ).clip(RoundedCornerShape(16.dp)).background(Color(0x14FFFFFF)).padding(horizontal = 18.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         Icon(icon, null, Modifier.size(22.dp), tint = if (tint == Palette.Text) Palette.Select else tint)
-        Column {
+        Column(Modifier.weight(1f)) {
             Text(label, style = MaterialTheme.typography.titleMedium, color = tint)
             subtitle?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
         }

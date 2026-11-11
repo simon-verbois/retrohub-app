@@ -1,24 +1,30 @@
 package ovh.verbois.retrohub.ui.home
 
-import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import ovh.verbois.retrohub.library.Game
 import ovh.verbois.retrohub.ui.UiController
+import ovh.verbois.retrohub.ui.components.AutoFocus
+import ovh.verbois.retrohub.ui.components.consoleFocus
 import ovh.verbois.retrohub.ui.icons.Lucide
 import ovh.verbois.retrohub.ui.nav.Route
 import ovh.verbois.retrohub.ui.nav.SettingsPage
@@ -28,6 +34,7 @@ import ovh.verbois.retrohub.ui.theme.Palette
 @Composable
 fun GameMenu(controller: UiController, game: Game) {
     val downloads by controller.container.downloads.states.collectAsState()
+    val first = remember { FocusRequester() }
     val close = { controller.gameMenu = false }
     DropdownMenu(
         expanded = controller.gameMenu,
@@ -35,8 +42,9 @@ fun GameMenu(controller: UiController, game: Game) {
         containerColor = Palette.Deep,
         shape = RoundedCornerShape(18.dp),
     ) {
+        AutoFocus(first)
         val action = gameAction(controller, game, downloads[game.playGameId])
-        Item(action.icon, action.label) {
+        Item(action.icon, action.label, Modifier.focusRequester(first)) {
             close()
             action.run()
         }
@@ -58,50 +66,14 @@ fun GameMenu(controller: UiController, game: Game) {
 }
 
 @Composable
-private fun Item(icon: ImageVector, label: String, onClick: () -> Unit) {
-    DropdownMenuItem(
-        text = { Text(label, style = MaterialTheme.typography.bodyLarge, color = Palette.Text) },
-        onClick = onClick,
-        leadingIcon = { Icon(icon, null, Modifier.size(20.dp), tint = Palette.Text) },
-    )
-}
-
-/** Les mêmes actions, en rangée sous le titre (accueil en paysage, où la place manque dessous). */
-@Composable
-fun GameActionsRow(controller: UiController, game: Game, modifier: Modifier = Modifier, height: androidx.compose.ui.unit.Dp = 52.dp) {
-    val downloads by controller.container.downloads.states.collectAsState()
-    val first = androidx.compose.runtime.remember { androidx.compose.ui.focus.FocusRequester() }
-    val close = { controller.gameMenu = false }
-    val action = gameAction(controller, game, downloads[game.playGameId])
-    androidx.compose.foundation.layout.Row(
-        modifier.horizontalScroll(rememberScrollState()).padding(horizontal = HomeEdge),
-        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(10.dp),
+private fun Item(icon: ImageVector, label: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    Row(
+        modifier.fillMaxWidth().heightIn(min = 48.dp).consoleFocus(RoundedCornerShape(12.dp), onClick)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        ovh.verbois.retrohub.ui.components.PrimaryButton(
-            action.label,
-            {
-                close()
-                action.run()
-            },
-            Modifier.focusRequester(first),
-            icon = action.icon,
-            progress = action.progress,
-            height = height,
-        )
-        if (game.downloaded && game.lastPlayed != null) {
-            ovh.verbois.retrohub.ui.components.GlassButton("Nouvelle partie", {
-                close()
-                controller.play(game, fresh = true)
-            }, icon = Lucide.RotateCcw, height = height)
-        }
-        ovh.verbois.retrohub.ui.components.GlassButton(if (game.favorite) "Retirer des favoris" else "Ajouter aux favoris", {
-            close()
-            controller.toggleFavorite(game)
-        }, icon = Lucide.Heart, height = height)
-        ovh.verbois.retrohub.ui.components.GlassButton("Options du jeu", {
-            close()
-            controller.nav.go(Route.Settings(SettingsPage.GAME, game.id))
-        }, icon = Lucide.Settings2, height = height)
+        Icon(icon, null, Modifier.size(20.dp), tint = Palette.Text)
+        Text(label, style = MaterialTheme.typography.bodyLarge, color = Palette.Text)
     }
-    ovh.verbois.retrohub.ui.components.AutoFocus(first)
 }

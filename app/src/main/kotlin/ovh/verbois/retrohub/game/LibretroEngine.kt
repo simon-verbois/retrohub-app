@@ -1,6 +1,6 @@
 package ovh.verbois.retrohub.game
 
-import android.graphics.RectF
+import android.opengl.GLSurfaceView
 import android.view.KeyEvent
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.lifecycleScope
@@ -8,7 +8,6 @@ import com.swordfish.libretrodroid.GLRetroView
 import com.swordfish.libretrodroid.LibretroDroid
 import com.swordfish.libretrodroid.ShaderConfig
 import com.swordfish.libretrodroid.Variable
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -16,21 +15,25 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.suspendCancellableCoroutine
 import ovh.verbois.retrohub.emulation.CoreVariable
 import ovh.verbois.retrohub.emulation.EmulatorEngine
 import ovh.verbois.retrohub.emulation.NormRect
 import ovh.verbois.retrohub.emulation.PadKey
 import ovh.verbois.retrohub.emulation.Shader
 import ovh.verbois.retrohub.emulation.Stick
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 
 /** Le moteur LibretroDroid derrière l’interface partagée [EmulatorEngine]. */
-class LibretroEngine(private val view: GLRetroView) : EmulatorEngine {
+class LibretroEngine(private val view: GLRetroView, private val restoreOnReset: Boolean = false) : EmulatorEngine {
     private val frameCount = MutableStateFlow(0L)
     override val frames: StateFlow<Long> = frameCount
     private val errorFlow = MutableSharedFlow<String>(extraBufferCapacity = 4)
     override val errors: SharedFlow<String> = errorFlow
     private var paused = false
+    private var audioEnabled = true
+    private var bootState: ByteArray? = null
 
     fun bind(owner: LifecycleOwner) {
         owner.lifecycleScope.launch {
@@ -60,25 +63,57 @@ class LibretroEngine(private val view: GLRetroView) : EmulatorEngine {
     override fun pause() {
         if (paused) return
         paused = true
-        view.onPause()
-        runCatching { LibretroDroid.pause() }
+        // The view's lifecycle owns EGL and native pause/resume. A menu pause only stops frames;
+        // stopping EGL a second time can block Android's main thread during a core operation.
+        view.renderMode = GLSurfaceView.RENDERMODE_WHEN_DIRTY
+        view.audioEnabled = false
     }
 
     override fun resume() {
         if (!paused) return
         paused = false
-        runCatching { LibretroDroid.resume() }
-        view.onResume()
+        view.audioEnabled = audioEnabled
+        view.renderMode = GLSurfaceView.RENDERMODE_CONTINUOUSLY
     }
 
-    override suspend fun saveState(): ByteArray? = withContext(Dispatchers.IO) { runCatching { view.serializeState() }.getOrNull() }
+    override suspend fun saveState(): ByteArray? = onEmulationThread { runCatching { view.serializeState(false) }.getOrNull() }
 
-    override suspend fun loadState(data: ByteArray): Boolean = withContext(Dispatchers.IO) { runCatching { view.unserializeState(data) }.getOrDefault(false) }
+    override suspend fun loadState(data: ByteArray): Boolean = onEmulationThread { runCatching { view.unserializeState(data, false) }.getOrDefault(false) }
 
-    override suspend fun saveSram(): ByteArray? = withContext(Dispatchers.IO) { runCatching { view.serializeSRAM() }.getOrNull() }
+    override suspend fun saveSram(): ByteArray? = onEmulationThread { runCatching { view.serializeSRAM(false) }.getOrNull() }
 
-    override fun reset() {
-        view.reset()
+    override suspend fun prepareReset() {
+        if (restoreOnReset) bootState = saveState()?.takeIf { it.isNotEmpty() }
+    }
+
+    override suspend fun reset() = onEmulationThread {
+        if (restoreOnReset) {
+            // Legacy melonDS caches the address of retro_game_info, which LibretroDroid creates
+            // on the stack. retro_reset then dereferences invalid metadata. Restore the initial
+            // machine state instead, while retaining the current in-game battery save.
+            val initial = checkNotNull(bootState) { "No restart checkpoint" }
+            val battery = view.serializeSRAM(false)
+            val previous = view.serializeState(false)
+            if (!view.unserializeState(initial, false) || (battery.isNotEmpty() && !view.unserializeSRAM(battery, false))) {
+                check(view.unserializeState(previous, false)) { "Restart rollback rejected" }
+                error("Restart checkpoint rejected")
+            }
+        } else {
+            view.reset(false)
+        }
+    }
+
+    /** Suspend the caller instead of waiting on LibretroDroid's unbounded CountDownLatch. */
+    private suspend fun <T> onEmulationThread(block: () -> T): T = suspendCancellableCoroutine { continuation ->
+        view.queueEvent {
+            if (continuation.isActive) {
+                try {
+                    continuation.resume(block())
+                } catch (error: Exception) {
+                    continuation.resumeWithException(error)
+                }
+            }
+        }
     }
 
     override fun setFastForward(speed: Int) {
@@ -86,7 +121,8 @@ class LibretroEngine(private val view: GLRetroView) : EmulatorEngine {
     }
 
     override fun setAudio(enabled: Boolean) {
-        view.audioEnabled = enabled
+        audioEnabled = enabled
+        view.audioEnabled = enabled && !paused
     }
 
     override fun key(key: PadKey, pressed: Boolean, port: Int) {
@@ -106,11 +142,11 @@ class LibretroEngine(private val view: GLRetroView) : EmulatorEngine {
     }
 
     override fun setViewport(rect: NormRect) {
-        view.viewport = RectF(rect.left, rect.top, rect.right, rect.bottom)
+        view.queueEvent { LibretroDroid.setViewport(rect.left, rect.top, rect.width, rect.height) }
     }
 
     override fun setOptions(options: Map<String, String>) {
-        view.updateVariables(*options.map { (key, value) -> Variable(key, value) }.toTypedArray())
+        view.queueEvent { view.updateVariables(*options.map { (key, value) -> Variable(key, value) }.toTypedArray()) }
     }
 
     override fun variables(): List<CoreVariable> = runCatching {
@@ -118,11 +154,11 @@ class LibretroEngine(private val view: GLRetroView) : EmulatorEngine {
     }.getOrDefault(emptyList())
 
     override fun setCheat(index: Int, enabled: Boolean, code: String) {
-        runCatching { view.setCheat(index, enabled, code) }
+        view.queueEvent { runCatching { view.setCheat(index, enabled, code, false) } }
     }
 
     override fun setControllerType(port: Int, type: Int) {
-        runCatching { view.setControllerType(port, type) }
+        view.queueEvent { runCatching { view.setControllerType(port, type) } }
     }
 
     override val rumble: Flow<Float> = view.getRumbleEvents().map { maxOf(it.strengthWeak, it.strengthStrong) }

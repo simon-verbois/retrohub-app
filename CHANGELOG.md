@@ -10,6 +10,55 @@ change, in plain text. Never rewrite the notes of a published version.
 
 ## [Unreleased]
 
+## [2026.46.7] - 2026-11-12
+
+### Added
+
+- Choose a profile picture from the server-hosted avatar catalogue in Account settings, with cached images and an initials fallback offline.
+
+- Confirm before closing the app, with Cancel focused by default for controller navigation.
+- Update the visible library instantly through the server event stream, with coalesced conditional reads, automatic reconnection and a ten-second polling fallback for older servers or interrupted streams. Suspend updates in the background, offline and during gameplay.
+
+- Scan one-use pairing QR codes with the Android camera, with manual-code and password alternatives.
+- Add short explanations to device and console settings, and a global option to use the camera-cutout area for the game image while protecting controls.
+- Require confirmation before manually downloading a game and show download progress directly on its cover.
+- Add an explicit play button to the selected game; selecting a cover or touching its artwork no longer starts a game.
+
+### Changed
+
+- Balance the top bar with equally sized search and profile visuals, a smaller status badge, tighter regular spacing and matching touch targets.
+
+- Make the profile status badge smaller and place it at the upper-right corner of the avatar.
+
+- Mark the active section with bold text instead of a rounded background, while retaining the controller focus outline.
+- Place the clock to the right of the profile icon in the top bar.
+- Order sections as Home, Favorites, Downloads, Search and Profile without wrapping; keep the library inside Home.
+- Enlarge home covers, make library covers more compact and gray out games that are not downloaded.
+- Present game information and play time below the title, with a single Play or Resume action and save-choice prompts at launch.
+- Move library filters to a side button, remove game counts and replace the controller help background with compact icon hints.
+- Show connection and synchronization status on the profile avatar; simplify the profile menu and remove the separate settings and sync icons.
+
+- Rebuild welcome and setup screens with centered content, readable opaque surfaces, natural text heights and actions that reflow for longer labels.
+- Let settings titles, selected values, recommendation badges, buttons and menus adapt to small screens and larger text.
+- Begin a shared French string catalogue for setup and settings explanations, with a documented path to additional languages.
+
+### Fixed
+
+- Link controller focus explicitly from sections to covers to game actions, returning to the same game and keeping horizontal movement inside each row.
+- Keep the background continuous behind the top bar and camera cutout, and make profile and settings content scroll into view with a controller.
+
+- Let Android back gestures navigate immediately in the application by reserving immersive mode for gameplay, and restore controller focus when the window becomes ready.
+- Avoid blocking the interface on queued emulator operations and coordinate game resets with snapshots.
+- Restart Nintendo DS from an initial machine checkpoint, preserving battery saves, instead of dereferencing invalid game metadata in the legacy core reset callback.
+
+### Removed
+
+- Remove selected-game background cover artwork and the redundant resume, play-time and synchronization activity tiles.
+
+### Internal
+
+- Add emulator regression coverage for DS background saves and repeated resets, long labels, large text and right-to-left layouts.
+
 ## [2026.46.6] - 2026-11-11
 
 ### Changed

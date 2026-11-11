@@ -3,12 +3,13 @@ package ovh.verbois.retrohub.ui.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -53,7 +54,10 @@ fun FormDialog(title: String, text: String?, fields: List<DialogField>, confirm:
     }
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         GlassPanel(Modifier.widthIn(max = 460.dp).padding(24.dp)) {
-            Column(Modifier.background(Palette.BackgroundHigh).padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(
+                Modifier.background(Palette.SkyLow).verticalScroll(rememberScrollState()).padding(24.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
                 Text(title, style = MaterialTheme.typography.headlineMedium)
                 text?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = Palette.TextDim) }
                 fields.forEachIndexed { index, field ->
@@ -79,10 +83,7 @@ fun FormDialog(title: String, text: String?, fields: List<DialogField>, confirm:
                     )
                 }
                 error?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = Palette.Danger) }
-                Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.End)) {
-                    GlassButton("Annuler", onDismiss)
-                    PrimaryButton(confirm, { if (!busy) submit++ }, height = 48.dp, loading = busy)
-                }
+                ActionButtons(confirm, { if (!busy) submit++ }, Modifier.padding(top = 4.dp), secondary = "Annuler", onSecondary = onDismiss, loading = busy)
             }
         }
     }

@@ -20,6 +20,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import org.jetbrains.compose.resources.stringResource
 import ovh.verbois.retrohub.emulation.AspectChoice
 import ovh.verbois.retrohub.emulation.BootMode
 import ovh.verbois.retrohub.emulation.ConsoleSettings
@@ -33,6 +34,22 @@ import ovh.verbois.retrohub.emulation.Orientation
 import ovh.verbois.retrohub.emulation.PadKey
 import ovh.verbois.retrohub.emulation.Region
 import ovh.verbois.retrohub.emulation.Shader
+import ovh.verbois.retrohub.resources.Res
+import ovh.verbois.retrohub.resources.console_analog_description
+import ovh.verbois.retrohub.resources.console_aspect_description
+import ovh.verbois.retrohub.resources.console_boot_description
+import ovh.verbois.retrohub.resources.console_ds_landscape_description
+import ovh.verbois.retrohub.resources.console_ds_portrait_description
+import ovh.verbois.retrohub.resources.console_ds_swap_description
+import ovh.verbois.retrohub.resources.console_fast_forward_description
+import ovh.verbois.retrohub.resources.console_frameskip_description
+import ovh.verbois.retrohub.resources.console_language_description
+import ovh.verbois.retrohub.resources.console_orientation_description
+import ovh.verbois.retrohub.resources.console_pixels_description
+import ovh.verbois.retrohub.resources.console_region_description
+import ovh.verbois.retrohub.resources.console_resolution_description
+import ovh.verbois.retrohub.resources.console_shader_description
+import ovh.verbois.retrohub.resources.console_widescreen_description
 import ovh.verbois.retrohub.ui.UiController
 import ovh.verbois.retrohub.ui.components.ChoiceRow
 import ovh.verbois.retrohub.ui.components.FilterChip
@@ -101,12 +118,12 @@ internal fun ConsolePage(controller: UiController, id: String) {
         val defaultShader = CoreOptions.shader(spec, settings.copy(consoles = settings.consoles - id))
         ChoiceRow("Rendu de l’image", Shader.entries, CoreOptions.shader(spec, settings), {
             it.label
-        }, { v -> update { it.copy(shader = v) } }, null, Lucide.Monitor, recommended = defaultShader)
+        }, { v -> update { it.copy(shader = v) } }, stringResource(Res.string.console_shader_description), Lucide.Monitor, recommended = defaultShader)
         if (Consoles.nativeSize(id) != null) {
             GroupDivider()
             SwitchRow("Pixels parfaits", console.integerScale == true, { v ->
                 update { it.copy(integerScale = v) }
-            }, null, Lucide.ScanLine)
+            }, stringResource(Res.string.console_pixels_description), Lucide.ScanLine)
         }
         val max = CoreOptions.maxResolution(id)
         if (max > 1 && !(id == "psx" && core == "swanstation")) {
@@ -117,7 +134,7 @@ internal fun ConsolePage(controller: UiController, id: String) {
                 CoreOptions.resolution(spec, settings, device),
                 { if (it == 1) "D’origine" else "×$it" },
                 { v -> update { it.copy(resolution = v) } },
-                null,
+                stringResource(Res.string.console_resolution_description),
                 Lucide.Maximize,
                 recommended = CoreOptions.resolution(spec, settings.copy(consoles = settings.consoles - id), device),
             )
@@ -126,13 +143,13 @@ internal fun ConsolePage(controller: UiController, id: String) {
             GroupDivider()
             SwitchRow("Écran large (16:9)", console.widescreen == true, { v ->
                 update { it.copy(widescreen = v) }
-            }, null, Lucide.Maximize)
+            }, stringResource(Res.string.console_widescreen_description), Lucide.Maximize)
         }
         if (CoreOptions.supportsAspect(core)) {
             GroupDivider()
             ChoiceRow("Proportions", AspectChoice.entries, console.aspect ?: AspectChoice.TV, { it.label }, { v ->
                 update { it.copy(aspect = v) }
-            }, null, Lucide.Monitor, recommended = AspectChoice.TV)
+            }, stringResource(Res.string.console_aspect_description), Lucide.Monitor, recommended = AspectChoice.TV)
         }
         GroupDivider()
         ChoiceRow(
@@ -141,7 +158,7 @@ internal fun ConsolePage(controller: UiController, id: String) {
             console.orientation,
             { it?.label ?: DEFAULT_LABEL },
             { v -> update { it.copy(orientation = v) } },
-            null,
+            stringResource(Res.string.console_orientation_description),
             Lucide.Smartphone,
             recommended = null,
         )
@@ -152,7 +169,7 @@ internal fun ConsolePage(controller: UiController, id: String) {
             console.fastForwardSpeed ?: 3,
             { "×$it" },
             { v -> update { it.copy(fastForwardSpeed = v) } },
-            null,
+            stringResource(Res.string.console_fast_forward_description),
             Lucide.FastForward,
             recommended = 3,
         )
@@ -160,7 +177,7 @@ internal fun ConsolePage(controller: UiController, id: String) {
             GroupDivider()
             ChoiceRow("Saut d’images", FrameSkip.entries, console.frameSkip ?: FrameSkip.AUTO, { it.label }, { v ->
                 update { it.copy(frameSkip = v) }
-            }, null, Lucide.Gauge, recommended = FrameSkip.AUTO)
+            }, stringResource(Res.string.console_frameskip_description), Lucide.Gauge, recommended = FrameSkip.AUTO)
         }
     }
     val language = CoreOptions.supportsLanguage(core)
@@ -182,7 +199,7 @@ internal fun ConsolePage(controller: UiController, id: String) {
                     console.language,
                     { it?.label ?: "Selon le compte (${settings.language(id).label})" },
                     { v -> update { it.copy(language = v) } },
-                    null,
+                    stringResource(Res.string.console_language_description),
                     Lucide.Languages,
                     recommended = null,
                 )
@@ -191,13 +208,13 @@ internal fun ConsolePage(controller: UiController, id: String) {
                 divider()
                 ChoiceRow("Région", Region.entries, console.region ?: Region.AUTO, { it.label }, { v ->
                     update { it.copy(region = v) }
-                }, null, Lucide.MapPin, recommended = Region.AUTO)
+                }, stringResource(Res.string.console_region_description), Lucide.MapPin, recommended = Region.AUTO)
             }
             if (boot) {
                 divider()
                 ChoiceRow("Démarrage", BootMode.entries, console.boot ?: CoreOptions.defaultBoot(id), { it.label }, { v ->
                     update { it.copy(boot = v) }
-                }, null, Lucide.Power, recommended = CoreOptions.defaultBoot(id))
+                }, stringResource(Res.string.console_boot_description), Lucide.Power, recommended = CoreOptions.defaultBoot(id))
             }
         }
     }
@@ -210,7 +227,7 @@ internal fun ConsolePage(controller: UiController, id: String) {
                 console.dsLayoutPortrait ?: GameLayouts.defaultDsLayout(true),
                 { it.label },
                 { v -> update { it.copy(dsLayoutPortrait = v) } },
-                null,
+                stringResource(Res.string.console_ds_portrait_description),
                 Lucide.Rows2,
                 recommended = GameLayouts.defaultDsLayout(true),
             )
@@ -221,14 +238,14 @@ internal fun ConsolePage(controller: UiController, id: String) {
                 console.dsLayoutLandscape ?: GameLayouts.defaultDsLayout(false),
                 { it.label },
                 { v -> update { it.copy(dsLayoutLandscape = v) } },
-                null,
+                stringResource(Res.string.console_ds_landscape_description),
                 Lucide.Columns2,
                 recommended = GameLayouts.defaultDsLayout(false),
             )
             GroupDivider()
             SwitchRow("Inverser les écrans", console.dsSwapScreens == true, { v ->
                 update { it.copy(dsSwapScreens = v) }
-            }, null, Lucide.RotateCw)
+            }, stringResource(Res.string.console_ds_swap_description), Lucide.RotateCw)
         }
     }
     SectionLabel("Commandes")
@@ -236,7 +253,7 @@ internal fun ConsolePage(controller: UiController, id: String) {
         if (CoreOptions.supportsAnalog(id)) {
             SwitchRow("Manette analogique (DualShock)", console.analog == true, { v ->
                 update { it.copy(analog = v) }
-            }, null, Lucide.Joystick)
+            }, stringResource(Res.string.console_analog_description), Lucide.Joystick)
             GroupDivider()
         }
         NavigationRow(

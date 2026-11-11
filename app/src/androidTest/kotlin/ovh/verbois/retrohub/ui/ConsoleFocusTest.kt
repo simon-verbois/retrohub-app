@@ -6,11 +6,14 @@ import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.Row
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.InputMode
+import androidx.compose.ui.input.InputModeManager
+import androidx.compose.ui.platform.LocalInputModeManager
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
@@ -20,6 +23,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import ovh.verbois.retrohub.ui.components.AutoFocus
 import ovh.verbois.retrohub.ui.components.GlassButton
 import ovh.verbois.retrohub.ui.components.PrimaryButton
 import ovh.verbois.retrohub.ui.theme.RetroHubTheme
@@ -43,8 +47,10 @@ class ConsoleFocusTest {
         // Une manette fait sortir Android du mode tactile : les éléments deviennent focalisables.
         InstrumentationRegistry.getInstrumentation().setInTouchMode(false)
         var clicked by mutableStateOf("")
+        val first = FocusRequester()
+        lateinit var inputMode: InputModeManager
         rule.setContent {
-            val first = remember { FocusRequester() }
+            inputMode = LocalInputModeManager.current
             RetroHubTheme {
                 Row {
                     PrimaryButton("Jouer", { clicked = "Jouer" }, Modifier.focusRequester(first))
@@ -52,8 +58,14 @@ class ConsoleFocusTest {
                     GlassButton("Favori", { clicked = "Favori" })
                 }
             }
-            androidx.compose.runtime.LaunchedEffect(Unit) { first.requestFocus() }
+            AutoFocus(first)
         }
+        rule.waitUntil(5_000) { rule.activity.hasWindowFocus() }
+        rule.runOnIdle {
+            inputMode.requestInputMode(InputMode.Keyboard)
+            first.requestFocus()
+        }
+        rule.waitUntil(5_000) { rule.onNodeWithText("Jouer").fetchSemanticsNode().config[SemanticsProperties.Focused] }
         rule.onNodeWithText("Jouer").assertIsFocused()
         pad(KeyEvent.KEYCODE_DPAD_RIGHT)
         rule.onNodeWithText("Fiche").assertIsFocused()

@@ -44,7 +44,7 @@ data class PairRequest(val code: String, @SerialName("device_name") val deviceNa
 data class Device(val id: String, val name: String, val platform: String = "")
 
 @Serializable
-data class AccountUser(val id: String, val username: String, @SerialName("is_admin") val isAdmin: Boolean = false)
+data class AccountUser(val id: String, val username: String, @SerialName("is_admin") val isAdmin: Boolean = false, val avatar: AccountAvatar? = null)
 
 @Serializable
 data class TokenResponse(val token: String, val device: Device, val user: AccountUser)

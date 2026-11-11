@@ -4,16 +4,21 @@ import androidx.activity.ComponentActivity
 import androidx.compose.material3.Text
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.hasScrollToIndexAction
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performKeyInput
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.test.pressKey
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import kotlinx.coroutines.runBlocking
@@ -60,7 +65,7 @@ class NavigationStateTest {
             val ui = remember {
                 UiController(container, scope).also {
                     controller = it
-                    it.nav.section(Section.LIBRARY)
+                    it.nav.go(Route.Library())
                 }
             }
             RetroHubTheme {
@@ -69,16 +74,20 @@ class NavigationStateTest {
                 }
             }
         }
-        rule.onNodeWithText("Toutes les consoles · Récents", useUnmergedTree = true).performClick()
-        rule.onNodeWithText("A → Z").performClick()
-        rule.onNode(hasScrollToIndexAction()).performScrollToIndex(151)
+        rule.onNodeWithContentDescription("Filtrer et trier").performClick()
+        rule.onNodeWithText("A → Z").performScrollTo().performClick()
+        rule.onNode(hasScrollToIndexAction()).performScrollToIndex(150)
         rule.onNodeWithTag("library-game-nav-150", useUnmergedTree = true).performSemanticsAction(SemanticsActions.RequestFocus) { it() }
+        rule.onNodeWithTag("library-game-nav-150", useUnmergedTree = true).assertIsFocused()
+        rule.onNodeWithContentDescription("Filtrer et trier").performSemanticsAction(SemanticsActions.RequestFocus) { it() }
+        rule.onNodeWithContentDescription("Filtrer et trier").performKeyInput { pressKey(Key.DirectionRight) }
         rule.onNodeWithTag("library-game-nav-150", useUnmergedTree = true).assertIsFocused()
         rule.runOnIdle { controller.nav.go(Route.Settings()) }
         rule.onNodeWithText("Autre écran").assertIsDisplayed()
         rule.runOnIdle { controller.nav.back() }
         rule.onNodeWithTag("library-game-nav-150", useUnmergedTree = true).assertIsDisplayed().assertIsFocused()
         rule.onNode(hasScrollToIndexAction()).performScrollToIndex(0)
-        rule.onNodeWithText("Toutes les consoles · A → Z", useUnmergedTree = true).assertIsDisplayed()
+        rule.onNodeWithContentDescription("Filtrer et trier").performClick()
+        rule.onNodeWithText("A → Z").assertIsDisplayed()
     }
 }

@@ -29,6 +29,35 @@ class GameSessionTest {
     private val plan = LaunchPlan("game", "play", "Jeu", "nes", "fceumm", "/rom.nes", "local-rom", "/system", "/core", "/sram", false)
 
     @Test
+    fun resetWaitsForAnOngoingSnapshotBeforeResuming() = runTest {
+        val saves = MemorySaveStore()
+        val engine = FakeEngine()
+        val api = TestApi()
+        try {
+            val session =
+                GameSession(plan, engine, saves.fs, saves, SaveSync(api.api, saves), MemorySessionStore(), {
+                }, backgroundScope, io = StandardTestDispatcher(testScheduler))
+            session.onFirstFrame()
+            session.pause()
+            val gate = CompletableDeferred<Unit>()
+            engine.beforeSnapshot = { gate.await() }
+            val snapshot = async { session.autoSave() }
+            runCurrent()
+            val reset = async { session.reset() }
+            runCurrent()
+            assertEquals(0, engine.resets)
+            assertTrue(session.ui.value.paused)
+            gate.complete(Unit)
+            snapshot.await()
+            reset.await()
+            assertEquals(1, engine.resets)
+            assertFalse(session.ui.value.paused)
+        } finally {
+            api.close()
+        }
+    }
+
+    @Test
     fun closingDuringRestoreCannotReplaceTheSavedGameWithTheBootState() = runTest {
         val saves = MemorySaveStore()
         val original = byteArrayOf(9, 8, 7)

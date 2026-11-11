@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -41,12 +42,12 @@ import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import ovh.verbois.retrohub.ui.theme.Palette
 
-private val Pill = RoundedCornerShape(percent = 50)
+private val Pill = RoundedCornerShape(28.dp)
 
 /** Le gros bouton d’action (Jouer, Reprendre, Continuer), couleur d’accent. */
 @Composable
@@ -72,7 +73,7 @@ fun PrimaryButton(
     }
     Box(
         modifier
-            .height(height)
+            .heightIn(min = height)
             .consoleFocus(Pill, onClick, enabled = enabled && !loading, focusScale = 1.05f)
             .clip(Pill)
             .background(if (enabled) Palette.Accent else Palette.Accent.copy(alpha = 0.45f))
@@ -80,7 +81,7 @@ fun PrimaryButton(
         contentAlignment = Alignment.Center,
     ) {
         Row(
-            Modifier.padding(horizontal = 26.dp),
+            Modifier.padding(horizontal = 24.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
@@ -96,10 +97,10 @@ fun PrimaryButton(
             }
             Text(
                 text,
+                Modifier.weight(1f, fill = false),
                 style = MaterialTheme.typography.labelLarge.copy(fontFeatureSettings = "tnum"),
                 color = Palette.OnAccent,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center,
             )
         }
     }
@@ -147,22 +148,22 @@ fun GlassButton(
 ) {
     Row(
         modifier
-            .height(height)
+            .heightIn(min = height)
             .consoleFocus(Pill, onClick, enabled = enabled)
             .clip(Pill)
             .background(Palette.GlassLight)
             .border(1.dp, Palette.Line, Pill)
-            .padding(horizontal = 20.dp),
+            .padding(horizontal = 20.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterHorizontally),
     ) {
         if (icon != null) Icon(icon, null, Modifier.size(20.dp), tint = if (enabled) tint else tint.copy(alpha = 0.4f))
         Text(
             text,
+            Modifier.weight(1f, fill = false),
             style = MaterialTheme.typography.labelLarge,
             color = if (enabled) tint else tint.copy(alpha = 0.4f),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
+            textAlign = TextAlign.Center,
         )
     }
 }
@@ -198,12 +199,12 @@ fun RoundButton(
 fun FilterChip(text: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier, dot: Color? = null) {
     Row(
         modifier
-            .height(40.dp)
+            .heightIn(min = 48.dp)
             .consoleFocus(Pill, onClick)
             .clip(Pill)
             .background(if (selected) Palette.Text else Palette.GlassLight)
             .border(1.dp, if (selected) Palette.Text else Palette.Line, Pill)
-            .padding(PaddingValues(horizontal = 16.dp)),
+            .padding(PaddingValues(horizontal = 16.dp, vertical = 10.dp)),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
@@ -212,7 +213,6 @@ fun FilterChip(text: String, selected: Boolean, onClick: () -> Unit, modifier: M
             text,
             style = MaterialTheme.typography.labelLarge.copy(fontSize = MaterialTheme.typography.labelMedium.fontSize),
             color = if (selected) Palette.Background else Palette.Text,
-            maxLines = 1,
         )
     }
 }
@@ -224,7 +224,7 @@ fun Badge(text: String, color: Color = Palette.Select, modifier: Modifier = Modi
             Pill,
         ).background(color.copy(alpha = 0.18f)).border(1.dp, color.copy(alpha = 0.5f), Pill).padding(horizontal = 10.dp, vertical = 3.dp),
     ) {
-        Text(text, style = MaterialTheme.typography.labelSmall, color = color, maxLines = 1)
+        Text(text, style = MaterialTheme.typography.labelSmall, color = color)
     }
 }
 

@@ -90,19 +90,37 @@ class UiLogicTest {
     }
 
     @Test
-    fun navigationCyclesSectionsAndGoesBackHome() {
+    fun shoulderNavigationFollowsVisibleSectionsWithoutWrapping() {
         val nav = Navigator()
+        nav.cycleSection(-1)
+        assertEquals(Route.Home, nav.current)
+        for (route in listOf(Route.Favorites, Route.Downloads, Route.Search, Route.User)) {
+            nav.cycleSection(1)
+            assertEquals(route, nav.current)
+        }
         nav.cycleSection(1)
-        assertEquals(Route.Library(), nav.current)
-        nav.cycleSection(-2)
-        assertEquals(Route.Downloads, nav.current)
+        assertEquals(Route.User, nav.current)
         nav.go(Route.Settings())
-        assertTrue(nav.back())
+        nav.cycleSection(-1)
+        assertEquals(Route.Search, nav.current)
+        nav.cycleSection(-1)
         assertEquals(Route.Downloads, nav.current)
         assertTrue(nav.back())
         assertEquals(Route.Home, nav.current)
         assertFalse(nav.back())
+    }
+
+    @Test
+    fun libraryIsAChildOfHomeAndNeverAShoulderSection() {
+        val nav = Navigator()
+        nav.go(Route.Library("nes"))
         assertEquals(Section.HOME, Section.of(nav.current))
+        nav.cycleSection(1)
+        assertEquals(Route.Favorites, nav.current)
+        nav.section(Section.HOME)
+        nav.go(Route.Library())
+        assertTrue(nav.back())
+        assertEquals(Route.Home, nav.current)
     }
 
     @Test

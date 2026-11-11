@@ -15,12 +15,17 @@ class FakeEngine : EmulatorEngine {
     var snapshot = byteArrayOf(1, 2, 3)
     var sram = byteArrayOf(4, 5)
     var loaded = 0
+    var resets = 0
+    var beforeSnapshot: suspend () -> Unit = {}
     var beforeLoad: suspend () -> Unit = {}
     val keys = mutableListOf<Triple<PadKey, Boolean, Int>>()
     val sticks = mutableListOf<Triple<Stick, Pair<Float, Float>, Int>>()
     override fun pause() = Unit
     override fun resume() = Unit
-    override suspend fun saveState() = snapshot
+    override suspend fun saveState(): ByteArray {
+        beforeSnapshot()
+        return snapshot
+    }
     override suspend fun saveSram() = sram
     override suspend fun loadState(data: ByteArray): Boolean {
         beforeLoad()
@@ -28,7 +33,9 @@ class FakeEngine : EmulatorEngine {
         loaded++
         return true
     }
-    override fun reset() = Unit
+    override suspend fun reset() {
+        resets++
+    }
     override fun setFastForward(speed: Int) = Unit
     override fun setAudio(enabled: Boolean) = Unit
     override fun key(key: PadKey, pressed: Boolean, port: Int) {

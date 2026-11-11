@@ -25,7 +25,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -39,7 +42,6 @@ import ovh.verbois.retrohub.ui.components.ProgressLine
 import ovh.verbois.retrohub.ui.components.consoleFocus
 import ovh.verbois.retrohub.ui.icons.Lucide
 import ovh.verbois.retrohub.ui.theme.Palette
-import ovh.verbois.retrohub.ui.theme.consoleColor
 
 /** Tuile de la rangée d’accueil : carrée, agrandie et cerclée de blanc quand elle est choisie. */
 @Composable
@@ -61,22 +63,11 @@ fun GameTile(
             .size(side)
             .semantics { contentDescription = game.title }
             .consoleFocus(shape, onClick, focusScale = 1f, ringWidth = 0.dp, onFocus = { if (it) onFocus() }, onLongClick = onLongClick)
-            .then(
-                if (selected) {
-                    Modifier.shadow(
-                        26.dp,
-                        shape,
-                        ambientColor = Color.White,
-                        spotColor = Color.White,
-                    )
-                } else {
-                    Modifier.shadow(10.dp, shape)
-                },
-            )
+            .shadow(if (selected) 12.dp else 6.dp, shape)
             .clip(shape)
             .border(if (selected) 3.dp else 1.dp, if (selected) Color.White else Palette.Line, shape),
     ) {
-        GameArt(game.remote.coverUrl, game.console, game.title, Modifier.fillMaxSize())
+        GameArt(game.remote.coverUrl, game.console, game.title, Modifier.fillMaxSize(), muted = !game.downloaded)
         if (game.downloaded) {
             Box(
                 Modifier.align(
@@ -85,7 +76,7 @@ fun GameTile(
             )
         }
         if (download is DownloadState.Running) {
-            ProgressLine(download.fraction, Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(8.dp))
+            DownloadOverlay(download.fraction, Modifier.align(Alignment.BottomCenter))
         }
     }
 }
@@ -99,7 +90,7 @@ fun GameCard(game: Game, onClick: () -> Unit, modifier: Modifier = Modifier, dow
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Box(Modifier.fillMaxWidth().aspectRatio(1f).shadow(12.dp, shape).clip(shape).border(1.dp, Palette.Line, shape)) {
-            GameArt(game.remote.coverUrl, game.console, game.title, Modifier.fillMaxSize(), showTitleOnFallback = false)
+            GameArt(game.remote.coverUrl, game.console, game.title, Modifier.fillMaxSize(), showTitleOnFallback = false, muted = !game.downloaded)
             if (game.downloaded) {
                 Row(
                     Modifier.align(
@@ -116,16 +107,12 @@ fun GameCard(game: Game, onClick: () -> Unit, modifier: Modifier = Modifier, dow
                 Icon(Lucide.Heart, "Favori", Modifier.align(Alignment.TopStart).padding(10.dp).size(16.dp), tint = Palette.Accent)
             }
             if (download is DownloadState.Running) {
-                ProgressLine(
-                    download.fraction,
-                    Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(10.dp),
-                )
+                DownloadOverlay(download.fraction, Modifier.align(Alignment.BottomCenter))
             }
         }
         Column(Modifier.padding(horizontal = 4.dp)) {
             Text(game.title, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(7.dp).clip(CircleShape).background(consoleColor(game.console)))
                 Text(
                     Consoles[game.console]?.shortName ?: game.console,
                     Modifier.weight(1f, fill = false),
@@ -144,5 +131,20 @@ fun GameCard(game: Game, onClick: () -> Unit, modifier: Modifier = Modifier, dow
                 }
             }
         }
+    }
+}
+
+/** Keep progress readable directly on the cover, independent of the artwork underneath. */
+@Composable
+private fun DownloadOverlay(fraction: Float, modifier: Modifier = Modifier) {
+    Column(
+        modifier.fillMaxWidth().testTag("game-download-progress")
+            .semantics { progressBarRangeInfo = ProgressBarRangeInfo(fraction.coerceIn(0f, 1f), 0f..1f) }
+            .background(Palette.SkyLow).padding(horizontal = 8.dp, vertical = 6.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Text("${(fraction.coerceIn(0f, 1f) * 100).toInt()} %", style = MaterialTheme.typography.labelSmall, color = Palette.Text)
+        ProgressLine(fraction, Modifier.fillMaxWidth())
     }
 }

@@ -17,6 +17,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -64,12 +66,14 @@ fun GameArt(
     modifier: Modifier = Modifier,
     showTitleOnFallback: Boolean = true,
     contentScale: ContentScale = ContentScale.Crop,
+    muted: Boolean = false,
 ) {
     val model = resolveArtwork(url)
+    val filter = if (muted) ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) }) else null
     var failed by remember(model) { mutableStateOf(model == null) }
     Box(modifier.background(Palette.Surface)) {
         if (failed || model == null) {
-            Image(painterResource(artworkResource(console)), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+            Image(painterResource(artworkResource(console)), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop, colorFilter = filter)
             if (showTitleOnFallback) {
                 Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.35f to Color.Transparent, 1f to Palette.SkyLow.copy(alpha = 0.9f))))
                 Text(
@@ -88,6 +92,7 @@ fun GameArt(
                 contentDescription = null,
                 modifier = Modifier.fillMaxSize(),
                 contentScale = contentScale,
+                colorFilter = filter,
                 onState = { state ->
                     if (state is AsyncImagePainter.State.Error) failed = true
                     if (state is AsyncImagePainter.State.Success) failed = false

@@ -4,35 +4,71 @@ import android.os.Bundle
 import android.view.KeyEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.lifecycleScope
+import com.journeyapps.barcodescanner.ScanContract
+import com.journeyapps.barcodescanner.ScanOptions
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import ovh.verbois.retrohub.account.AuthState
+import ovh.verbois.retrohub.account.QrCameraException
 import ovh.verbois.retrohub.ui.RetroHubRoot
 import ovh.verbois.retrohub.ui.UiController
 
 class MainActivity : ComponentActivity() {
     private var controller: UiController? = null
+    private var qrResult: CompletableDeferred<String?>? = null
+    private val scanLauncher = registerForActivityResult(ScanContract()) { result -> qrResult?.complete(result.contents) }
+    private val cameraPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) launchQrCamera() else qrResult?.completeExceptionally(QrCameraException())
+    }
+
+    private fun launchQrCamera() {
+        scanLauncher.launch(
+            ScanOptions().setCaptureActivity(PairingScanActivity::class.java)
+                .setDesiredBarcodeFormats(ScanOptions.QR_CODE)
+                .setPrompt(getString(R.string.qr_camera_prompt))
+                .setBeepEnabled(false).setBarcodeImageEnabled(false).setOrientationLocked(false),
+        )
+    }
+
+    private suspend fun scanQrCode(): String? {
+        check(qrResult == null)
+        val result = CompletableDeferred<String?>()
+        qrResult = result
+        try {
+            cameraPermission.launch(android.Manifest.permission.CAMERA)
+            return result.await()
+        } finally {
+            qrResult = null
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        enableEdgeToEdge()
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
+        )
         super.onCreate(savedInstanceState)
-        immersive()
+        showSystemBars()
         val container = (application as RetroHubApp).container
+        (application as RetroHubApp).platform.qrScanner = { scanQrCode() }
         onBackPressedDispatcher.addCallback(
             this,
             object : OnBackPressedCallback(true) {
                 override fun handleOnBackPressed() {
-                    if (controller?.back() != true) moveTaskToBack(true)
+                    controller?.back()
                 }
             },
         )
-        setContent { RetroHubRoot(container) { controller = it } }
+        setContent { RetroHubRoot(container, onExit = { finish() }) { controller = it } }
         // Notifications (téléchargements, conflits) : demandées une fois la configuration faite.
         lifecycleScope.launch {
             container.settings.settings.first { it.setupDone }
@@ -74,7 +110,7 @@ class MainActivity : ComponentActivity() {
             ui.container.settings.settings.value.setupDone
         ) {
             if (event.action == KeyEvent.ACTION_UP && event.repeatCount == 0) {
-                if (!ui.onButton(button)) moveTaskToBack(true)
+                ui.onButton(button)
             }
             return true
         }
@@ -83,7 +119,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        immersive()
+        showSystemBars()
         // Retour au premier plan : un 304 coûte peu, la bibliothèque reste à jour.
         val container = (application as RetroHubApp).container
         lifecycleScope.launch {
@@ -94,15 +130,20 @@ class MainActivity : ComponentActivity() {
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
-        if (hasFocus) immersive()
+        if (hasFocus) showSystemBars()
     }
 
-    /** Plein écran immersif, comme une console : les barres système reviennent d’un glissement. */
-    private fun immersive() {
+    override fun onDestroy() {
+        (application as RetroHubApp).platform.qrScanner = null
+        qrResult?.complete(null)
+        super.onDestroy()
+    }
+
+    /** Keep navigation gestures available; immersive mode is reserved for the running game. */
+    private fun showSystemBars() {
         WindowCompat.setDecorFitsSystemWindows(window, false)
         WindowInsetsControllerCompat(window, window.decorView).apply {
-            hide(WindowInsetsCompat.Type.systemBars())
-            systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            show(WindowInsetsCompat.Type.systemBars())
         }
     }
 }

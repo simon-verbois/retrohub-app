@@ -26,8 +26,26 @@ class UiController(val container: AppContainer, private val scope: CoroutineScop
         private set
     var launching by mutableStateOf<String?>(null)
         private set
-    var searching by mutableStateOf(false)
-    var menuOpen by mutableStateOf(false)
+    var searching: Boolean
+        get() = nav.current == Route.Search
+        set(value) {
+            if (value) {
+                nav.go(Route.Search)
+            } else if (searching) {
+                nav.back()
+            }
+        }
+    var menuOpen: Boolean
+        get() = nav.current == Route.User
+        set(value) {
+            if (value) {
+                nav.go(Route.User)
+            } else if (menuOpen) {
+                nav.back()
+            }
+        }
+    var exitRequested by mutableStateOf(false)
+    var launchIssue by mutableStateOf<Route?>(null)
     var portrait by mutableStateOf(false)
 
     /** Demande du code parental en cours : la raison affichée et ce qu’on fera une fois déverrouillé. */
@@ -44,6 +62,23 @@ class UiController(val container: AppContainer, private val scope: CoroutineScop
 
     /** Menu du jeu choisi, qui descend de son titre (appui long ou bouton □ de la manette). */
     var gameMenu by mutableStateOf(false)
+    var downloadRequest by mutableStateOf<Game?>(null)
+        private set
+
+    fun requestDownload(game: Game) {
+        gameMenu = false
+        downloadRequest = game
+    }
+
+    fun dismissDownload() {
+        downloadRequest = null
+    }
+
+    fun confirmDownload() {
+        val game = downloadRequest ?: return
+        downloadRequest = null
+        container.downloads.start(game)
+    }
 
     fun showGame(id: String) {
         homeGame = id
@@ -66,7 +101,16 @@ class UiController(val container: AppContainer, private val scope: CoroutineScop
     /** Boutons « système » de la manette, valables partout dans l’interface. */
     enum class Button { B, Y, LB, RB, START, SELECT }
 
-    fun onButton(button: Button): Boolean = when (button) {
+    fun onButton(button: Button): Boolean = when {
+        exitRequested || downloadRequest != null || pinRequest != null || launchIssue != null -> {
+            if (button == Button.B) back()
+            true
+        }
+
+        else -> handleButton(button)
+    }
+
+    private fun handleButton(button: Button): Boolean = when (button) {
         Button.B -> back()
 
         Button.Y -> {
@@ -75,11 +119,13 @@ class UiController(val container: AppContainer, private val scope: CoroutineScop
         }
 
         Button.LB -> {
+            gameMenu = false
             nav.cycleSection(-1)
             true
         }
 
         Button.RB -> {
+            gameMenu = false
             nav.cycleSection(1)
             true
         }
@@ -96,6 +142,26 @@ class UiController(val container: AppContainer, private val scope: CoroutineScop
     }
 
     fun back(): Boolean = when {
+        exitRequested -> {
+            exitRequested = false
+            true
+        }
+
+        pinRequest != null -> {
+            pinRequest = null
+            true
+        }
+
+        launchIssue != null -> {
+            launchIssue = null
+            true
+        }
+
+        downloadRequest != null -> {
+            dismissDownload()
+            true
+        }
+
         searching -> {
             searching = false
             true
@@ -111,7 +177,10 @@ class UiController(val container: AppContainer, private val scope: CoroutineScop
             true
         }
 
-        else -> nav.back()
+        else -> {
+            if (!nav.back()) exitRequested = true
+            true
+        }
     }
 
     /** Jouer : vérifie tout ce qui peut l’être, corrige ce qui peut l’être, puis lance. */
@@ -151,14 +220,13 @@ class UiController(val container: AppContainer, private val scope: CoroutineScop
                     is LaunchCheck.Ready -> container.platform.launchGame(check.plan)
 
                     LaunchCheck.NeedsDownload -> {
-                        container.downloads.start(game)
-                        show("Téléchargement du jeu…")
                         showGame(game.id)
+                        requestDownload(game)
                     }
 
-                    LaunchCheck.NeedsProgressionChoice -> nav.go(Route.Progression(game.id))
+                    LaunchCheck.NeedsProgressionChoice -> launchIssue = Route.Progression(game.id)
 
-                    is LaunchCheck.Conflicts -> nav.go(Route.Conflict(game.playGameId))
+                    is LaunchCheck.Conflicts -> launchIssue = Route.Conflict(game.playGameId)
 
                     is LaunchCheck.Blocked -> show(check.message)
                 }

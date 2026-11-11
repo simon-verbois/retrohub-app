@@ -226,7 +226,7 @@ private fun GamePhoneActions(controller: UiController, game: ovh.verbois.retrohu
             SettingRow("Annuler le téléchargement", icon = Lucide.X, onClick = { container.downloads.cancel(game.playGameId) })
         } else if (game.updateAvailable) {
             divider()
-            SettingRow("Mettre à jour le jeu", icon = Lucide.Download, onClick = { container.downloads.start(game) })
+            SettingRow("Mettre à jour le jeu", icon = Lucide.Download, onClick = { controller.requestDownload(game) })
         }
         if (game.downloaded) {
             divider()

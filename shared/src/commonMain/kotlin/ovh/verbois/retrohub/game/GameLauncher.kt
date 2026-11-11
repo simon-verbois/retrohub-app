@@ -170,6 +170,7 @@ class GameLauncher(
                     },
                     integerScale = consoleSettings.integerScale == true && Consoles.nativeSize(spec.id) != null,
                     portraitPosition = settings.portraitPosition,
+                    useDisplayCutout = settings.useDisplayCutout,
                     orientation = settings.orientation(spec.id),
                     turbo = consoleSettings.turbo,
                     remap = consoleSettings.remap,

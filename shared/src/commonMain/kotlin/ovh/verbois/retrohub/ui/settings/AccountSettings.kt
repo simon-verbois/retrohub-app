@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -29,9 +30,11 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import ovh.verbois.retrohub.account.AuthState
 import ovh.verbois.retrohub.api.AccountSecurity
 import ovh.verbois.retrohub.api.ApiException
 import ovh.verbois.retrohub.api.DeviceItem
+import ovh.verbois.retrohub.api.FEATURE_ACCOUNT_AVATARS
 import ovh.verbois.retrohub.api.PairingCode
 import ovh.verbois.retrohub.api.PasswordChange
 import ovh.verbois.retrohub.core.formatRelative
@@ -47,6 +50,7 @@ import ovh.verbois.retrohub.ui.components.GlassPanel
 import ovh.verbois.retrohub.ui.components.GroupDivider
 import ovh.verbois.retrohub.ui.components.MessageBanner
 import ovh.verbois.retrohub.ui.components.NavigationRow
+import ovh.verbois.retrohub.ui.components.ProfileAvatar
 import ovh.verbois.retrohub.ui.components.SectionLabel
 import ovh.verbois.retrohub.ui.components.SettingRow
 import ovh.verbois.retrohub.ui.components.SettingsGroup
@@ -65,12 +69,14 @@ private const val OFFLINE = "Cette action demande une connexion au serveur."
 @Composable
 internal fun AccountPage(controller: UiController) {
     val container = controller.container
-    val account = container.account.account
+    val auth by container.account.auth.collectAsState()
+    val account = (auth as? AuthState.SignedIn)?.account
     val settings by container.settings.settings.collectAsState()
     val status by container.serverStatus.collectAsState()
     val scope = rememberCoroutineScope()
     var confirm by remember { mutableStateOf(false) }
     var renaming by remember { mutableStateOf(false) }
+    var choosingAvatar by remember(account?.server, account?.userId) { mutableStateOf(false) }
     // Intervalle de sauvegarde : appliqué tout de suite, envoyé au compte quand le curseur s’arrête.
     var autoSave by remember { mutableStateOf(settings.autoSaveSeconds) }
     val initialAutoSave = remember { settings.autoSaveSeconds }
@@ -80,6 +86,12 @@ internal fun AccountPage(controller: UiController) {
         container.preferences.setAutoSave(autoSave)
     }
     val canRename = status?.features?.contains(FEATURE_DEVICE_RENAME) == true
+    val canChooseAvatar = status?.features?.contains(FEATURE_ACCOUNT_AVATARS) == true
+    LaunchedEffect(canChooseAvatar, account?.server, account?.userId) {
+        try {
+            container.account.refreshAvatar(canChooseAvatar)
+        } catch (_: ApiException) { /* Keep the cached avatar; editing can be retried. */ }
+    }
     SettingsGroup {
         SettingRow(
             "Serveur",
@@ -89,6 +101,12 @@ internal fun AccountPage(controller: UiController) {
         GroupDivider()
         SettingRow("Compte", subtitle = account?.username, icon = Lucide.User)
         GroupDivider()
+        if (canChooseAvatar && account != null) {
+            SettingRow("Photo de profil", icon = Lucide.Image, onClick = { choosingAvatar = true }) {
+                ProfileAvatar(account.username, account.server, account.avatar, Modifier.size(40.dp))
+            }
+            GroupDivider()
+        }
         SettingRow(
             "Cet appareil",
             subtitle = account?.deviceName + if (canRename) "" else " · le renommage arrivera avec une prochaine version du serveur",
@@ -123,6 +141,9 @@ internal fun AccountPage(controller: UiController) {
             Lucide.Cpu,
             { controller.nav.go(Route.Settings(SettingsPage.CONSOLES)) },
         )
+    }
+    if (choosingAvatar && account != null) {
+        AccountAvatarDialog(controller, account, onDismiss = { choosingAvatar = false })
     }
     if (renaming) {
         FormDialog(

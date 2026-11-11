@@ -5,14 +5,18 @@ import android.view.InputDevice
 import android.view.KeyEvent
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextClearance
 import androidx.compose.ui.test.performTextInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -31,6 +35,7 @@ import org.junit.runner.RunWith
 import ovh.verbois.retrohub.MainActivity
 import ovh.verbois.retrohub.RetroHubApp
 import ovh.verbois.retrohub.account.AuthState
+import ovh.verbois.retrohub.api.FEATURE_LIBRARY_EVENTS
 import ovh.verbois.retrohub.game.GameActivity
 import java.io.File
 
@@ -69,19 +74,36 @@ class EndToEndTest {
 
         pairWithCode(backend.pairingCode())
         finishSetup()
+        checkSettingsAndBackGesture()
+        checkAccountAvatars()
 
         // Catalogue : le jeu importé arrive dans l’interface console.
         waitUntil(30_000, "jeu dans le catalogue") { container.library.games.value.any { it.title == title } }
         waitText("Téléchargés")
         screenshot("home-landscape")
 
-        // Navigation à la manette : RB change de section, B revient à l’accueil.
+        // Changes imported while the app stays active arrive without a lifecycle restart.
+        val liveEvents = container.serverStatus.value?.features?.contains(FEATURE_LIBRARY_EVENTS) == true
+        if (liveEvents) {
+            waitUntil(10_000, "flux de bibliothèque connecté") {
+                rule.mainClock.advanceTimeBy(250)
+                container.foregroundLibrary.streaming.value
+            }
+        }
+        val liveTitle = "Ajout en direct $suffix"
+        backend.importRom("$liveTitle (FR).nes", Backend.nesRom(suffix.hashCode() + 1))
+        waitUntil(if (liveEvents) 8_000 else 30_000, "import reçu sans relancer l’application") {
+            // Keep virtual time below the polling interval when the real stream is available.
+            rule.mainClock.advanceTimeBy(if (liveEvents) 250 else 1_000)
+            container.library.games.value.any { it.title == liveTitle }
+        }
+        if (liveEvents) assertTrue(container.foregroundLibrary.streaming.value)
         pad(KeyEvent.KEYCODE_BUTTON_R1)
-        waitText("Toutes les consoles", substring = true)
+        waitText("Aucun favori pour l’instant")
         pad(KeyEvent.KEYCODE_BUTTON_B)
-        waitGone("Toutes les consoles", substring = true)
-        pad(KeyEvent.KEYCODE_BUTTON_R1)
-        waitText("Toutes les consoles", substring = true)
+        rule.onNodeWithTag("home-games").performScrollToNode(hasContentDescription("Toute la bibliothèque"))
+        clickDescription("Toute la bibliothèque")
+        rule.waitUntil(10_000) { rule.onAllNodesWithContentDescription("Filtrer et trier").fetchSemanticsNodes().isNotEmpty() }
         screenshot("library-landscape")
         // Recherche (bouton Y) : le jeu du test, quel que soit le contenu de la bibliothèque.
         pad(KeyEvent.KEYCODE_BUTTON_Y)
@@ -93,8 +115,13 @@ class EndToEndTest {
 
         // Le jeu est choisi sur l’accueil ; toucher sa tuile lance l’action : ici le téléchargement,
         // vérifié par son SHA-256.
-        waitText("À télécharger", substring = true)
-        clickDescription(title)
+        waitText("Télécharger ·", substring = true)
+        rule.onNodeWithTag("game-primary-action").performClick()
+        waitText("Télécharger ce jeu ?")
+        click("Annuler")
+        assertTrue(container.downloads.states.value[gameId] == null)
+        rule.onNodeWithTag("game-primary-action").performClick()
+        click("Télécharger")
         waitUntil(60_000, "jeu téléchargé") { runBlocking { container.database.roms().find(gameId) } != null }
         val local = runBlocking { container.database.roms().find(gameId) }!!
         val expected = backend.game(gameId)["rom"]!!.jsonObject["sha256"]!!.jsonPrimitive.content
@@ -102,9 +129,18 @@ class EndToEndTest {
         assertEquals(Backend.sha256(rom), expected)
         screenshot("selected-landscape")
 
-        // Lancement du cœur NES : la vue émulateur rend des images. Au moins 10 s, pour compter.
+        // Selecting the cover never starts a game; the explicit action does.
+        device.setOrientationNatural()
+        screenshot("selected-portrait")
         clickDescription(title)
+        assertTrue(GameActivity.current?.get() == null)
+        // Lancement du cœur NES : la vue émulateur rend des images. Au moins 10 s, pour compter.
+        rule.onNodeWithTag("game-primary-action").performClick()
         waitFrames(120)
+        if (liveEvents) {
+            waitUntil(5_000, "flux suspendu pendant le jeu") { !container.foregroundLibrary.streaming.value }
+        }
+        device.setOrientationLandscape()
         Thread.sleep(11_000)
         screenshot("game-landscape")
         // Rotation, advanced options and background saves also run against the optimized build.
@@ -143,8 +179,9 @@ class EndToEndTest {
 
         // Conflit : les deux versions côte à côte, le joueur garde celle du téléphone.
         waitUntil(60_000, "conflit détecté") { runBlocking { container.saveStore.find(gameId, "state", 1)?.inConflict == true } }
-        waitText("À choisir", timeout = 20_000)
-        click("À choisir")
+        rule.onNodeWithTag("game-primary-action").performClick()
+        waitText("Quelle partie reprendre ?", timeout = 20_000)
+        click("Choisir")
         waitText("Sur ce téléphone")
         waitText("Sur le serveur")
         screenshot("conflict-landscape")
@@ -172,8 +209,8 @@ class EndToEndTest {
         shell("svc data disable")
         waitUntil(30_000, "hors ligne") { !container.platform.online.value }
         // Déjà joué : la carte « Reprendre » apparaît, et le jeu se lance sans réseau.
-        waitText("REPRENDRE")
-        clickDescription(title)
+        waitText("Reprendre")
+        rule.onNodeWithTag("game-primary-action").performClick()
         waitFrames(60)
         Thread.sleep(12_000)
         quitGame()
@@ -206,12 +243,39 @@ class EndToEndTest {
 
     private fun pairWithCode(code: String) {
         waitText("Commencer")
+        device.setOrientationNatural()
+        screenshot("welcome-portrait")
         click("Commencer")
+        device.setOrientationLandscape()
+        rule.waitForIdle()
+        Thread.sleep(350)
         val address = rule.onNode(hasSetTextAction() and hasText("Adresse du serveur"))
         address.performTextInput(serverUrl)
         address.performImeAction()
         waitText("Relier ce téléphone")
-        rule.onNode(hasSetTextAction() and hasText("Code d’appairage")).performTextInput(code.replace("-", ""))
+        // Denial leaves manual entry available; then exercise the registered camera-result flow.
+        click("Scanner un code QR")
+        val deny = device.wait(
+            androidx.test.uiautomator.Until.findObject(androidx.test.uiautomator.By.res("com.android.permissioncontroller:id/permission_deny_button")),
+            5_000,
+        )
+        if (deny != null) {
+            deny.click()
+            waitText("Autorisez la caméra", substring = true)
+        }
+        instrumentation.uiAutomation.grantRuntimePermission(instrumentation.targetContext.packageName, android.Manifest.permission.CAMERA)
+        val result = android.content.Intent().putExtra("SCAN_RESULT", code).putExtra("SCAN_RESULT_FORMAT", "QR_CODE")
+        val monitor = instrumentation.addMonitor(
+            ovh.verbois.retrohub.PairingScanActivity::class.java.name,
+            android.app.Instrumentation.ActivityResult(android.app.Activity.RESULT_OK, result),
+            true,
+        )
+        try {
+            click("Scanner un code QR")
+            rule.waitUntil(10_000) { rule.onAllNodesWithText(code).fetchSemanticsNodes().isNotEmpty() }
+        } finally {
+            instrumentation.removeMonitor(monitor)
+        }
         val name = rule.onNode(hasSetTextAction() and hasText("Nom de cet appareil"))
         name.performTextClearance()
         name.performTextInput(deviceName)
@@ -220,13 +284,74 @@ class EndToEndTest {
 
     private fun finishSetup() {
         waitText("Bienvenue,", timeout = 20_000, substring = true)
+        device.setOrientationNatural()
+        screenshot("setup-play-portrait")
         click("Continuer")
         waitText("Performances")
         click("Continuer")
         waitText("Confort")
+        screenshot("setup-comfort-portrait")
         click("Continuer")
         waitText("Découvrir ma bibliothèque")
+        screenshot("setup-ready-portrait")
         click("Découvrir ma bibliothèque")
+        device.setOrientationLandscape()
+    }
+
+    private fun checkSettingsAndBackGesture() {
+        waitText("Téléchargés")
+        pad(KeyEvent.KEYCODE_BUTTON_START)
+        click("Paramètres de l’application")
+        click("Réglages des consoles")
+        click("Nintendo DS")
+        device.setOrientationNatural()
+        screenshot("settings-ds-portrait")
+        shell("cmd overlay enable-exclusive --category com.android.internal.systemui.navbar.gestural")
+        Thread.sleep(500)
+        device.swipe(1, device.displayHeight / 2, device.displayWidth / 3, device.displayHeight / 2, 25)
+        waitText("Consoles")
+        device.swipe(1, device.displayHeight / 2, device.displayWidth / 3, device.displayHeight / 2, 25)
+        waitText("Paramètres")
+        click("Apparence")
+        click("Thème")
+        waitText("Conseillé")
+        screenshot("appearance-portrait")
+        device.pressBack()
+        click("Affichage")
+        click("Utiliser tout l’écran")
+        assertTrue(container.settings.settings.value.useDisplayCutout)
+        device.pressBack()
+        device.pressBack()
+        click("Accueil")
+        waitText("Téléchargés")
+        device.setOrientationLandscape()
+    }
+
+    private fun checkAccountAvatars() {
+        if (container.serverStatus.value?.features?.contains("account_avatars") != true) return
+        val catalogue = backend.avatarCatalogue()
+        val defaultId = catalogue["default_avatar"]!!.jsonObject["id"]!!.jsonPrimitive.content
+        val target = catalogue["avatars"]!!.jsonArray.map { it.jsonObject }.first { it["id"]!!.jsonPrimitive.content != defaultId }
+        val targetId = target["id"]!!.jsonPrimitive.content
+        pad(KeyEvent.KEYCODE_BUTTON_START)
+        click("Compte RetroHub")
+        click("Photo de profil")
+        waitText("Par défaut")
+        rule.onNodeWithTag("account-avatar-$targetId").performScrollTo().performClick()
+        screenshot("account-avatars-landscape")
+        click("Enregistrer")
+        rule.waitUntil(10_000) { container.account.account?.avatar?.id == targetId }
+        waitGone("Enregistrer")
+        assertEquals(targetId, backend.accountAvatar()["id"]!!.jsonPrimitive.content)
+        click("Photo de profil")
+        waitText("Par défaut")
+        rule.onNodeWithTag("account-avatar-default").performScrollTo().performClick()
+        click("Enregistrer")
+        rule.waitUntil(10_000) { container.account.account?.avatar?.id == defaultId }
+        waitGone("Enregistrer")
+        assertEquals(defaultId, backend.accountAvatar()["id"]!!.jsonPrimitive.content)
+        pad(KeyEvent.KEYCODE_BUTTON_B)
+        click("Accueil")
     }
 
     private fun saveStateInSlot(slot: Int) {
@@ -250,7 +375,12 @@ class EndToEndTest {
         rule.waitForIdle()
     }
 
-    private fun waitFrames(count: Long) = waitUntil(30_000, "images du cœur") { (GameActivity.current?.get()?.frames?.value ?: 0) >= count }
+    private fun waitFrames(count: Long) = waitUntil(30_000, "images du cœur") {
+        // Game content is composed after asynchronous ROM preparation. Keep the test frame clock
+        // advancing until that new activity has drawn; native frames are still counted separately.
+        rule.waitForIdle()
+        (GameActivity.current?.get()?.frames?.value ?: 0) >= count
+    }
 
     // ---- Outils -------------------------------------------------------------------------------
 
@@ -294,8 +424,13 @@ class EndToEndTest {
             if (runCatching(condition).getOrDefault(false)) return
             Thread.sleep(300)
         }
+        val game = GameActivity.current?.get()
+        android.util.Log.e(
+            "RetroHubE2E",
+            "Timeout $what: frames=${game?.frames?.value}, lifecycle=${game?.lifecycle?.currentState}, finishing=${game?.isFinishing}, destroyed=${game?.isDestroyed}",
+        )
         screenshot("echec-attente")
-        throw AssertionError("Délai dépassé : $what")
+        throw AssertionError("Délai dépassé : $what (frames=${game?.frames?.value}, lifecycle=${game?.lifecycle?.currentState})")
     }
 
     /** Un appui de manette (KeyEvent avec la source gamepad). */
