@@ -10,6 +10,12 @@ change, in plain text. Never rewrite the notes of a published version.
 
 ## [Unreleased]
 
+## [2026.46.3] - 2026-11-11
+
+### Internal
+
+- First version published on GitHub with its signed APK, after an interrupted publication.
+
 ## [2026.46.2] - 2026-11-11
 
 ### Changed
