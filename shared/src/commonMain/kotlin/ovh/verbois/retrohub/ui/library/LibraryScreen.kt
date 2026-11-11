@@ -19,6 +19,7 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
@@ -29,20 +30,27 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import ovh.verbois.retrohub.core.formatBytes
 import ovh.verbois.retrohub.emulation.Consoles
 import ovh.verbois.retrohub.library.Game
@@ -70,9 +78,9 @@ enum class Sort(val label: String) {
 }
 
 fun sortGames(games: List<Game>, sort: Sort): List<Game> = when (sort) {
-    Sort.RECENT -> games.sortedWith(compareByDescending<Game> { it.lastPlayed }.thenBy { it.title.lowercase() })
+    Sort.RECENT -> games.sortedWith(compareByDescending<Game> { it.lastPlayed }.thenBy { it.sortTitle })
 
-    Sort.TITLE -> games.sortedBy { it.title.lowercase() }
+    Sort.TITLE -> games.sortedBy { it.sortTitle }
 
     Sort.CONSOLE -> games.sortedWith(
         compareBy<Game> {
@@ -85,7 +93,7 @@ fun sortGames(games: List<Game>, sort: Sort): List<Game> = when (sort) {
                     i
                 }
             }
-        }.thenBy { it.title.lowercase() },
+        }.thenBy { it.sortTitle },
     )
 }
 
@@ -96,16 +104,30 @@ fun LibraryScreen(controller: UiController, console: String?, favoritesOnly: Boo
     val downloads by controller.container.downloads.states.collectAsState()
     var filter by rememberSaveable(console) { mutableStateOf(console) }
     var sort by rememberSaveable { mutableStateOf(Sort.RECENT) }
+    var focusedGame by rememberSaveable { mutableStateOf<String?>(null) }
+    val restoredFocus = remember { androidx.compose.ui.focus.FocusRequester() }
     val hidden = controller.container.settings.settings.collectAsState().value.hiddenConsoles
     val base =
         remember(games, favoritesOnly, hidden) {
             games.filter { (!favoritesOnly || it.favorite) && it.console !in hidden }
         }
     val consoles = remember(base) { Consoles.all.filter { spec -> base.any { it.console == spec.id } } }
-    val shown = remember(base, filter, sort) { sortGames(base.filter { filter == null || it.console == filter }, sort) }
+    val sorted by produceState<List<Game>?>(null, base, filter, sort) {
+        value = withContext(Dispatchers.Default) { sortGames(base.filter { filter == null || it.console == filter }, sort) }
+    }
+    val shown = sorted ?: return
+    val grid = rememberLazyGridState()
     LaunchedEffect(filter) { controller.backdrop = Backdrop(null, filter ?: shown.firstOrNull()?.console) }
     val first = remember { androidx.compose.ui.focus.FocusRequester() }
-    ovh.verbois.retrohub.ui.components.AutoFocus(first)
+    if (focusedGame == null || shown.none { it.id == focusedGame }) ovh.verbois.retrohub.ui.components.AutoFocus(first)
+    LaunchedEffect(Unit) {
+        val index = shown.indexOfFirst { it.id == focusedGame }
+        if (index >= 0) {
+            if (grid.layoutInfo.visibleItemsInfo.none { it.key == focusedGame }) grid.scrollToItem(index + 1)
+            snapshotFlow { grid.layoutInfo.visibleItemsInfo.any { it.key == focusedGame } }.first { it }
+            runCatching { restoredFocus.requestFocus() }
+        }
+    }
     if (base.isEmpty()) {
         CenteredMessage(
             if (favoritesOnly) "Aucun favori pour l’instant" else "Bibliothèque vide",
@@ -119,6 +141,7 @@ fun LibraryScreen(controller: UiController, console: String?, favoritesOnly: Boo
         return
     }
     LazyVerticalGrid(
+        state = grid,
         columns = GridCells.Adaptive(if (controller.portrait) 150.dp else 168.dp),
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(start = 24.dp, end = 24.dp, bottom = 24.dp),
@@ -137,7 +160,14 @@ fun LibraryScreen(controller: UiController, console: String?, favoritesOnly: Boo
             }
         }
         items(shown, key = { it.id }) { game ->
-            GameCard(game, { controller.showGame(game.id) }, download = downloads[game.playGameId])
+            GameCard(
+                game,
+                { controller.showGame(game.id) },
+                modifier = (if (game.id == focusedGame) Modifier.focusRequester(restoredFocus) else Modifier)
+                    .testTag("library-game-${game.id}")
+                    .onFocusChanged { if (it.isFocused) focusedGame = game.id },
+                download = downloads[game.playGameId],
+            )
         }
     }
 }
@@ -151,7 +181,8 @@ fun DownloadsScreen(controller: UiController) {
     val scope = rememberCoroutineScope()
     var usage by remember { mutableStateOf<StorageUsage?>(null) }
     var confirm by remember { mutableStateOf<Game?>(null) }
-    val local = remember(games, downloads) { games.filter { it.downloaded || downloads.containsKey(it.playGameId) }.sortedBy { it.title.lowercase() } }
+    val downloading = remember(downloads) { downloads.keys }
+    val local = remember(games, downloading) { games.filter { it.downloaded || it.playGameId in downloading }.sortedBy { it.sortTitle } }
     LaunchedEffect(local.size) { usage = container.downloads.usage() }
     LaunchedEffect(Unit) { controller.backdrop = Backdrop(null, local.firstOrNull()?.console) }
     LazyColumn(

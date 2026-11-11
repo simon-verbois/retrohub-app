@@ -47,6 +47,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -105,6 +106,7 @@ fun ConsoleShell(controller: UiController, account: Account, content: @Composabl
     val gamepad by container.platform.gamepadConnected.collectAsState()
     val settings by container.settings.settings.collectAsState()
     val route = controller.nav.current
+    val screenStates = rememberSaveableStateHolder()
     val showHints =
         when (settings.hints) {
             HintsMode.ALWAYS -> true
@@ -151,7 +153,7 @@ fun ConsoleShell(controller: UiController, account: Account, content: @Composabl
                             (fadeOut(tween(160)) + slideOutHorizontally(tween(220)) { -it / 16 * dir })
                     },
                     label = "screen",
-                ) { target -> content(target) }
+                ) { target -> screenStates.SaveableStateProvider(target.toString()) { content(target) } }
             }
             if (showHints) HintsBar()
         }

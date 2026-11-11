@@ -3,125 +3,159 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#173faa">
-  <title>RetroHub — Tu salón recreativo RetroHub, en el bolsillo.</title>
-  <meta name="description" content="Los juegos de tu servidor RetroHub, jugables sin conexión, con partidas guardadas que te siguen en la web.">
-  <meta property="og:title" content="RetroHub — Tu salón recreativo RetroHub, en el bolsillo.">
-  <meta property="og:description" content="Los juegos de tu servidor RetroHub, jugables sin conexión, con partidas guardadas que te siguen en la web.">
+  <meta name="theme-color" content="#fafbfe">
+  <title>RetroHub — Tus juegos retro. La partida continúa.</title>
+  <meta name="description" content="Lleva contigo los juegos de tu servidor RetroHub. Juega sin conexión en el móvil y continúa la partida en la web.">
+  <meta property="og:title" content="RetroHub — Tus juegos retro. La partida continúa.">
+  <meta property="og:description" content="Lleva contigo los juegos de tu servidor RetroHub. Juega sin conexión en el móvil y continúa la partida en la web.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://simon-verbois.github.io/retrohub-app/es/">
+  <meta property="og:image" content="https://simon-verbois.github.io/retrohub-app/screenshots/home.webp">
   <link rel="canonical" href="https://simon-verbois.github.io/retrohub-app/es/">
   <link rel="alternate" hreflang="en" href="https://simon-verbois.github.io/retrohub-app/">
   <link rel="alternate" hreflang="fr" href="https://simon-verbois.github.io/retrohub-app/fr/">
   <link rel="alternate" hreflang="de" href="https://simon-verbois.github.io/retrohub-app/de/">
   <link rel="alternate" hreflang="es" href="https://simon-verbois.github.io/retrohub-app/es/">
   <link rel="alternate" hreflang="it" href="https://simon-verbois.github.io/retrohub-app/it/">
-  <link rel="alternate" hreflang="pl" href="https://simon-verbois.github.io/retrohub-app/pl/">
   <link rel="alternate" hreflang="nl" href="https://simon-verbois.github.io/retrohub-app/nl/">
   <link rel="alternate" hreflang="pt-PT" href="https://simon-verbois.github.io/retrohub-app/pt/">
-  <link rel="alternate" hreflang="ro" href="https://simon-verbois.github.io/retrohub-app/ro/">
-  <link rel="alternate" hreflang="el" href="https://simon-verbois.github.io/retrohub-app/el/">
-  <link rel="alternate" hreflang="hu" href="https://simon-verbois.github.io/retrohub-app/hu/">
-  <link rel="alternate" hreflang="cs" href="https://simon-verbois.github.io/retrohub-app/cs/">
   <link rel="alternate" hreflang="x-default" href="https://simon-verbois.github.io/retrohub-app/">
   <link rel="icon" href="../favicon.svg" type="image/svg+xml">
+  <link rel="preload" href="../fonts/manrope-extrabold.ttf" as="font" type="font/ttf" crossorigin>
   <link rel="stylesheet" href="../styles.css">
+  <script src="../site.js" defer></script>
 </head>
 <body>
-  <header class="top">
-    <a class="brand" href="#main"><img src="../favicon.svg" width="32" height="32" alt=""> RetroHub</a>
-    <nav aria-label="RetroHub">
-      <a href="#features">Funciones</a>
+  <a class="skip-link" href="#main">Ir al contenido</a>
+  <header class="header wrap">
+    <a class="brand" href="#main" aria-label="RetroHub"><img src="../favicon.svg" width="36" height="36" alt="">RetroHub</a>
+    <nav class="main-nav" aria-label="Navegación principal">
+      <a href="#app">La aplicación</a>
       <a href="#consoles">Consolas</a>
-      <a href="#server">Servidor</a>
-      <a href="https://github.com/simon-verbois/retrohub-app">GitHub</a>
+      <a href="#install">Instalar</a>
     </nav>
     <details class="languages">
-      <summary><span class="sr-only">Idioma: </span>Español <span aria-hidden="true">⌄</span></summary>
-      <ul><li><a href="../" lang="en" hreflang="en">English</a></li>
-<li><a href="../fr/" lang="fr" hreflang="fr">Français</a></li>
-<li><a href="../de/" lang="de" hreflang="de">Deutsch</a></li>
-<li><a href="../es/" lang="es" hreflang="es" aria-current="page">Español</a></li>
-<li><a href="../it/" lang="it" hreflang="it">Italiano</a></li>
-<li><a href="../pl/" lang="pl" hreflang="pl">Polski</a></li>
-<li><a href="../nl/" lang="nl" hreflang="nl">Nederlands</a></li>
-<li><a href="../pt/" lang="pt-PT" hreflang="pt-PT">Português</a></li>
-<li><a href="../ro/" lang="ro" hreflang="ro">Română</a></li>
-<li><a href="../el/" lang="el" hreflang="el">Ελληνικά</a></li>
-<li><a href="../hu/" lang="hu" hreflang="hu">Magyar</a></li>
-<li><a href="../cs/" lang="cs" hreflang="cs">Čeština</a></li></ul>
+      <summary><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a18 18 0 0 1 0 18 18 18 0 0 1 0-18"/></svg><span>Español</span><svg class="chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg></summary>
+      <nav aria-label="Idioma"><a href="../" lang="en" hreflang="en">English</a>
+<a href="../fr/" lang="fr" hreflang="fr">Français</a>
+<a href="../de/" lang="de" hreflang="de">Deutsch</a>
+<a href="../es/" lang="es" hreflang="es" aria-current="page">Español</a>
+<a href="../it/" lang="it" hreflang="it">Italiano</a>
+<a href="../nl/" lang="nl" hreflang="nl">Nederlands</a>
+<a href="../pt/" lang="pt-PT" hreflang="pt-PT">Português</a></nav>
     </details>
   </header>
 
   <main id="main">
-    <section class="hero">
-      <div class="hero-text">
-        <p class="kicker">Cliente Android</p>
-        <h1>Tu salón recreativo RetroHub, en el bolsillo.</h1>
-        <p class="lead">Los juegos de tu servidor RetroHub, jugables sin conexión, con partidas guardadas que te siguen en la web.</p>
-        <div class="actions">
-          <a class="button primary" href="https://github.com/simon-verbois/retrohub-app/releases/latest">Descargar el APK</a>
-          <a class="button" href="#server">El servidor RetroHub</a>
-        </div>
-        <a class="coffee" href="https://buymeacoffee.com/simonverbois"><img src="../buy-me-a-coffee.png" width="178" height="50" alt="Buy Me a Coffee"></a>
+    <section class="hero wrap" aria-labelledby="hero-title">
+      <p class="platform"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="2" width="12" height="20" rx="3"/><path d="M10 18h4"/></svg>La aplicación Android de RetroHub</p>
+      <h1 id="hero-title">Tus juegos retro.<br>La partida continúa.</h1>
+      <p class="lead">Lleva contigo los juegos de tu servidor RetroHub. Juega sin conexión en el móvil y continúa la partida en la web.</p>
+      <div class="actions">
+        <a class="button primary" href="https://github.com/simon-verbois/retrohub-app/releases/latest"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M5 16v4h14v-4"/></svg>Descargar para Android</a>
+        <a class="button secondary" href="#app">Ver la aplicación</a>
       </div>
-      <figure class="screen hero-screen">
-        <img src="../screenshots/home.webp" width="1200" height="540" alt="Pantalla de inicio: una fila de juegos, el juego elegido y sus tarjetas de actividad">
+      <p class="requirements">Android 8.0 o posterior. <a href="#server">Requiere un servidor RetroHub.</a></p>
+      <figure class="hero-product">
+        <a href="../screenshots/home.webp" class="screenshot device" data-screenshot aria-label="Ampliar la captura de inicio" data-caption="El inicio y las últimas partidas">
+          <img src="../screenshots/home.webp" width="1200" height="540" fetchpriority="high" alt="Inicio de RetroHub con carátulas, el juego seleccionado y tarjetas de partida guardada, tiempo de juego y sincronización">
+          <span class="zoom" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5"/></svg></span>
+        </a>
+        <figcaption>Capturas de la aplicación con una biblioteca de demostración. La interfaz está en francés.</figcaption>
       </figure>
     </section>
 
-    <section id="server" class="server">
-      <h2>Un cliente para el servidor RetroHub</h2>
-      <p>La aplicación no funciona sola: se conecta a tu servidor RetroHub autoalojado. La biblioteca, los juegos, las partidas y el tiempo de juego vienen de él.</p>
-      <div class="actions">
-        <a class="button primary" href="https://simon-verbois.github.io/retrohub/">Descubrir RetroHub</a>
-        <a class="button" href="https://github.com/simon-verbois/retrohub">Código del servidor</a>
+    <section id="app" class="app-section section" aria-labelledby="app-title">
+      <div class="wrap">
+        <div class="section-heading">
+          <h2 id="app-title">Tus juegos, en primer plano.</h2>
+          <p>Una pantalla de inicio pensada como una consola. Tu biblioteca, tus últimas partidas y los ajustes siempre a mano.</p>
+        </div>
+        <div class="showcase-tabs" role="tablist" aria-label="Vistas de la aplicación" hidden>
+          <button id="tab-home" type="button" role="tab" aria-controls="view-home" aria-selected="false" tabindex="-1">Inicio</button>
+          <button id="tab-library" type="button" role="tab" aria-controls="view-library" aria-selected="true" tabindex="0">Biblioteca</button>
+          <button id="tab-settings" type="button" role="tab" aria-controls="view-settings" aria-selected="false" tabindex="-1">Ajustes</button>
+        </div>
+        <div class="showcase-panels">
+          <figure id="view-home" class="showcase-panel">
+            <a href="../screenshots/home.webp" class="screenshot" data-screenshot aria-label="Ampliar la captura de inicio" data-caption="El inicio y las últimas partidas"><img src="../screenshots/home.webp" width="1200" height="540" loading="lazy" alt="Inicio de RetroHub con carátulas, el juego seleccionado y tarjetas de partida guardada, tiempo de juego y sincronización"><span class="zoom" aria-hidden="true">+</span></a>
+            <figcaption><h3>Continúa donde lo dejaste.</h3><p>Elige un juego entre las carátulas. Tu última partida guardada, el tiempo de juego y el estado de sincronización siguen a la vista.</p></figcaption>
+          </figure>
+          <figure id="view-library" class="showcase-panel">
+            <a href="../screenshots/library.webp" class="screenshot" data-screenshot aria-label="Ampliar la captura de la biblioteca" data-caption="La biblioteca y sus filtros"><img src="../screenshots/library.webp" width="1200" height="540" loading="lazy" alt="Biblioteca de RetroHub con varias carátulas y el filtro por consola"><span class="zoom" aria-hidden="true">+</span></a>
+            <figcaption><h3>Encuentra tu próximo juego.</h3><p>Explora las carátulas, filtra por consola y ten tus favoritos a mano. Descarga los juegos que quieras llevar contigo.</p></figcaption>
+          </figure>
+          <figure id="view-settings" class="showcase-panel">
+            <a href="../screenshots/settings.webp" class="screenshot" data-screenshot aria-label="Ampliar la captura de los ajustes" data-caption="Los ajustes por consola"><img src="../screenshots/settings.webp" width="1200" height="540" loading="lazy" alt="Ajustes de una consola en RetroHub"><span class="zoom" aria-hidden="true">+</span></a>
+            <figcaption><h3>Cada consola, a tu manera.</h3><p>Imagen, resolución, botones y velocidad de avance rápido: adapta cada consola a tu forma de jugar.</p></figcaption>
+          </figure>
+        </div>
       </div>
     </section>
 
-    <section id="features" class="features">
-      <h2>Funciones</h2>
-      <div class="grid">
-        <article><h3>Sin conexión</h3><p>Un juego descargado funciona sin red. Todo se sincroniza al volver la conexión.</p></article>
-        <article><h3>La misma partida en todas partes</h3><p>Empieza en el móvil, continúa en el navegador, y al revés.</p></article>
-        <article><h3>Nada se sobrescribe</h3><p>¿Dos versiones de la misma partida? Tú eliges cuál conservar.</p></article>
-        <article><h3>Como una consola</h3><p>Navegación con mando, táctil o teclado.</p></article>
-        <article><h3>Controles fieles</h3><p>Una disposición táctil por consola, movible con el dedo, oculta en cuanto se conecta un mando.</p></article>
-        <article><h3>Ajustes por consola</h3><p>Emulador, imagen, idioma, región, botones, turbo y trucos.</p></article>
+    <section class="section wrap play-section" aria-labelledby="play-title">
+      <h2 id="play-title">Juega como te gusta.</h2>
+      <div class="play-features">
+        <article>
+          <svg class="feature-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m2 2 20 20M2 8.8a16 16 0 0 1 2.4-1.5M7 6a16 16 0 0 1 15 2.8M5 12a11 11 0 0 1 2.3-1.4m4.1-1a11 11 0 0 1 7.6 2.4M8.5 15.5a5.5 5.5 0 0 1 7 0M12 19h.01"/></svg>
+          <h3>Incluso sin conexión.</h3>
+          <p>Descarga tus juegos antes de salir. Podrás jugar sin conexión; las partidas guardadas se sincronizarán cuando vuelvas a conectarte.</p>
+        </article>
+        <article>
+          <svg class="feature-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 7h12a3 3 0 0 1 3 2.5l1 7a2.5 2.5 0 0 1-4.2 2.1L15 16H9l-2.8 2.6A2.5 2.5 0 0 1 2 16.5l1-7A3 3 0 0 1 6 7ZM6 11v4m-2-2h4m8-1h.01M19 14h.01"/></svg>
+          <h3>Con la pantalla o con un mando.</h3>
+          <p>Los controles táctiles se adaptan a cada consola. Conecta un mando y desaparecen. También puedes recorrer toda la aplicación con sus botones.</p>
+        </article>
       </div>
     </section>
 
-    <section class="gallery-section">
-      <div class="gallery">
-        <figure class="screen"><img src="../screenshots/conflict.webp" width="1200" height="540" loading="lazy" alt="Elección entre dos versiones de una partida"><figcaption>Dos versiones de una partida, lado a lado</figcaption></figure>
-        <figure class="screen"><img src="../screenshots/game.webp" width="1200" height="540" loading="lazy" alt="Partida en curso con controles táctiles"><figcaption>Controles táctiles de cada consola</figcaption></figure>
-        <figure class="screen"><img src="../screenshots/library.webp" width="1200" height="540" loading="lazy" alt="Biblioteca filtrada por consola"><figcaption>Biblioteca, filtrada por consola</figcaption></figure>
+    <section class="saves-section section" aria-labelledby="saves-title">
+      <div class="wrap saves-layout">
+        <div class="saves-copy">
+          <svg class="feature-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7a8 8 0 0 0-14-2L3 8m0-5v5h5M4 17a8 8 0 0 0 14 2l3-3m-5 0h5v5"/></svg>
+          <h2 id="saves-title">Cambia de pantalla. Conserva tu partida.</h2>
+          <p>Empieza en el móvil y continúa en el navegador. Tus partidas guardadas y el tiempo de juego siguen a tu cuenta RetroHub.</p>
+          <p class="saves-detail">Si has jugado en ambos dispositivos, la aplicación te deja elegir qué partida guardada conservar antes de reemplazar nada.</p>
+        </div>
+        <figure>
+          <a href="../screenshots/conflict.webp" class="screenshot" data-screenshot aria-label="Ampliar la captura de selección de partida guardada" data-caption="¿Han cambiado ambas partidas guardadas? Tú eliges cuál conservar."><img src="../screenshots/conflict.webp" width="1200" height="540" loading="lazy" alt="Dos partidas guardadas del mismo juego, en el móvil y en el servidor, cada una con un botón para elegirla"><span class="zoom" aria-hidden="true">+</span></a>
+          <figcaption>¿Han cambiado ambas partidas guardadas? Tú eliges cuál conservar.</figcaption>
+        </figure>
       </div>
-      <p class="note">Las capturas muestran la aplicación en francés. Pronto llegarán más idiomas.</p>
     </section>
 
-    <section id="consoles" class="consoles">
-      <h2>Consolas</h2>
-      <ul>
-        <li>NES</li><li>Super Nintendo</li><li>Game Boy</li><li>Game Boy Color</li><li>Game Boy Advance</li>
-        <li>Master System</li><li>Mega Drive</li><li>PlayStation</li><li>Nintendo DS</li><li>Nintendo 64</li>
-        <li>GameCube</li><li>Atari 2600</li><li>Dreamcast</li>
-      </ul>
+    <section id="consoles" class="section wrap consoles-section" aria-labelledby="consoles-title">
+      <div class="section-heading"><h2 id="consoles-title">Varias generaciones. Una biblioteca.</h2><p>Los emuladores vienen integrados en la aplicación. Elige un juego y empieza tu partida.</p></div>
+      <div class="console-families">
+        <div><h3>Nintendo</h3><ul><li>NES</li><li>Super Nintendo</li><li>Game Boy / Color / Advance</li><li>Nintendo DS</li><li>Nintendo 64</li><li>GameCube</li></ul></div>
+        <div><h3>Sega</h3><ul><li>Master System</li><li>Mega Drive</li></ul></div>
+        <div><h3>Sony &amp; Atari</h3><ul><li>PlayStation</li><li>Atari 2600</li></ul></div>
+      </div>
+      <p class="compatibility-note">El rendimiento depende de tu móvil, especialmente para Nintendo 64 y GameCube. Algunos sistemas necesitan una BIOS.</p>
     </section>
 
-    <section class="install">
-      <h2>Instalar</h2>
-      <ol>
-        <li><a href="https://github.com/simon-verbois/retrohub-app/releases/latest">Descarga la última versión del APK e instálala.</a></li>
-        <li>Introduce la dirección de tu servidor RetroHub.</li>
-        <li>Vincula el móvil con el código que aparece en la web, o con tu contraseña.</li>
-      </ol>
+    <section id="install" class="install-section section" aria-labelledby="install-title">
+      <div class="wrap">
+        <div class="install-heading"><div><h2 id="install-title">Tu próxima partida empieza aquí.</h2><p>Una aplicación gratuita para conectar a tu propio servidor RetroHub.</p></div><a class="button primary" href="https://github.com/simon-verbois/retrohub-app/releases/latest"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M5 16v4h14v-4"/></svg>Descargar para Android</a></div>
+        <ol class="install-steps">
+          <li><h3>Instala la aplicación.</h3><p>Descarga el APK desde GitHub. Ábrelo en tu móvil y permite la instalación si Android te lo pide.</p></li>
+          <li><h3>Conecta tu servidor.</h3><p>Introduce su dirección y el código de vinculación que aparece en RetroHub en la web, o inicia sesión con tu contraseña.</p></li>
+          <li><h3>Lleva tus juegos contigo.</h3><p>Tu biblioteca aparece en la aplicación. Descarga un juego para jugar también sin conexión.</p></li>
+        </ol>
+        <aside id="server" class="server" aria-labelledby="server-title"><div><h3 id="server-title">¿Todavía no tienes un servidor RetroHub?</h3><p>RetroHub aloja tu biblioteca y tus partidas guardadas en tu propio equipo. La aplicación se conecta a él para acceder a tus juegos; no incluye juegos.</p></div><a class="text-link" href="https://simon-verbois.github.io/retrohub/">Descubrir el servidor<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17 17 7M7 7h10v10"/></svg></a></aside>
+      </div>
     </section>
   </main>
 
-  <footer>
-    <p>Código con licencia MIT. El APK incluye LibretroDroid y núcleos libretro con sus propias licencias.</p>
-    <p>Proyecto personal, desarrollado con ayuda de la IA.</p>
+  <footer class="footer wrap">
+    <div class="footer-top"><a class="brand" href="#main"><img src="../favicon.svg" width="28" height="28" alt="">RetroHub</a><nav aria-label="Enlaces del proyecto"><a href="https://github.com/simon-verbois/retrohub-app">Código fuente</a><a href="https://github.com/simon-verbois/retrohub-app/releases">Versiones</a><a href="https://buymeacoffee.com/simonverbois">Apoyar el proyecto</a></nav></div>
+    <p>Código bajo licencia MIT. LibretroDroid y los núcleos libretro se distribuyen bajo sus propias licencias.</p>
+    <p>No incluye juegos ni BIOS. Todas las marcas pertenecen a sus respectivos propietarios.</p>
   </footer>
+
+  <dialog class="image-dialog" aria-label="Captura de la aplicación">
+    <form method="dialog"><button class="dialog-close" aria-label="Cerrar la captura"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M6 18 18 6"/></svg></button></form>
+    <figure><img width="1200" height="540" alt=""><figcaption></figcaption></figure>
+  </dialog>
 </body>
 </html>

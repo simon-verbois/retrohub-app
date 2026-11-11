@@ -61,6 +61,8 @@ fun playTimeCard(game: Game): ActivityCard =
 /** État de la synchronisation des sauvegardes de ce jeu. */
 fun syncCard(saves: List<LocalSave>, online: Boolean): ActivityCard = when {
     saves.any { it.inConflict } -> ActivityCard("Synchronisation", "À choisir", tone = ActivityCard.Tone.WARNING)
+    saves.any { it.lastError == "rom_changed" } -> ActivityCard("Synchronisation", "Jeu à mettre à jour", tone = ActivityCard.Tone.WARNING)
+    saves.any { it.lastError != null } -> ActivityCard("Synchronisation", "Conservée ici", tone = ActivityCard.Tone.WARNING)
     saves.any { it.pendingUpload } && !online -> ActivityCard("Synchronisation", "En attente")
     saves.any { it.pendingUpload } -> ActivityCard("Synchronisation", "En cours")
     else -> ActivityCard("Synchronisation", "À jour")
@@ -70,9 +72,8 @@ fun syncCard(saves: List<LocalSave>, online: Boolean): ActivityCard = when {
 @Composable
 fun ActivityCards(controller: UiController, game: Game, modifier: Modifier = Modifier, height: Dp = 64.dp) {
     val container = controller.container
-    val sync by container.sync.status.collectAsState()
     val online by container.platform.online.collectAsState()
-    val saves by produceState(emptyList<LocalSave>(), game.playGameId, sync) { value = container.saveStore.forGame(game.playGameId) }
+    val saves by androidx.compose.runtime.remember(game.playGameId) { container.saveStore.observe(game.playGameId) }.collectAsState(emptyList())
     Row(
         modifier.horizontalScroll(rememberScrollState()).padding(horizontal = HomeEdge).height(height),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -82,7 +83,11 @@ fun ActivityCards(controller: UiController, game: Game, modifier: Modifier = Mod
         Card(playTimeCard(game), width) { controller.nav.go(Route.Settings(SettingsPage.GAME, game.id)) }
         val state = syncCard(saves, online)
         Card(state, width) {
-            if (state.tone == ActivityCard.Tone.WARNING) controller.nav.go(Route.Conflict(game.playGameId)) else controller.syncNow()
+            when {
+                saves.any { it.inConflict } -> controller.nav.go(Route.Conflict(game.playGameId))
+                saves.any { it.lastError != null } -> controller.nav.go(Route.Settings(SettingsPage.GAME, game.id))
+                else -> controller.syncNow()
+            }
         }
     }
 }

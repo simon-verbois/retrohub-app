@@ -107,6 +107,24 @@ class EndToEndTest {
         waitFrames(120)
         Thread.sleep(11_000)
         screenshot("game-landscape")
+        // Rotation, advanced options and background saves also run against the optimized build.
+        device.setOrientationNatural()
+        waitFrames(180)
+        screenshot("game-portrait")
+        device.setOrientationLandscape()
+        pad(KeyEvent.KEYCODE_MENU)
+        click("Options de l’émulateur")
+        waitText("Retour")
+        click("Retour")
+        click("Reprendre")
+        val gameIntent = android.content.Intent(GameActivity.current!!.get()!!.intent)
+        device.pressHome()
+        waitUntil(15_000, "sauvegarde au passage en arrière-plan") {
+            runBlocking { container.saveStore.find(gameId, "state", 0)?.localSha != null }
+        }
+        instrumentation.runOnMainSync { rule.activity.startActivity(gameIntent) }
+        waitText("Reprendre")
+        click("Reprendre")
 
         // Une partie arrive du web pendant qu’on joue : conflit au retour.
         backend.putSave(gameId, "state", 1, "partie depuis le web".encodeToByteArray())
@@ -239,7 +257,11 @@ class EndToEndTest {
     private fun waitText(text: String, timeout: Long = 15_000, substring: Boolean = false) {
         try {
             rule.waitUntil(timeout) {
-                rule.onAllNodesWithText(text, substring = substring, useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()
+                try {
+                    rule.onAllNodesWithText(text, substring = substring, useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()
+                } catch (_: IllegalStateException) {
+                    false // Activity transitions can temporarily have no Compose root.
+                }
             }
         } catch (error: Throwable) {
             screenshot("echec-attente")

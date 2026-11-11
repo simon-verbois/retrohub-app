@@ -134,6 +134,7 @@ fun GameScreen(
             )
         }
     DisposableEffect(Unit) { onDispose { router.releaseAll() } }
+    LaunchedEffect(ui.paused, gamepad) { router.releaseAll() }
     if (plan.rumble) LaunchedEffect(Unit) { engine.rumble.collect { if (it > 0.05f) onRumble(it) } }
     // Le compteur d’images change 60 fois par seconde : il n’est jamais lu comme état de l’écran.
     LaunchedEffect(Unit) {

@@ -43,3 +43,7 @@ scripts/test.sh instrumented
 
 step "End-to-end against the real backend"
 scripts/test.sh e2e
+
+step "Optimized build: native cores, instrumented tests and end-to-end"
+RETROHUB_TEST_VARIANT=benchmark scripts/test.sh instrumented
+RETROHUB_TEST_VARIANT=benchmark scripts/test.sh e2e

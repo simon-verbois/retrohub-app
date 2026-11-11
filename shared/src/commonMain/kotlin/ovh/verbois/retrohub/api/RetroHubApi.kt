@@ -159,8 +159,6 @@ class RetroHubApi(
 
     suspend fun consoles(): List<ConsoleCapabilities> = get("/native/consoles", kotlinx.serialization.builtins.ListSerializer(ConsoleCapabilities.serializer()))
 
-    suspend fun game(id: String): GameDetail = get("/games/$id", GameDetail.serializer())
-
     suspend fun updateLibrary(id: String, update: LibraryUpdate) {
         request(HttpMethod.Put, api("/library/$id"), json = encode(LibraryUpdate.serializer(), update)) { }
     }

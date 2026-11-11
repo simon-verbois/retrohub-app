@@ -131,3 +131,19 @@ nothing required otherwise.
 - `versionCode = year × 1,000,000 + week × 10,000 + number`; `0.1.0` (code 1) between published
   versions.
 - `-Pretrohub.abis=arm64-v8a` produces a lighter APK for phones; both ABIs are bundled by default.
+
+## Performance and regression checks
+
+- Snapshot serialization waits on the emulation thread from an I/O coroutine. Save comparison uses
+  the recorded digest, hashes new snapshots in bounded chunks, and never reads the old snapshot
+  into a second full-sized array. The activity waits for its final save before destroying the core.
+- Catalogue JSON is decoded before joining local downloads. Search and sorting run on a background
+  dispatcher; screen state is retained per route, including library focus and scroll position.
+- Download progress is published at most five times per second, plus completion. WorkManager retries
+  transient failures, respects the mobile-data setting, and coalesces pending sync requests.
+- Release builds enable R8 and resource shrinking. The `benchmark` variant uses the same optimizers,
+  debug signing and local test-server access; local CI runs instrumented and end-to-end checks on
+  both variants. Test references generate scoped keep rules for the benchmark app, preserving the
+  APIs reached from the separate instrumentation APK and their package boundaries. Production builds
+  only keep JNI entry points.
+  This is a functional regression check, not a hardware performance benchmark.

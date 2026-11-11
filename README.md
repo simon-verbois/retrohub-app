@@ -56,6 +56,23 @@ For a lighter APK targeting a single device type: `./gradlew :app:assembleDebug 
 
 See `docs/` for design decisions, licences and server requests.
 
+### Website
+
+The GitHub Pages site is static HTML, CSS and JavaScript, available in English, French, German,
+Spanish, Italian, Dutch and Portuguese. Edit `docs/site-template.html`, `docs/styles.css`,
+`docs/site.js` and the translations in `docs/locales/`,
+then regenerate and check the committed pages:
+
+```sh
+python3 scripts/build_site.py --generate
+python3 scripts/build_site.py --check
+python3 scripts/build_site.py --output build/site  # requires an empty output directory
+```
+
+Screenshots in `docs/screenshots/` show the app with a demo library. Fonts and images are served
+locally; the site needs no external scripts or build dependencies. The Pages workflow publishes
+only the generated pages and their assets.
+
 ## License
 
 Code under the MIT license (`LICENSE`). The APK bundles LibretroDroid (GPL-3.0) and libretro cores

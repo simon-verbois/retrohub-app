@@ -50,11 +50,11 @@ interface EmulatorEngine {
 
     fun resume()
 
-    fun saveState(): ByteArray?
+    suspend fun saveState(): ByteArray?
 
-    fun loadState(data: ByteArray): Boolean
+    suspend fun loadState(data: ByteArray): Boolean
 
-    fun saveSram(): ByteArray?
+    suspend fun saveSram(): ByteArray?
 
     fun reset()
 
@@ -70,8 +70,6 @@ interface EmulatorEngine {
     fun touch(x: Float?, y: Float?)
 
     fun setViewport(rect: NormRect)
-
-    fun setShader(shader: Shader)
 
     fun setOptions(options: Map<String, String>)
 

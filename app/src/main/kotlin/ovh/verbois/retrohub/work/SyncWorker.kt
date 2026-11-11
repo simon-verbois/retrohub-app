@@ -7,8 +7,13 @@ import androidx.work.CoroutineWorker
 import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import ovh.verbois.retrohub.RetroHubApp
 import ovh.verbois.retrohub.account.AuthState
 import ovh.verbois.retrohub.sync.SyncOutcome
@@ -57,24 +62,33 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
             manager.enqueueUniquePeriodicWork(PERIODIC, androidx.work.ExistingPeriodicWorkPolicy.UPDATE, request)
         }
 
-        fun enqueue(context: Context, delaySeconds: Long = 0) {
-            val request =
-                OneTimeWorkRequestBuilder<SyncWorker>()
-                    .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
-                    .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
-                    .setInitialDelay(delaySeconds, TimeUnit.SECONDS)
-                    .build()
-            WorkManager.getInstance(context).enqueueUniqueWork(
-                NAME,
-                if (delaySeconds >
-                    0
-                ) {
-                    ExistingWorkPolicy.REPLACE
-                } else {
-                    ExistingWorkPolicy.APPEND_OR_REPLACE
-                },
-                request,
-            )
+        private val enqueueLock = Mutex()
+
+        fun enqueue(context: Context, delaySeconds: Long = 0) = (context.applicationContext as RetroHubApp).container.scope.launch(Dispatchers.IO) {
+            enqueueLock.withLock {
+                val request =
+                    OneTimeWorkRequestBuilder<SyncWorker>()
+                        .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
+                        .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
+                        .setInitialDelay(delaySeconds, TimeUnit.SECONDS)
+                        .build()
+                val manager = WorkManager.getInstance(context)
+                val pending = manager.getWorkInfosForUniqueWork(NAME).get().any {
+                    it.state == WorkInfo.State.ENQUEUED || it.state == WorkInfo.State.BLOCKED
+                }
+                if (delaySeconds == 0L && pending) return@withLock
+                manager.enqueueUniqueWork(
+                    NAME,
+                    if (delaySeconds >
+                        0
+                    ) {
+                        ExistingWorkPolicy.REPLACE
+                    } else {
+                        ExistingWorkPolicy.APPEND_OR_REPLACE
+                    },
+                    request,
+                ).result.get()
+            }
         }
     }
 }

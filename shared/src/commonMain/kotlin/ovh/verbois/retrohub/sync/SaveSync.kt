@@ -124,10 +124,10 @@ class SaveSync(private val api: RetroHubApi, private val store: SaveStore, priva
     }
 
     /** Enregistre une sauvegarde faite sur l’appareil (après une partie, hors ligne compris). */
-    suspend fun recordLocal(gameId: String, console: String, kind: String, slot: Int, core: String, romSha: String): LocalSave? {
+    suspend fun recordLocal(gameId: String, console: String, kind: String, slot: Int, core: String, romSha: String, digest: String? = null): LocalSave? {
         val path = store.file(gameId, kind, slot)
         if (!fs.exists(path) || (fs.metadata(path).size ?: 0L) == 0L) return store.find(gameId, kind, slot)
-        val digest = fs.sha256(path)
+        val digest = digest ?: fs.sha256(path)
         val existing = store.find(gameId, kind, slot)
         if (existing != null && existing.localSha == digest) return existing
         val save =

@@ -234,6 +234,3 @@ fun ProgressLine(fraction: Float, modifier: Modifier = Modifier, color: Color = 
         Box(Modifier.fillMaxHeight().fillMaxWidth(fraction.coerceIn(0f, 1f)).clip(Pill).background(color))
     }
 }
-
-@Composable
-fun Gap(width: Dp = 0.dp, height: Dp = 0.dp) = androidx.compose.foundation.layout.Spacer(Modifier.width(width).height(height))

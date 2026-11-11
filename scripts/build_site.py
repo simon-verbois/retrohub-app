@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate and build the twelve-language static GitHub Pages website of RetroHub for Android."""
+"""Generate and build the Western European language editions of RetroHub's GitHub Pages site."""
 import argparse
 import html
 import json
@@ -14,13 +14,10 @@ BASE_URL = 'https://simon-verbois.github.io/retrohub-app/'
 LANGUAGES = {
     'en': ('en', 'English'), 'fr': ('fr', 'Français'),
     'de': ('de', 'Deutsch'), 'es': ('es', 'Español'),
-    'it': ('it', 'Italiano'), 'pl': ('pl', 'Polski'),
-    'nl': ('nl', 'Nederlands'), 'pt': ('pt-PT', 'Português'),
-    'ro': ('ro', 'Română'), 'el': ('el', 'Ελληνικά'),
-    'hu': ('hu', 'Magyar'), 'cs': ('cs', 'Čeština'),
+    'it': ('it', 'Italiano'), 'nl': ('nl', 'Nederlands'), 'pt': ('pt-PT', 'Português'),
 }
-SCREENSHOTS = ('home', 'conflict', 'game', 'library')
-ASSETS = ('styles.css', 'favicon.svg', 'buy-me-a-coffee.png', 'fonts/manrope-regular.ttf',
+SCREENSHOTS = ('home', 'conflict', 'settings', 'library')
+ASSETS = ('styles.css', 'site.js', 'favicon.svg', 'fonts/manrope-regular.ttf',
           'fonts/manrope-extrabold.ttf', 'fonts/Manrope-OFL.txt') + tuple(f'screenshots/{name}.webp' for name in SCREENSHOTS)
 PLACEHOLDER = re.compile(r'{{([a-z0-9_]+)}}')
 
@@ -70,8 +67,8 @@ def render_pages(source: Path) -> dict[str, str]:
         links = []
         for other, (other_tag, name) in LANGUAGES.items():
             current = ' aria-current="page"' if other == language else ''
-            links.append(f'<li><a href="{prefix}{route(other)}" lang="{other_tag}" '
-                         f'hreflang="{other_tag}"{current}>{name}</a></li>')
+            links.append(f'<a href="{prefix}{route(other)}" lang="{other_tag}" '
+                         f'hreflang="{other_tag}"{current}>{name}</a>')
         values = {key: html.escape(value, quote=True) for key, value in copy.items()}
         values.update(html_language=tag, canonical=BASE_URL + route(language),
                       alternates=alternates, asset_prefix=prefix,
@@ -133,7 +130,7 @@ def generate(source: Path) -> None:
         path = source / name
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content, encoding='utf-8')
-    print('Generated twelve static locale pages in docs/.')
+    print(f'Generated {len(LANGUAGES)} static locale pages in docs/.')
 
 
 def check_generated(source: Path) -> None:
@@ -160,7 +157,7 @@ def build(destination: Path, source: Path | None = None) -> None:
         shutil.copyfile(source / name, path)
     (destination / '.nojekyll').touch()
     validate_site(destination)
-    print(f'Built and checked twelve languages / {len(list(destination.rglob("*")))} entries in {destination}')
+    print(f'Built and checked {len(LANGUAGES)} languages / {len(list(destination.rglob("*")))} entries in {destination}')
 
 
 def main() -> None:
@@ -176,7 +173,7 @@ def main() -> None:
         elif args.check:
             check_generated(ROOT / 'docs')
             validate_site(ROOT / 'docs')
-            print('Twelve static locale pages and local references are current.')
+            print(f'{len(LANGUAGES)} static locale pages and local references are current.')
         else:
             build(args.output)
     except (OSError, ValueError) as error:

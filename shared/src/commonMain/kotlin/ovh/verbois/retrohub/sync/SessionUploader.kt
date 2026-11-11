@@ -5,6 +5,8 @@ import ovh.verbois.retrohub.api.RetroHubApi
 import ovh.verbois.retrohub.data.PlaySessionEntity
 
 interface SessionStore {
+    suspend fun add(session: PlaySessionEntity)
+
     suspend fun oldest(limit: Int): List<PlaySessionEntity>
 
     suspend fun remove(ids: List<String>)

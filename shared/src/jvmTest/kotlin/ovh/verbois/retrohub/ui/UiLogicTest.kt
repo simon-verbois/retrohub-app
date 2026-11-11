@@ -30,6 +30,14 @@ class UiLogicTest {
         Game(LibraryGame(id = title, playGameId = title, title = title, console = console, lastPlayedAt = played), null)
 
     @Test
+    fun searchFindsAccentInsensitiveMatchesInALargeCatalogueAndCapsResults() {
+        val games = (0 until 5000).map { game("Pokémon $it", "gb") }
+        val results = ovh.verbois.retrohub.ui.shell.searchGames(games, "POKEMON game boy")
+        assertEquals(40, results.size)
+        assertEquals(games.take(40), results)
+    }
+
+    @Test
     fun pairingCodeIsFormattedWhileTyping() {
         assertEquals("ABCD-EFGH", formatPairingCode("abcdefgh"))
         assertEquals("ABC", formatPairingCode("a b-c"))

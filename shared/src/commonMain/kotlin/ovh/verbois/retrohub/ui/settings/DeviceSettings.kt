@@ -15,7 +15,12 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import coil3.SingletonImageLoader
+import coil3.compose.LocalPlatformContext
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.IO
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import ovh.verbois.retrohub.core.Pin
 import ovh.verbois.retrohub.core.formatBytes
 import ovh.verbois.retrohub.emulation.Consoles
@@ -242,6 +247,7 @@ internal fun PerformancePage(controller: UiController) {
 
 @Composable
 internal fun StoragePage(controller: UiController) {
+    val imageLoader = SingletonImageLoader.get(LocalPlatformContext.current)
     val container = controller.container
     val repo = container.settings
     val settings by repo.settings.collectAsState()
@@ -313,8 +319,11 @@ internal fun StoragePage(controller: UiController) {
     if (confirmCovers) {
         ConfirmDialog("Vider le cache des jaquettes ?", "Elles seront téléchargées de nouveau.", "Vider", onConfirm = {
             confirmCovers = false
-            container.downloads.clearCovers()
-            scope.launch { usage = container.downloads.usage() }
+            scope.launch {
+                imageLoader.memoryCache?.clear()
+                withContext(Dispatchers.IO) { imageLoader.diskCache?.clear() }
+                usage = container.downloads.usage()
+            }
         }, onDismiss = { confirmCovers = false })
     }
 }

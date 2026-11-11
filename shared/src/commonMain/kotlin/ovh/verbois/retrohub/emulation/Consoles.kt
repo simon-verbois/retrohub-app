@@ -142,8 +142,6 @@ object Consoles {
 
     operator fun get(id: String): ConsoleSpec? = byId[id]
 
-    fun isSupported(id: String): Boolean = id in byId
-
     fun name(id: String): String = byId[id]?.name ?: id
 
     /** Résolution native en pixels carrés des consoles 2D, pour la mise à l’échelle entière. */

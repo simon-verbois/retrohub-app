@@ -165,18 +165,6 @@ data class SessionResults(val results: List<SessionResult> = emptyList())
 data class LibraryUpdate(val favorite: Boolean? = null, @SerialName("version_id") val versionId: String? = null)
 
 @Serializable
-data class GameDetail(
-    val id: String,
-    val title: String,
-    val console: String,
-    val description: String? = null,
-    val genre: String? = null,
-    val year: Int? = null,
-    @SerialName("cover_url") val coverUrl: String? = null,
-    val screenshots: List<String> = emptyList(),
-)
-
-@Serializable
 data class BrowserSession(
     val id: String,
     @SerialName("created_at") val createdAt: String? = null,

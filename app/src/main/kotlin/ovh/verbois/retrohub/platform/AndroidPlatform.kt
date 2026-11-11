@@ -137,7 +137,9 @@ class AndroidPlatform(private val context: Context) : Platform {
                 )
     }
 
-    override fun scheduleSync(delaySeconds: Long) = SyncWorker.enqueue(context, delaySeconds)
+    override fun scheduleSync(delaySeconds: Long) {
+        SyncWorker.enqueue(context, delaySeconds)
+    }
 
     override fun availableCores(): Set<String> {
         val dir = File(context.applicationInfo.nativeLibraryDir)

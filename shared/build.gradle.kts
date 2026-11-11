@@ -47,8 +47,6 @@ kotlin {
             api(libs.compose.foundation)
             api(libs.compose.material3)
             api(libs.compose.mp.ui)
-            implementation(libs.cmp.material.icons)
-            api(libs.jb.lifecycle.viewmodel.compose)
             implementation(libs.jb.lifecycle.runtime.compose)
             implementation(libs.coil.compose)
             implementation(libs.coil.network.ktor)

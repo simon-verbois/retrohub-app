@@ -4,6 +4,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.updateAndGet
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -19,15 +20,17 @@ class SettingsRepository(private val store: KeyValueStore, private val scope: Co
     }
 
     fun update(change: (AppSettings) -> AppSettings) {
-        val next = change(state.value)
-        state.value = next
-        scope.launch { lock.withLock { store.put(KEY, AppSettings.serializer(), next) } }
+        val previous = state.value
+        val next = state.updateAndGet(change)
+        if (previous == next) return
+        scope.launch { lock.withLock { store.put(KEY, AppSettings.serializer(), state.value) } }
     }
 
     suspend fun updateNow(change: (AppSettings) -> AppSettings) {
-        val next = change(state.value)
-        state.value = next
-        lock.withLock { store.put(KEY, AppSettings.serializer(), next) }
+        val previous = state.value
+        val next = state.updateAndGet(change)
+        if (previous == next) return
+        lock.withLock { store.put(KEY, AppSettings.serializer(), state.value) }
     }
 
     private companion object {

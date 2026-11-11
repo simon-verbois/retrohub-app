@@ -1,3 +1,11 @@
+import com.android.build.api.artifact.ScopedArtifact
+import com.android.build.api.variant.ScopedArtifacts
+import org.gradle.process.ExecOperations
+import java.util.zip.ZipEntry
+import java.util.zip.ZipFile
+import java.util.zip.ZipOutputStream
+import javax.inject.Inject
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
@@ -58,6 +66,8 @@ android {
         }
     }
 
+    testBuildType = providers.gradleProperty("retrohub.testVariant").getOrElse("debug")
+
     buildTypes {
         debug {
             applicationIdSuffix = ".debug"
@@ -65,8 +75,22 @@ android {
         release {
             // CI signs with the distribution key and never publishes a debug-signed APK.
             signingConfig = signingConfigs.getByName(if (keystorePath.isNullOrBlank()) "debug" else "distribution")
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
+        create("benchmark") {
+            initWith(getByName("release"))
+            applicationIdSuffix = ".debug"
+            signingConfig = signingConfigs.getByName("debug")
+            matchingFallbacks += "release"
+            testProguardFiles("test-proguard-rules.pro")
+        }
+    }
+
+    sourceSets.getByName("benchmark").apply {
+        manifest.srcFile("src/debug/AndroidManifest.xml")
+        res.directories += "src/debug/res"
     }
 
     compileOptions {
@@ -115,6 +139,7 @@ dependencies {
     implementation(libs.libretrodroid)
     debugImplementation(libs.compose.ui.tooling)
     debugImplementation(libs.compose.ui.test.manifest)
+    add("benchmarkImplementation", libs.compose.ui.test.manifest)
 
     androidTestImplementation(platform(libs.compose.bom))
     androidTestImplementation(libs.compose.ui.test.junit4)
@@ -127,4 +152,108 @@ dependencies {
     androidTestImplementation(libs.coroutines.test)
     androidTestImplementation(libs.room.testing)
     androidTestImplementation(libs.sqlite.bundled)
+}
+
+// Trace external test references before shrinking, so instrumentation can call optimized code.
+abstract class BenchmarkTestKeepRules : DefaultTask() {
+    @get:Classpath abstract val targetJars: ListProperty<RegularFile>
+
+    @get:Classpath abstract val targetDirectories: ListProperty<Directory>
+
+    @get:Classpath abstract val sourceJars: ListProperty<RegularFile>
+
+    @get:Classpath abstract val sourceDirectories: ListProperty<Directory>
+
+    @get:Classpath abstract val tracer: RegularFileProperty
+
+    @get:Classpath abstract val bootClasspath: ConfigurableFileCollection
+
+    @get:OutputFile abstract val rules: RegularFileProperty
+
+    @get:Inject abstract val execution: ExecOperations
+
+    private fun archive(
+        jars: List<RegularFile>,
+        directories: List<Directory>,
+        output: File,
+        excluded: Set<String>,
+    ): Set<String> {
+        val names = mutableSetOf<String>()
+        ZipOutputStream(output.outputStream()).use { zip ->
+            for (file in jars) {
+                ZipFile(file.asFile).use { jar ->
+                    for (entry in jar.entries().asSequence()) {
+                        if (!entry.name.endsWith(".class") || entry.name in excluded || !names.add(entry.name)) continue
+                        zip.putNextEntry(ZipEntry(entry.name))
+                        jar.getInputStream(entry).use { it.copyTo(zip) }
+                        zip.closeEntry()
+                    }
+                }
+            }
+            for (directory in directories) {
+                for (file in directory.asFile.walkTopDown().filter { it.isFile && it.extension == "class" }) {
+                    val name = file.relativeTo(directory.asFile).invariantSeparatorsPath
+                    if (name in excluded || !names.add(name)) continue
+                    zip.putNextEntry(ZipEntry(name))
+                    file.inputStream().use { it.copyTo(zip) }
+                    zip.closeEntry()
+                }
+            }
+        }
+        return names
+    }
+
+    @TaskAction
+    fun generate() {
+        val target = temporaryDir.resolve("target.jar")
+        val source = temporaryDir.resolve("source.jar")
+        val targets = archive(targetJars.get(), targetDirectories.get(), target, emptySet())
+        archive(sourceJars.get(), sourceDirectories.get(), source, targets)
+        val output = rules.get().asFile
+        output.parentFile.mkdirs()
+        execution.javaexec {
+            classpath(tracer.get().asFile)
+            mainClass.set("com.android.tools.r8.tracereferences.TraceReferences")
+            args(
+                "--keep-rules",
+                "--target",
+                target,
+                "--source",
+                source,
+                "--output",
+                output,
+                "--map-diagnostics",
+                "error",
+                "warning",
+            )
+            bootClasspath.files.forEach { args("--lib", it) }
+        }
+        check(output.length() > 0) { "No instrumentation references were found in the benchmark app." }
+        // Keep package-private inheritance valid around APIs retained for the test APK.
+        output.writeText("-keeppackagenames **\n" + output.readText())
+    }
+}
+
+androidComponents {
+    onVariants(selector().withBuildType("benchmark")) { variant ->
+        variant.androidTest?.let { tests ->
+            val keep =
+                tasks.register<BenchmarkTestKeepRules>("benchmarkTestKeepRules") {
+                    tracer.set(sdkComponents.sdkDirectory.map { it.file("build-tools/37.0.0/lib/d8.jar") })
+                    bootClasspath.from(sdkComponents.bootClasspath)
+                    rules.set(layout.buildDirectory.file("generated/benchmark/test-keep.pro"))
+                }
+            variant.artifacts.forScope(ScopedArtifacts.Scope.ALL).use(keep).toGet(
+                ScopedArtifact.CLASSES,
+                BenchmarkTestKeepRules::targetJars,
+                BenchmarkTestKeepRules::targetDirectories,
+            )
+            tests.artifacts.forScope(ScopedArtifacts.Scope.ALL).use(keep).toGet(
+                ScopedArtifact.CLASSES,
+                BenchmarkTestKeepRules::sourceJars,
+                BenchmarkTestKeepRules::sourceDirectories,
+            )
+            variant.proguardFiles.add(keep.flatMap { it.rules })
+        }
+    }
 }

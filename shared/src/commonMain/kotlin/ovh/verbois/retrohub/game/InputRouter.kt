@@ -23,13 +23,20 @@ class InputRouter(
     private val period: Long = 50,
 ) {
     private val turbos = mutableMapOf<Pair<PadKey, Int>, Job>()
+    private val held = mutableSetOf<Pair<PadKey, Int>>()
+    private val sticks = mutableSetOf<Pair<Stick, Int>>()
 
     fun key(key: PadKey, pressed: Boolean, port: Int = 0) {
+        val id = key to port
+        if (pressed) {
+            if (!held.add(id)) return
+        } else {
+            if (!held.remove(id)) return
+        }
         if (key !in turbo) {
             engine.key(key, pressed, port)
             return
         }
-        val id = key to port
         if (pressed) {
             if (turbos[id]?.isActive == true) return
             turbos[id] =
@@ -49,12 +56,22 @@ class InputRouter(
 
     fun stick(stick: Stick, x: Float, y: Float, port: Int = 0) {
         val (sx, sy) = shape(x, y, deadzone, sensitivity)
+        val id = stick to port
+        if (sx == 0f && sy == 0f) {
+            if (!sticks.remove(id)) return
+        } else {
+            sticks += id
+        }
         engine.stick(stick, sx, sy, port)
     }
 
     fun releaseAll() {
         turbos.values.forEach { it.cancel() }
         turbos.clear()
+        held.forEach { (key, port) -> engine.key(key, false, port) }
+        held.clear()
+        sticks.forEach { (stick, port) -> engine.stick(stick, 0f, 0f, port) }
+        sticks.clear()
     }
 
     companion object {

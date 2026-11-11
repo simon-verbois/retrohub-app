@@ -31,8 +31,15 @@ class SyncWorkerTest {
     }
 
     @Test
+    fun repeatedRequestsShareOnePendingSync() {
+        runBlocking { repeat(30) { SyncWorker.enqueue(context).join() } }
+        val pending = WorkManager.getInstance(context).getWorkInfosForUniqueWork(SyncWorker.NAME).get().filter { !it.state.isFinished }
+        assertEquals(1, pending.size)
+    }
+
+    @Test
     fun syncWaitsForTheNetwork() {
-        SyncWorker.enqueue(context)
+        runBlocking { SyncWorker.enqueue(context).join() }
         val info = WorkManager.getInstance(context).getWorkInfosForUniqueWork(SyncWorker.NAME).get().single()
         assertEquals(NetworkType.CONNECTED, info.constraints.requiredNetworkType)
         assertEquals(WorkInfo.State.ENQUEUED, info.state)
@@ -44,8 +51,8 @@ class SyncWorkerTest {
 
     @Test
     fun maintenanceDelayReplacesThePendingSync() {
-        SyncWorker.enqueue(context)
-        SyncWorker.enqueue(context, delaySeconds = 120)
+        runBlocking { SyncWorker.enqueue(context).join() }
+        runBlocking { SyncWorker.enqueue(context, delaySeconds = 120).join() }
         val infos = WorkManager.getInstance(context).getWorkInfosForUniqueWork(SyncWorker.NAME).get().filter { !it.state.isFinished }
         assertEquals(1, infos.size)
         assertTrue(infos.single().initialDelayMillis >= 120_000)

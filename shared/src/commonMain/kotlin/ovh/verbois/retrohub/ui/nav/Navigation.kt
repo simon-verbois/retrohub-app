@@ -12,8 +12,6 @@ sealed interface Route {
 
     data object Downloads : Route
 
-    data object Search : Route
-
     data class Conflict(val gameId: String) : Route
 
     data class Progression(val gameId: String) : Route
@@ -82,11 +80,6 @@ class Navigator(start: Route = Route.Home) {
         if (route == current) return
         forward.value = true
         stack.add(route)
-    }
-
-    fun replace(route: Route) {
-        forward.value = true
-        stack[stack.lastIndex] = route
     }
 
     fun section(section: Section) {

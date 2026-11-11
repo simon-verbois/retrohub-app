@@ -3,102 +3,146 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#173faa">
+  <meta name="theme-color" content="#fafbfe">
   <title>RetroHub — {{title}}</title>
   <meta name="description" content="{{lead}}">
   <meta property="og:title" content="RetroHub — {{title}}">
   <meta property="og:description" content="{{lead}}">
   <meta property="og:type" content="website">
   <meta property="og:url" content="{{canonical}}">
+  <meta property="og:image" content="https://simon-verbois.github.io/retrohub-app/screenshots/home.webp">
   <link rel="canonical" href="{{canonical}}">
   {{alternates}}
   <link rel="icon" href="{{asset_prefix}}favicon.svg" type="image/svg+xml">
+  <link rel="preload" href="{{asset_prefix}}fonts/manrope-extrabold.ttf" as="font" type="font/ttf" crossorigin>
   <link rel="stylesheet" href="{{asset_prefix}}styles.css">
+  <script src="{{asset_prefix}}site.js" defer></script>
 </head>
 <body>
-  <header class="top">
-    <a class="brand" href="#main"><img src="{{asset_prefix}}favicon.svg" width="32" height="32" alt=""> RetroHub</a>
-    <nav aria-label="RetroHub">
-      <a href="#features">{{nav_features}}</a>
+  <a class="skip-link" href="#main">{{skip_link}}</a>
+  <header class="header wrap">
+    <a class="brand" href="#main" aria-label="RetroHub"><img src="{{asset_prefix}}favicon.svg" width="36" height="36" alt="">RetroHub</a>
+    <nav class="main-nav" aria-label="{{navigation}}">
+      <a href="#app">{{nav_app}}</a>
       <a href="#consoles">{{nav_consoles}}</a>
-      <a href="#server">{{nav_server}}</a>
-      <a href="https://github.com/simon-verbois/retrohub-app">GitHub</a>
+      <a href="#install">{{nav_install}}</a>
     </nav>
     <details class="languages">
-      <summary><span class="sr-only">{{language}}: </span>{{language_name}} <span aria-hidden="true">⌄</span></summary>
-      <ul>{{language_links}}</ul>
+      <summary><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a18 18 0 0 1 0 18 18 18 0 0 1 0-18"/></svg><span>{{language_name}}</span><svg class="chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg></summary>
+      <nav aria-label="{{language}}">{{language_links}}</nav>
     </details>
   </header>
 
   <main id="main">
-    <section class="hero">
-      <div class="hero-text">
-        <p class="kicker">{{kicker}}</p>
-        <h1>{{title}}</h1>
-        <p class="lead">{{lead}}</p>
-        <div class="actions">
-          <a class="button primary" href="https://github.com/simon-verbois/retrohub-app/releases/latest">{{download}}</a>
-          <a class="button" href="#server">{{server_button}}</a>
-        </div>
-        <a class="coffee" href="https://buymeacoffee.com/simonverbois"><img src="{{asset_prefix}}buy-me-a-coffee.png" width="178" height="50" alt="Buy Me a Coffee"></a>
+    <section class="hero wrap" aria-labelledby="hero-title">
+      <p class="platform"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="2" width="12" height="20" rx="3"/><path d="M10 18h4"/></svg>{{platform}}</p>
+      <h1 id="hero-title">{{hero_line_1}}<br>{{hero_line_2}}</h1>
+      <p class="lead">{{lead}}</p>
+      <div class="actions">
+        <a class="button primary" href="https://github.com/simon-verbois/retrohub-app/releases/latest"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M5 16v4h14v-4"/></svg>{{download}}</a>
+        <a class="button secondary" href="#app">{{see_app}}</a>
       </div>
-      <figure class="screen hero-screen">
-        <img src="{{asset_prefix}}screenshots/home.webp" width="1200" height="540" alt="{{alt_home}}">
+      <p class="requirements">{{requirements}} <a href="#server">{{server_required}}</a></p>
+      <figure class="hero-product">
+        <a href="{{asset_prefix}}screenshots/home.webp" class="screenshot device" data-screenshot aria-label="{{zoom_home}}" data-caption="{{cap_home}}">
+          <img src="{{asset_prefix}}screenshots/home.webp" width="1200" height="540" fetchpriority="high" alt="{{alt_home}}">
+          <span class="zoom" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5"/></svg></span>
+        </a>
+        <figcaption>{{screens_note}}</figcaption>
       </figure>
     </section>
 
-    <section id="server" class="server">
-      <h2>{{server_title}}</h2>
-      <p>{{server_body}}</p>
-      <div class="actions">
-        <a class="button primary" href="https://simon-verbois.github.io/retrohub/">{{server_site}}</a>
-        <a class="button" href="https://github.com/simon-verbois/retrohub">{{server_code}}</a>
+    <section id="app" class="app-section section" aria-labelledby="app-title">
+      <div class="wrap">
+        <div class="section-heading">
+          <h2 id="app-title">{{app_title}}</h2>
+          <p>{{app_body}}</p>
+        </div>
+        <div class="showcase-tabs" role="tablist" aria-label="{{views}}" hidden>
+          <button id="tab-home" type="button" role="tab" aria-controls="view-home" aria-selected="false" tabindex="-1">{{tab_home}}</button>
+          <button id="tab-library" type="button" role="tab" aria-controls="view-library" aria-selected="true" tabindex="0">{{tab_library}}</button>
+          <button id="tab-settings" type="button" role="tab" aria-controls="view-settings" aria-selected="false" tabindex="-1">{{tab_settings}}</button>
+        </div>
+        <div class="showcase-panels">
+          <figure id="view-home" class="showcase-panel">
+            <a href="{{asset_prefix}}screenshots/home.webp" class="screenshot" data-screenshot aria-label="{{zoom_home}}" data-caption="{{cap_home}}"><img src="{{asset_prefix}}screenshots/home.webp" width="1200" height="540" loading="lazy" alt="{{alt_home}}"><span class="zoom" aria-hidden="true">+</span></a>
+            <figcaption><h3>{{home_title}}</h3><p>{{home_body}}</p></figcaption>
+          </figure>
+          <figure id="view-library" class="showcase-panel">
+            <a href="{{asset_prefix}}screenshots/library.webp" class="screenshot" data-screenshot aria-label="{{zoom_library}}" data-caption="{{cap_library}}"><img src="{{asset_prefix}}screenshots/library.webp" width="1200" height="540" loading="lazy" alt="{{alt_library}}"><span class="zoom" aria-hidden="true">+</span></a>
+            <figcaption><h3>{{library_title}}</h3><p>{{library_body}}</p></figcaption>
+          </figure>
+          <figure id="view-settings" class="showcase-panel">
+            <a href="{{asset_prefix}}screenshots/settings.webp" class="screenshot" data-screenshot aria-label="{{zoom_settings}}" data-caption="{{cap_settings}}"><img src="{{asset_prefix}}screenshots/settings.webp" width="1200" height="540" loading="lazy" alt="{{alt_settings}}"><span class="zoom" aria-hidden="true">+</span></a>
+            <figcaption><h3>{{settings_title}}</h3><p>{{settings_body}}</p></figcaption>
+          </figure>
+        </div>
       </div>
     </section>
 
-    <section id="features" class="features">
-      <h2>{{features_title}}</h2>
-      <div class="grid">
-        <article><h3>{{f1_title}}</h3><p>{{f1_body}}</p></article>
-        <article><h3>{{f2_title}}</h3><p>{{f2_body}}</p></article>
-        <article><h3>{{f3_title}}</h3><p>{{f3_body}}</p></article>
-        <article><h3>{{f4_title}}</h3><p>{{f4_body}}</p></article>
-        <article><h3>{{f5_title}}</h3><p>{{f5_body}}</p></article>
-        <article><h3>{{f6_title}}</h3><p>{{f6_body}}</p></article>
+    <section class="section wrap play-section" aria-labelledby="play-title">
+      <h2 id="play-title">{{play_title}}</h2>
+      <div class="play-features">
+        <article>
+          <svg class="feature-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m2 2 20 20M2 8.8a16 16 0 0 1 2.4-1.5M7 6a16 16 0 0 1 15 2.8M5 12a11 11 0 0 1 2.3-1.4m4.1-1a11 11 0 0 1 7.6 2.4M8.5 15.5a5.5 5.5 0 0 1 7 0M12 19h.01"/></svg>
+          <h3>{{offline_title}}</h3>
+          <p>{{offline_body}}</p>
+        </article>
+        <article>
+          <svg class="feature-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 7h12a3 3 0 0 1 3 2.5l1 7a2.5 2.5 0 0 1-4.2 2.1L15 16H9l-2.8 2.6A2.5 2.5 0 0 1 2 16.5l1-7A3 3 0 0 1 6 7ZM6 11v4m-2-2h4m8-1h.01M19 14h.01"/></svg>
+          <h3>{{controls_title}}</h3>
+          <p>{{controls_body}}</p>
+        </article>
       </div>
     </section>
 
-    <section class="gallery-section">
-      <div class="gallery">
-        <figure class="screen"><img src="{{asset_prefix}}screenshots/conflict.webp" width="1200" height="540" loading="lazy" alt="{{alt_conflict}}"><figcaption>{{cap_conflict}}</figcaption></figure>
-        <figure class="screen"><img src="{{asset_prefix}}screenshots/game.webp" width="1200" height="540" loading="lazy" alt="{{alt_game}}"><figcaption>{{cap_game}}</figcaption></figure>
-        <figure class="screen"><img src="{{asset_prefix}}screenshots/library.webp" width="1200" height="540" loading="lazy" alt="{{alt_library}}"><figcaption>{{cap_library}}</figcaption></figure>
+    <section class="saves-section section" aria-labelledby="saves-title">
+      <div class="wrap saves-layout">
+        <div class="saves-copy">
+          <svg class="feature-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7a8 8 0 0 0-14-2L3 8m0-5v5h5M4 17a8 8 0 0 0 14 2l3-3m-5 0h5v5"/></svg>
+          <h2 id="saves-title">{{saves_title}}</h2>
+          <p>{{saves_body}}</p>
+          <p class="saves-detail">{{saves_detail}}</p>
+        </div>
+        <figure>
+          <a href="{{asset_prefix}}screenshots/conflict.webp" class="screenshot" data-screenshot aria-label="{{zoom_conflict}}" data-caption="{{cap_conflict}}"><img src="{{asset_prefix}}screenshots/conflict.webp" width="1200" height="540" loading="lazy" alt="{{alt_conflict}}"><span class="zoom" aria-hidden="true">+</span></a>
+          <figcaption>{{cap_conflict}}</figcaption>
+        </figure>
       </div>
-      <p class="note">{{screens_note}}</p>
     </section>
 
-    <section id="consoles" class="consoles">
-      <h2>{{consoles_title}}</h2>
-      <ul>
-        <li>NES</li><li>Super Nintendo</li><li>Game Boy</li><li>Game Boy Color</li><li>Game Boy Advance</li>
-        <li>Master System</li><li>Mega Drive</li><li>PlayStation</li><li>Nintendo DS</li><li>Nintendo 64</li>
-        <li>GameCube</li><li>Atari 2600</li><li>Dreamcast</li>
-      </ul>
+    <section id="consoles" class="section wrap consoles-section" aria-labelledby="consoles-title">
+      <div class="section-heading"><h2 id="consoles-title">{{consoles_title}}</h2><p>{{consoles_body}}</p></div>
+      <div class="console-families">
+        <div><h3>Nintendo</h3><ul><li>NES</li><li>Super Nintendo</li><li>Game Boy / Color / Advance</li><li>Nintendo DS</li><li>Nintendo 64</li><li>GameCube</li></ul></div>
+        <div><h3>Sega</h3><ul><li>Master System</li><li>Mega Drive</li></ul></div>
+        <div><h3>Sony &amp; Atari</h3><ul><li>PlayStation</li><li>Atari 2600</li></ul></div>
+      </div>
+      <p class="compatibility-note">{{compatibility_note}}</p>
     </section>
 
-    <section class="install">
-      <h2>{{install_title}}</h2>
-      <ol>
-        <li><a href="https://github.com/simon-verbois/retrohub-app/releases/latest">{{install_1}}</a></li>
-        <li>{{install_2}}</li>
-        <li>{{install_3}}</li>
-      </ol>
+    <section id="install" class="install-section section" aria-labelledby="install-title">
+      <div class="wrap">
+        <div class="install-heading"><div><h2 id="install-title">{{install_title}}</h2><p>{{install_body}}</p></div><a class="button primary" href="https://github.com/simon-verbois/retrohub-app/releases/latest"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M5 16v4h14v-4"/></svg>{{download}}</a></div>
+        <ol class="install-steps">
+          <li><h3>{{install_1_title}}</h3><p>{{install_1_body}}</p></li>
+          <li><h3>{{install_2_title}}</h3><p>{{install_2_body}}</p></li>
+          <li><h3>{{install_3_title}}</h3><p>{{install_3_body}}</p></li>
+        </ol>
+        <aside id="server" class="server" aria-labelledby="server-title"><div><h3 id="server-title">{{server_title}}</h3><p>{{server_body}}</p></div><a class="text-link" href="https://simon-verbois.github.io/retrohub/">{{server_link}}<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17 17 7M7 7h10v10"/></svg></a></aside>
+      </div>
     </section>
   </main>
 
-  <footer>
+  <footer class="footer wrap">
+    <div class="footer-top"><a class="brand" href="#main"><img src="{{asset_prefix}}favicon.svg" width="28" height="28" alt="">RetroHub</a><nav aria-label="{{footer_navigation}}"><a href="https://github.com/simon-verbois/retrohub-app">{{source_code}}</a><a href="https://github.com/simon-verbois/retrohub-app/releases">{{releases}}</a><a href="https://buymeacoffee.com/simonverbois">{{support}}</a></nav></div>
     <p>{{footer_license}}</p>
-    <p>{{footer_disclaimer}}</p>
+    <p>{{footer_games}}</p>
   </footer>
+
+  <dialog class="image-dialog" aria-label="{{preview}}">
+    <form method="dialog"><button class="dialog-close" aria-label="{{close}}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M6 18 18 6"/></svg></button></form>
+    <figure><img width="1200" height="540" alt=""><figcaption></figcaption></figure>
+  </dialog>
 </body>
 </html>

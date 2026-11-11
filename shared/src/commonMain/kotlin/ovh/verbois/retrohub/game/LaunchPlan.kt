@@ -17,7 +17,7 @@ data class LaunchPlan(
     val console: String,
     val core: String,
     val romPath: String,
-    /** SHA-256 de la ROM du serveur : il accompagne chaque sauvegarde envoyée. */
+    /** SHA-256 de la ROM exécutée : il accompagne chaque sauvegarde envoyée. */
     val romSha: String,
     val systemDir: String,
     val savesDir: String,
@@ -36,7 +36,6 @@ data class LaunchPlan(
     val hideTouchWithGamepad: Boolean = true,
     val haptics: Boolean = true,
     val showFps: Boolean = false,
-    val coverUrl: String? = null,
     val notice: String? = null,
     /** GameCube : code jeu et dossier « User » de Dolphin, pour les sauvegardes GCI. */
     val gameCode: String? = null,

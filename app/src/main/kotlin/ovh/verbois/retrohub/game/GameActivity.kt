@@ -1,6 +1,7 @@
 package ovh.verbois.retrohub.game
 
 import android.content.pm.ActivityInfo
+import android.hardware.input.InputManager
 import android.os.Bundle
 import android.view.InputDevice
 import android.view.KeyEvent
@@ -9,6 +10,8 @@ import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.viewinterop.AndroidView
@@ -19,8 +22,12 @@ import androidx.lifecycle.lifecycleScope
 import com.swordfish.libretrodroid.GLRetroView
 import com.swordfish.libretrodroid.GLRetroViewData
 import com.swordfish.libretrodroid.Variable
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import okio.Path.Companion.toPath
 import ovh.verbois.retrohub.RetroHubApp
 import ovh.verbois.retrohub.api.ApiJson
@@ -46,6 +53,14 @@ class GameActivity : ComponentActivity() {
     private val held = mutableSetOf<Int>()
     private lateinit var plan: LaunchPlan
     private lateinit var router: InputRouter
+    private var quitting = false
+    private val inputListener = object : InputManager.InputDeviceListener {
+        override fun onInputDeviceAdded(deviceId: Int) = Unit
+        override fun onInputDeviceChanged(deviceId: Int) = Unit
+        override fun onInputDeviceRemoved(deviceId: Int) {
+            releaseInputs()
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -60,7 +75,26 @@ class GameActivity : ComponentActivity() {
                 Orientation.LANDSCAPE -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
                 Orientation.PORTRAIT -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
             }
-        prepareSystem(plan)
+        setContent {
+            val settings by container.settings.settings.collectAsState()
+            RetroHubTheme(settings.theme) {
+                androidx.compose.foundation.layout.Box(
+                    androidx.compose.ui.Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Color.Black),
+                    contentAlignment = androidx.compose.ui.Alignment.Center,
+                ) { androidx.compose.material3.Text("Préparation du jeu…") }
+            }
+        }
+        lifecycleScope.launch {
+            val sram = withContext(Dispatchers.IO) {
+                prepareSystem(plan)
+                if (plan.loadSram) File(plan.sramPath).takeIf { it.exists() }?.readBytes() else null
+            }
+            if (!isFinishing) createGame(app, sram)
+        }
+    }
+
+    private fun createGame(app: RetroHubApp, sram: ByteArray?) {
+        val container = app.container
         val data =
             GLRetroViewData(this).apply {
                 coreFilePath = app.platform.corePath(plan.core)
@@ -68,7 +102,7 @@ class GameActivity : ComponentActivity() {
                 systemDirectory = plan.systemDir
                 savesDirectory = plan.savesDir.also { File(it).mkdirs() }
                 variables = plan.options.map { (key, value) -> Variable(key, value) }.toTypedArray()
-                saveRAMState = if (plan.loadSram) File(plan.sramPath).takeIf { it.exists() }?.readBytes() else null
+                saveRAMState = sram
                 shader = LibretroEngine.shaderConfig(plan.shader)
                 preferLowLatencyAudio = plan.lowLatencyAudio
                 rumbleEventsEnabled = plan.rumble
@@ -88,6 +122,10 @@ class GameActivity : ComponentActivity() {
                 plan.stickSensitivity,
             )
         session = container.gameSession(plan, engine, lifecycleScope)
+        getSystemService(InputManager::class.java).registerInputDeviceListener(inputListener, null)
+        lifecycleScope.launch {
+            session.ui.map { it.paused }.distinctUntilChanged().collect { if (it) releaseInputs() }
+        }
         lifecycleScope.launch { engine.errors.collect { session.flash(it) } }
         onBackPressedDispatcher.addCallback(
             this,
@@ -133,6 +171,7 @@ class GameActivity : ComponentActivity() {
     // Faux positif de lint : super.dispatchKeyEvent est l’API publique d’Activity.
     @android.annotation.SuppressLint("RestrictedApi")
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (!::session.isInitialized) return super.dispatchKeyEvent(event)
         val paused = session.ui.value.paused
         val code = event.keyCode
         // Menu : bouton Guide / Menu, ou la combinaison choisie (Select + Start, L3 + R3).
@@ -176,34 +215,31 @@ class GameActivity : ComponentActivity() {
     }
 
     override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean {
-        if (session.ui.value.paused ||
+        if (!::session.isInitialized || session.ui.value.paused ||
             event.source and InputDevice.SOURCE_JOYSTICK != InputDevice.SOURCE_JOYSTICK
         ) {
             return super.dispatchGenericMotionEvent(event)
         }
         val port = port(event)
-        retroView.sendMotionEvent(
-            GLRetroView.MOTION_SOURCE_DPAD,
-            event.getAxisValue(MotionEvent.AXIS_HAT_X),
-            event.getAxisValue(MotionEvent.AXIS_HAT_Y),
-            port,
-        )
+        val hatX = event.getAxisValue(MotionEvent.AXIS_HAT_X)
+        val hatY = event.getAxisValue(MotionEvent.AXIS_HAT_Y)
+        router.key(PadKey.LEFT, hatX < -0.5f, port)
+        router.key(PadKey.RIGHT, hatX > 0.5f, port)
+        router.key(PadKey.UP, hatY < -0.5f, port)
+        router.key(PadKey.DOWN, hatY > 0.5f, port)
         router.stick(Stick.LEFT, event.getAxisValue(MotionEvent.AXIS_X), event.getAxisValue(MotionEvent.AXIS_Y), port)
         router.stick(Stick.RIGHT, event.getAxisValue(MotionEvent.AXIS_Z), event.getAxisValue(MotionEvent.AXIS_RZ), port)
         // Gâchettes analogiques (GameCube, Dreamcast) : au-delà de la moitié, on enfonce L2/R2.
         val left = maxOf(event.getAxisValue(MotionEvent.AXIS_LTRIGGER), event.getAxisValue(MotionEvent.AXIS_BRAKE))
         val right = maxOf(event.getAxisValue(MotionEvent.AXIS_RTRIGGER), event.getAxisValue(MotionEvent.AXIS_GAS))
-        triggers(PadKey.L2, left > 0.5f, port)
-        triggers(PadKey.R2, right > 0.5f, port)
+        router.key(PadKey.L2, left > 0.5f, port)
+        router.key(PadKey.R2, right > 0.5f, port)
         return true
     }
 
-    private val triggerState = mutableMapOf<PadKey, Boolean>()
-
-    private fun triggers(key: PadKey, pressed: Boolean, port: Int) {
-        if (triggerState[key] == pressed) return
-        triggerState[key] = pressed
-        router.key(key, pressed, port)
+    private fun releaseInputs() {
+        if (::router.isInitialized) router.releaseAll()
+        held.clear()
     }
 
     /** Manette Android → RetroPad (A et B, X et Y inversés), et un clavier pour jouer au bureau. */
@@ -237,8 +273,23 @@ class GameActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
-        if (isFinishing && ::session.isInitialized) (application as RetroHubApp).container.scope.launch { session.finish() }
+        releaseInputs()
+        getSystemService(InputManager::class.java).unregisterInputDeviceListener(inputListener)
         super.onDestroy()
+    }
+
+    override fun finish() {
+        if (!::session.isInitialized) {
+            super.finish()
+            return
+        }
+        if (quitting) return
+        quitting = true
+        session.pause()
+        lifecycleScope.launch {
+            session.finish()
+            super@GameActivity.finish()
+        }
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {

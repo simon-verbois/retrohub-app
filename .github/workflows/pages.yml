@@ -21,7 +21,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      # Checks the twelve generated pages, then assembles only the site files.
+      # Checks the seven generated pages, then assembles only the site files.
       - name: Build and check the static site
         run: python3 scripts/build_site.py --output build/site
       - uses: actions/configure-pages@v5

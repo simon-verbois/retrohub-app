@@ -5,6 +5,8 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import ovh.verbois.retrohub.account.AccountPreferences
 import ovh.verbois.retrohub.account.AccountRepository
 import ovh.verbois.retrohub.account.AuthState
@@ -70,7 +72,10 @@ class AppContainer(val platform: Platform, val database: AppDatabase, val clock:
     val launcher =
         GameLauncher(library, downloads, saveSync, saveStore, fs, paths, platform::availableCores, platform.deviceClass, cheats::get, platform::batteryLow)
 
+    private val startLock = Mutex()
     private var started = false
+    private var statusServer: String? = null
+    private var statusCheckedAt: kotlin.time.Instant? = null
     private var notifiedConflicts = 0
 
     init {
@@ -79,8 +84,18 @@ class AppContainer(val platform: Platform, val database: AppDatabase, val clock:
 
     /** Après chaque synchro : compte, version du serveur, favoris à télécharger, place à libérer. */
     private suspend fun afterSync() {
-        runCatching { preferences.pull() }
-        account.server?.let { server -> runCatching { api.status(server) }.getOrNull()?.let { serverStatus.value = it } }
+        try {
+            preferences.pull()
+        } catch (error: ovh.verbois.retrohub.api.ApiException) { /* Retry at the next sync. */ }
+        account.server?.let { server ->
+            if (statusServer != server || statusCheckedAt == null || (clock.now() - statusCheckedAt!!).inWholeMinutes >= 15) {
+                try {
+                    serverStatus.value = api.status(server)
+                    statusServer = server
+                    statusCheckedAt = clock.now()
+                } catch (error: ovh.verbois.retrohub.api.ApiException) { /* Keep the last known version. */ }
+            }
+        }
         val current = settings.settings.value
         val games = library.games.value
         if (current.autoDownloadFavorites) {
@@ -99,9 +114,8 @@ class AppContainer(val platform: Platform, val database: AppDatabase, val clock:
     }
 
     /** Chargement initial : réglages, compte, puis synchro à chaque retour du réseau. */
-    suspend fun start() {
-        if (started) return
-        started = true
+    suspend fun start() = startLock.withLock {
+        if (started) return@withLock
         settings.load()
         account.load()
         sync.refreshCounts()
@@ -117,6 +131,7 @@ class AppContainer(val platform: Platform, val database: AppDatabase, val clock:
         }
         if (!platform.online.value) sync.markOffline()
         applyPeriodicSync()
+        started = true
     }
 
     /** Synchro périodique selon les réglages (désactivée si la synchro automatique l’est). */

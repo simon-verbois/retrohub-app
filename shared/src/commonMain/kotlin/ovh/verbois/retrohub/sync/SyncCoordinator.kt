@@ -1,5 +1,6 @@
 package ovh.verbois.retrohub.sync
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -80,9 +81,12 @@ class SyncCoordinator(
                 }
                 // Les sessions changent le temps de jeu et la dernière partie : on relit la bibliothèque.
                 if (sessions.upload().recorded > 0) library.refresh()
-                runCatching { afterSync() }
+                runCatching { afterSync() }.onFailure { if (it is CancellationException) throw it }
                 state.update { it.copy(phase = SyncPhase.IDLE, lastSuccess = clock.now()) }
                 SyncOutcome.Done
+            } catch (error: CancellationException) {
+                state.update { it.copy(phase = SyncPhase.IDLE) }
+                throw error
             } catch (error: ApiException.Unauthorized) {
                 state.update { it.copy(phase = SyncPhase.SIGNED_OUT) }
                 SyncOutcome.SignedOut

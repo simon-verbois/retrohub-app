@@ -8,6 +8,7 @@ import com.swordfish.libretrodroid.GLRetroView
 import com.swordfish.libretrodroid.LibretroDroid
 import com.swordfish.libretrodroid.ShaderConfig
 import com.swordfish.libretrodroid.Variable
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -15,6 +16,7 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import ovh.verbois.retrohub.emulation.CoreVariable
 import ovh.verbois.retrohub.emulation.EmulatorEngine
 import ovh.verbois.retrohub.emulation.NormRect
@@ -69,11 +71,11 @@ class LibretroEngine(private val view: GLRetroView) : EmulatorEngine {
         view.onResume()
     }
 
-    override fun saveState(): ByteArray? = runCatching { view.serializeState() }.getOrNull()
+    override suspend fun saveState(): ByteArray? = withContext(Dispatchers.IO) { runCatching { view.serializeState() }.getOrNull() }
 
-    override fun loadState(data: ByteArray): Boolean = runCatching { view.unserializeState(data) }.getOrDefault(false)
+    override suspend fun loadState(data: ByteArray): Boolean = withContext(Dispatchers.IO) { runCatching { view.unserializeState(data) }.getOrDefault(false) }
 
-    override fun saveSram(): ByteArray? = runCatching { view.serializeSRAM() }.getOrNull()
+    override suspend fun saveSram(): ByteArray? = withContext(Dispatchers.IO) { runCatching { view.serializeSRAM() }.getOrNull() }
 
     override fun reset() {
         view.reset()
@@ -105,10 +107,6 @@ class LibretroEngine(private val view: GLRetroView) : EmulatorEngine {
 
     override fun setViewport(rect: NormRect) {
         view.viewport = RectF(rect.left, rect.top, rect.right, rect.bottom)
-    }
-
-    override fun setShader(shader: Shader) {
-        view.shader = shaderConfig(shader)
     }
 
     override fun setOptions(options: Map<String, String>) {

@@ -36,6 +36,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -53,6 +54,8 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import ovh.verbois.retrohub.core.formatDate
 import ovh.verbois.retrohub.core.formatPlayTime
 import ovh.verbois.retrohub.emulation.Consoles
@@ -80,7 +83,7 @@ import ovh.verbois.retrohub.ui.theme.consoleColor
  */
 fun homeOrder(games: List<Game>, order: HomeOrder = HomeOrder.RECENT, hidden: Set<String> = emptySet(), downloadedOnly: Boolean = false): List<Game> {
     val shown = games.filter { it.console !in hidden && (!downloadedOnly || it.downloaded) }
-    val byTitle = compareBy<Game> { it.title.lowercase() }
+    val byTitle = compareBy<Game> { it.sortTitle }
     return when (order) {
         HomeOrder.RECENT -> {
             val (recent, others) = shown.partition { it.lastPlayed != null }
@@ -99,10 +102,9 @@ fun HomeScreen(controller: UiController) {
     val games by container.library.games.collectAsState()
     val sync by container.sync.status.collectAsState()
     val settings by container.settings.settings.collectAsState()
-    val ordered =
-        remember(games, settings.homeOrder, settings.hiddenConsoles, settings.offlineOnly) {
-            homeOrder(games, settings.homeOrder, settings.hiddenConsoles, settings.offlineOnly)
-        }
+    val ordered by produceState(emptyList<Game>(), games, settings.homeOrder, settings.hiddenConsoles, settings.offlineOnly) {
+        value = withContext(Dispatchers.Default) { homeOrder(games, settings.homeOrder, settings.hiddenConsoles, settings.offlineOnly) }
+    }
     val selected = ordered.firstOrNull { it.id == controller.homeGame } ?: games.firstOrNull { it.id == controller.homeGame } ?: ordered.firstOrNull()
     LaunchedEffect(selected?.id, selected?.remote?.coverUrl) {
         controller.backdrop =
@@ -278,7 +280,13 @@ private fun Spotlight(controller: UiController, game: Game, metrics: HomeMetrics
             )
         }
         Text(
-            if (game.supported) meta(game) else "Pas encore jouable dans l’application",
+            if (controller.launching == game.id) {
+                "Préparation du jeu…"
+            } else if (game.supported) {
+                meta(game)
+            } else {
+                "Pas encore jouable dans l’application"
+            },
             style = if (metrics.title == 2) type.bodyLarge else type.bodyMedium,
             color = if (game.supported) Palette.TextDim else Palette.Warning,
             maxLines = 1,
@@ -307,7 +315,7 @@ fun Kicker(game: Game) {
 }
 
 fun meta(game: Game): String = when {
-    game.lastPlayed != null -> "${formatPlayTime(game.remote.playedSeconds)} de jeu · ${formatDate(game.lastPlayed!!)}"
+    game.lastPlayed != null -> "${formatPlayTime(game.remote.playedSeconds)} de jeu · ${formatDate(game.lastPlayed)}"
     game.downloaded -> "Prêt à jouer, même hors ligne"
     game.remote.rom != null -> "À télécharger sur ce téléphone"
     else -> "Pas encore installé sur le serveur"
@@ -353,7 +361,19 @@ private fun HeroCard(controller: UiController, game: Game, modifier: Modifier = 
                 Text(game.title, style = MaterialTheme.typography.displaySmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 GameMenu(controller, game)
             }
-            Text(meta(game), style = MaterialTheme.typography.bodyMedium, color = Palette.TextDim, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(
+                if (controller.launching ==
+                    game.id
+                ) {
+                    "Préparation du jeu…"
+                } else {
+                    meta(game)
+                },
+                style = MaterialTheme.typography.bodyMedium,
+                color = Palette.TextDim,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
     }
 }

@@ -3,125 +3,159 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#173faa">
-  <title>RetroHub — Jouw RetroHub-speelhal, in je broekzak.</title>
-  <meta name="description" content="De games van je RetroHub-server, offline speelbaar, met opslagen die je op het web terugvindt.">
-  <meta property="og:title" content="RetroHub — Jouw RetroHub-speelhal, in je broekzak.">
-  <meta property="og:description" content="De games van je RetroHub-server, offline speelbaar, met opslagen die je op het web terugvindt.">
+  <meta name="theme-color" content="#fafbfe">
+  <title>RetroHub — Je retrogames. Speel gewoon verder.</title>
+  <meta name="description" content="Neem de games van je RetroHub-server mee. Speel offline op je telefoon en ga daarna verder op het web.">
+  <meta property="og:title" content="RetroHub — Je retrogames. Speel gewoon verder.">
+  <meta property="og:description" content="Neem de games van je RetroHub-server mee. Speel offline op je telefoon en ga daarna verder op het web.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://simon-verbois.github.io/retrohub-app/nl/">
+  <meta property="og:image" content="https://simon-verbois.github.io/retrohub-app/screenshots/home.webp">
   <link rel="canonical" href="https://simon-verbois.github.io/retrohub-app/nl/">
   <link rel="alternate" hreflang="en" href="https://simon-verbois.github.io/retrohub-app/">
   <link rel="alternate" hreflang="fr" href="https://simon-verbois.github.io/retrohub-app/fr/">
   <link rel="alternate" hreflang="de" href="https://simon-verbois.github.io/retrohub-app/de/">
   <link rel="alternate" hreflang="es" href="https://simon-verbois.github.io/retrohub-app/es/">
   <link rel="alternate" hreflang="it" href="https://simon-verbois.github.io/retrohub-app/it/">
-  <link rel="alternate" hreflang="pl" href="https://simon-verbois.github.io/retrohub-app/pl/">
   <link rel="alternate" hreflang="nl" href="https://simon-verbois.github.io/retrohub-app/nl/">
   <link rel="alternate" hreflang="pt-PT" href="https://simon-verbois.github.io/retrohub-app/pt/">
-  <link rel="alternate" hreflang="ro" href="https://simon-verbois.github.io/retrohub-app/ro/">
-  <link rel="alternate" hreflang="el" href="https://simon-verbois.github.io/retrohub-app/el/">
-  <link rel="alternate" hreflang="hu" href="https://simon-verbois.github.io/retrohub-app/hu/">
-  <link rel="alternate" hreflang="cs" href="https://simon-verbois.github.io/retrohub-app/cs/">
   <link rel="alternate" hreflang="x-default" href="https://simon-verbois.github.io/retrohub-app/">
   <link rel="icon" href="../favicon.svg" type="image/svg+xml">
+  <link rel="preload" href="../fonts/manrope-extrabold.ttf" as="font" type="font/ttf" crossorigin>
   <link rel="stylesheet" href="../styles.css">
+  <script src="../site.js" defer></script>
 </head>
 <body>
-  <header class="top">
-    <a class="brand" href="#main"><img src="../favicon.svg" width="32" height="32" alt=""> RetroHub</a>
-    <nav aria-label="RetroHub">
-      <a href="#features">Functies</a>
+  <a class="skip-link" href="#main">Naar de inhoud</a>
+  <header class="header wrap">
+    <a class="brand" href="#main" aria-label="RetroHub"><img src="../favicon.svg" width="36" height="36" alt="">RetroHub</a>
+    <nav class="main-nav" aria-label="Hoofdnavigatie">
+      <a href="#app">De app</a>
       <a href="#consoles">Consoles</a>
-      <a href="#server">Server</a>
-      <a href="https://github.com/simon-verbois/retrohub-app">GitHub</a>
+      <a href="#install">Installeren</a>
     </nav>
     <details class="languages">
-      <summary><span class="sr-only">Taal: </span>Nederlands <span aria-hidden="true">⌄</span></summary>
-      <ul><li><a href="../" lang="en" hreflang="en">English</a></li>
-<li><a href="../fr/" lang="fr" hreflang="fr">Français</a></li>
-<li><a href="../de/" lang="de" hreflang="de">Deutsch</a></li>
-<li><a href="../es/" lang="es" hreflang="es">Español</a></li>
-<li><a href="../it/" lang="it" hreflang="it">Italiano</a></li>
-<li><a href="../pl/" lang="pl" hreflang="pl">Polski</a></li>
-<li><a href="../nl/" lang="nl" hreflang="nl" aria-current="page">Nederlands</a></li>
-<li><a href="../pt/" lang="pt-PT" hreflang="pt-PT">Português</a></li>
-<li><a href="../ro/" lang="ro" hreflang="ro">Română</a></li>
-<li><a href="../el/" lang="el" hreflang="el">Ελληνικά</a></li>
-<li><a href="../hu/" lang="hu" hreflang="hu">Magyar</a></li>
-<li><a href="../cs/" lang="cs" hreflang="cs">Čeština</a></li></ul>
+      <summary><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a18 18 0 0 1 0 18 18 18 0 0 1 0-18"/></svg><span>Nederlands</span><svg class="chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg></summary>
+      <nav aria-label="Taal"><a href="../" lang="en" hreflang="en">English</a>
+<a href="../fr/" lang="fr" hreflang="fr">Français</a>
+<a href="../de/" lang="de" hreflang="de">Deutsch</a>
+<a href="../es/" lang="es" hreflang="es">Español</a>
+<a href="../it/" lang="it" hreflang="it">Italiano</a>
+<a href="../nl/" lang="nl" hreflang="nl" aria-current="page">Nederlands</a>
+<a href="../pt/" lang="pt-PT" hreflang="pt-PT">Português</a></nav>
     </details>
   </header>
 
   <main id="main">
-    <section class="hero">
-      <div class="hero-text">
-        <p class="kicker">Android-client</p>
-        <h1>Jouw RetroHub-speelhal, in je broekzak.</h1>
-        <p class="lead">De games van je RetroHub-server, offline speelbaar, met opslagen die je op het web terugvindt.</p>
-        <div class="actions">
-          <a class="button primary" href="https://github.com/simon-verbois/retrohub-app/releases/latest">APK downloaden</a>
-          <a class="button" href="#server">De RetroHub-server</a>
-        </div>
-        <a class="coffee" href="https://buymeacoffee.com/simonverbois"><img src="../buy-me-a-coffee.png" width="178" height="50" alt="Buy Me a Coffee"></a>
+    <section class="hero wrap" aria-labelledby="hero-title">
+      <p class="platform"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="2" width="12" height="20" rx="3"/><path d="M10 18h4"/></svg>De Android-app voor RetroHub</p>
+      <h1 id="hero-title">Je retrogames.<br>Speel gewoon verder.</h1>
+      <p class="lead">Neem de games van je RetroHub-server mee. Speel offline op je telefoon en ga daarna verder op het web.</p>
+      <div class="actions">
+        <a class="button primary" href="https://github.com/simon-verbois/retrohub-app/releases/latest"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M5 16v4h14v-4"/></svg>Downloaden voor Android</a>
+        <a class="button secondary" href="#app">Bekijk de app</a>
       </div>
-      <figure class="screen hero-screen">
-        <img src="../screenshots/home.webp" width="1200" height="540" alt="Startscherm: een rij games, het gekozen spel en zijn activiteitskaarten">
+      <p class="requirements">Android 8.0 of hoger. <a href="#server">RetroHub-server vereist.</a></p>
+      <figure class="hero-product">
+        <a href="../screenshots/home.webp" class="screenshot device" data-screenshot aria-label="Schermafbeelding van het startscherm vergroten" data-caption="Het startscherm en recente games">
+          <img src="../screenshots/home.webp" width="1200" height="540" fetchpriority="high" alt="RetroHub-startscherm met gamehoesjes, de gekozen game en kaarten voor hervatten, speeltijd en synchronisatie">
+          <span class="zoom" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5"/></svg></span>
+        </a>
+        <figcaption>Schermafbeeldingen van de app met een demobibliotheek. De interface is in het Frans.</figcaption>
       </figure>
     </section>
 
-    <section id="server" class="server">
-      <h2>Een client voor de RetroHub-server</h2>
-      <p>De app werkt niet alleen: hij koppelt met je eigen RetroHub-server. Bibliotheek, games, opslagen en speeltijd komen daarvandaan.</p>
-      <div class="actions">
-        <a class="button primary" href="https://simon-verbois.github.io/retrohub/">RetroHub ontdekken</a>
-        <a class="button" href="https://github.com/simon-verbois/retrohub">Broncode van de server</a>
+    <section id="app" class="app-section section" aria-labelledby="app-title">
+      <div class="wrap">
+        <div class="section-heading">
+          <h2 id="app-title">Je games staan centraal.</h2>
+          <p>Een startscherm dat aanvoelt als een console. Je bibliotheek, recente games en instellingen altijd binnen handbereik.</p>
+        </div>
+        <div class="showcase-tabs" role="tablist" aria-label="Schermen van de app" hidden>
+          <button id="tab-home" type="button" role="tab" aria-controls="view-home" aria-selected="false" tabindex="-1">Startscherm</button>
+          <button id="tab-library" type="button" role="tab" aria-controls="view-library" aria-selected="true" tabindex="0">Bibliotheek</button>
+          <button id="tab-settings" type="button" role="tab" aria-controls="view-settings" aria-selected="false" tabindex="-1">Instellingen</button>
+        </div>
+        <div class="showcase-panels">
+          <figure id="view-home" class="showcase-panel">
+            <a href="../screenshots/home.webp" class="screenshot" data-screenshot aria-label="Schermafbeelding van het startscherm vergroten" data-caption="Het startscherm en recente games"><img src="../screenshots/home.webp" width="1200" height="540" loading="lazy" alt="RetroHub-startscherm met gamehoesjes, de gekozen game en kaarten voor hervatten, speeltijd en synchronisatie"><span class="zoom" aria-hidden="true">+</span></a>
+            <figcaption><h3>Ga verder waar je was gebleven.</h3><p>Kies een game uit de rij hoesjes. Je laatste opgeslagen spel, speeltijd en synchronisatiestatus blijven in beeld.</p></figcaption>
+          </figure>
+          <figure id="view-library" class="showcase-panel">
+            <a href="../screenshots/library.webp" class="screenshot" data-screenshot aria-label="Schermafbeelding van de bibliotheek vergroten" data-caption="De bibliotheek en de filters"><img src="../screenshots/library.webp" width="1200" height="540" loading="lazy" alt="RetroHub-bibliotheek met meerdere gamehoesjes en een consolefilter"><span class="zoom" aria-hidden="true">+</span></a>
+            <figcaption><h3>Vind je volgende game.</h3><p>Blader door je hoesjes, filter op console en houd je favorieten bij de hand. Download de games die je wilt meenemen.</p></figcaption>
+          </figure>
+          <figure id="view-settings" class="showcase-panel">
+            <a href="../screenshots/settings.webp" class="screenshot" data-screenshot aria-label="Schermafbeelding van de instellingen vergroten" data-caption="Instellingen per console"><img src="../screenshots/settings.webp" width="1200" height="540" loading="lazy" alt="Instellingen van een console in RetroHub"><span class="zoom" aria-hidden="true">+</span></a>
+            <figcaption><h3>Elke console naar jouw smaak.</h3><p>Beeldweergave, resolutie, knoppen en doorspoelsnelheid: pas elke console aan je eigen speelstijl aan.</p></figcaption>
+          </figure>
+        </div>
       </div>
     </section>
 
-    <section id="features" class="features">
-      <h2>Functies</h2>
-      <div class="grid">
-        <article><h3>Offline</h3><p>Een gedownload spel speelt zonder netwerk. Alles synchroniseert zodra de verbinding terug is.</p></article>
-        <article><h3>Overal hetzelfde spel</h3><p>Begin op de telefoon, ga verder in de browser, en andersom.</p></article>
-        <article><h3>Niets overschreven</h3><p>Twee versies van dezelfde opslag? Jij kiest welke blijft.</p></article>
-        <article><h3>Zoals een console</h3><p>Bedienen met controller, aanraking of toetsenbord.</p></article>
-        <article><h3>Getrouwe besturing</h3><p>Een aanraakindeling per console, met je vinger te verplaatsen, verborgen zodra een controller verbindt.</p></article>
-        <article><h3>Instellingen per console</h3><p>Emulator, beeld, taal, regio, knoppen, turbo en cheatcodes.</p></article>
+    <section class="section wrap play-section" aria-labelledby="play-title">
+      <h2 id="play-title">Speel zoals jij wilt.</h2>
+      <div class="play-features">
+        <article>
+          <svg class="feature-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m2 2 20 20M2 8.8a16 16 0 0 1 2.4-1.5M7 6a16 16 0 0 1 15 2.8M5 12a11 11 0 0 1 2.3-1.4m4.1-1a11 11 0 0 1 7.6 2.4M8.5 15.5a5.5 5.5 0 0 1 7 0M12 19h.01"/></svg>
+          <h3>Ook zonder verbinding.</h3>
+          <p>Download je games voordat je vertrekt. Je kunt ze offline blijven spelen. Je voortgang wordt gesynchroniseerd zodra je weer verbinding hebt.</p>
+        </article>
+        <article>
+          <svg class="feature-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 7h12a3 3 0 0 1 3 2.5l1 7a2.5 2.5 0 0 1-4.2 2.1L15 16H9l-2.8 2.6A2.5 2.5 0 0 1 2 16.5l1-7A3 3 0 0 1 6 7ZM6 11v4m-2-2h4m8-1h.01M19 14h.01"/></svg>
+          <h3>Met het scherm of een controller.</h3>
+          <p>De aanraakbediening past bij elke console. Sluit een controller aan en de schermknoppen verdwijnen. Je kunt ook de hele app met de controller bedienen.</p>
+        </article>
       </div>
     </section>
 
-    <section class="gallery-section">
-      <div class="gallery">
-        <figure class="screen"><img src="../screenshots/conflict.webp" width="1200" height="540" loading="lazy" alt="Keuze tussen twee versies van een opslag"><figcaption>Twee versies van een spel, naast elkaar</figcaption></figure>
-        <figure class="screen"><img src="../screenshots/game.webp" width="1200" height="540" loading="lazy" alt="Lopend spel met aanraakbesturing"><figcaption>Aanraakbesturing van elke console</figcaption></figure>
-        <figure class="screen"><img src="../screenshots/library.webp" width="1200" height="540" loading="lazy" alt="Bibliotheek gefilterd op console"><figcaption>Bibliotheek, gefilterd op console</figcaption></figure>
+    <section class="saves-section section" aria-labelledby="saves-title">
+      <div class="wrap saves-layout">
+        <div class="saves-copy">
+          <svg class="feature-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7a8 8 0 0 0-14-2L3 8m0-5v5h5M4 17a8 8 0 0 0 14 2l3-3m-5 0h5v5"/></svg>
+          <h2 id="saves-title">Wissel van scherm. Bewaar je voortgang.</h2>
+          <p>Begin op je telefoon en speel verder in je browser. Je opgeslagen spellen en speeltijd volgen je RetroHub-account.</p>
+          <p class="saves-detail">Heb je op beide apparaten gespeeld? Dan kies je in de app welke opgeslagen versie je wilt bewaren, voordat er iets wordt vervangen.</p>
+        </div>
+        <figure>
+          <a href="../screenshots/conflict.webp" class="screenshot" data-screenshot aria-label="Schermafbeelding van de spelkeuze vergroten" data-caption="Beide versies zijn veranderd? Jij kiest welke je bewaart."><img src="../screenshots/conflict.webp" width="1200" height="540" loading="lazy" alt="Twee opgeslagen versies van hetzelfde spel, op de telefoon en de server, elk met een knop om die versie te kiezen"><span class="zoom" aria-hidden="true">+</span></a>
+          <figcaption>Beide versies zijn veranderd? Jij kiest welke je bewaart.</figcaption>
+        </figure>
       </div>
-      <p class="note">De schermafbeeldingen tonen de app in het Frans. Meer talen volgen binnenkort.</p>
     </section>
 
-    <section id="consoles" class="consoles">
-      <h2>Consoles</h2>
-      <ul>
-        <li>NES</li><li>Super Nintendo</li><li>Game Boy</li><li>Game Boy Color</li><li>Game Boy Advance</li>
-        <li>Master System</li><li>Mega Drive</li><li>PlayStation</li><li>Nintendo DS</li><li>Nintendo 64</li>
-        <li>GameCube</li><li>Atari 2600</li><li>Dreamcast</li>
-      </ul>
+    <section id="consoles" class="section wrap consoles-section" aria-labelledby="consoles-title">
+      <div class="section-heading"><h2 id="consoles-title">Meerdere generaties. Eén bibliotheek.</h2><p>De emulators zijn ingebouwd in de app. Kies een game en begin met spelen.</p></div>
+      <div class="console-families">
+        <div><h3>Nintendo</h3><ul><li>NES</li><li>Super Nintendo</li><li>Game Boy / Color / Advance</li><li>Nintendo DS</li><li>Nintendo 64</li><li>GameCube</li></ul></div>
+        <div><h3>Sega</h3><ul><li>Master System</li><li>Mega Drive</li></ul></div>
+        <div><h3>Sony &amp; Atari</h3><ul><li>PlayStation</li><li>Atari 2600</li></ul></div>
+      </div>
+      <p class="compatibility-note">De prestaties hangen af van je telefoon, vooral voor Nintendo 64 en GameCube. Sommige systemen hebben een BIOS nodig.</p>
     </section>
 
-    <section class="install">
-      <h2>Installeren</h2>
-      <ol>
-        <li><a href="https://github.com/simon-verbois/retrohub-app/releases/latest">Download de nieuwste versie van de APK en installeer die.</a></li>
-        <li>Voer het adres van je RetroHub-server in.</li>
-        <li>Koppel de telefoon met de code op het web, of met je wachtwoord.</li>
-      </ol>
+    <section id="install" class="install-section section" aria-labelledby="install-title">
+      <div class="wrap">
+        <div class="install-heading"><div><h2 id="install-title">Je volgende game begint hier.</h2><p>Een gratis app die je verbindt met je eigen RetroHub-server.</p></div><a class="button primary" href="https://github.com/simon-verbois/retrohub-app/releases/latest"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M5 16v4h14v-4"/></svg>Downloaden voor Android</a></div>
+        <ol class="install-steps">
+          <li><h3>Installeer de app.</h3><p>Download de APK van GitHub. Open het bestand op je telefoon en sta de installatie toe als Android daarom vraagt.</p></li>
+          <li><h3>Verbind je server.</h3><p>Voer het adres in en daarna de koppelcode die RetroHub op het web toont, of meld je aan met je wachtwoord.</p></li>
+          <li><h3>Neem je games mee.</h3><p>Je bibliotheek verschijnt in de app. Download een game om die ook offline te spelen.</p></li>
+        </ol>
+        <aside id="server" class="server" aria-labelledby="server-title"><div><h3 id="server-title">Nog geen RetroHub-server?</h3><p>RetroHub bewaart je bibliotheek en opgeslagen spellen op je eigen hardware. De app maakt verbinding om je games op te halen. Er worden geen games meegeleverd.</p></div><a class="text-link" href="https://simon-verbois.github.io/retrohub/">Ontdek de server<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17 17 7M7 7h10v10"/></svg></a></aside>
+      </div>
     </section>
   </main>
 
-  <footer>
-    <p>Code onder MIT-licentie. De APK bevat LibretroDroid en libretro-cores onder hun eigen licenties.</p>
-    <p>Persoonlijk project, ontwikkeld met hulp van AI.</p>
+  <footer class="footer wrap">
+    <div class="footer-top"><a class="brand" href="#main"><img src="../favicon.svg" width="28" height="28" alt="">RetroHub</a><nav aria-label="Projectlinks"><a href="https://github.com/simon-verbois/retrohub-app">Broncode</a><a href="https://github.com/simon-verbois/retrohub-app/releases">Versies</a><a href="https://buymeacoffee.com/simonverbois">Steun het project</a></nav></div>
+    <p>Code onder de MIT-licentie. LibretroDroid en de libretro-kernen worden onder hun eigen licenties verspreid.</p>
+    <p>Geen games of BIOS inbegrepen. Alle handelsmerken zijn eigendom van hun respectieve eigenaren.</p>
   </footer>
+
+  <dialog class="image-dialog" aria-label="Schermafbeelding van de app">
+    <form method="dialog"><button class="dialog-close" aria-label="Schermafbeelding sluiten"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M6 18 18 6"/></svg></button></form>
+    <figure><img width="1200" height="540" alt=""><figcaption></figcaption></figure>
+  </dialog>
 </body>
 </html>

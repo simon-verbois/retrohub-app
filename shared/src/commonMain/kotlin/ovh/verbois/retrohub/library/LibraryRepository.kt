@@ -1,22 +1,29 @@
 package ovh.verbois.retrohub.library
 
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.IO
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.builtins.ListSerializer
 import ovh.verbois.retrohub.api.ApiJson
 import ovh.verbois.retrohub.api.ConsoleCapabilities
-import ovh.verbois.retrohub.api.GameDetail
 import ovh.verbois.retrohub.api.LibraryGame
 import ovh.verbois.retrohub.api.LibraryManifest
 import ovh.verbois.retrohub.api.LibraryResult
 import ovh.verbois.retrohub.api.LibraryUpdate
 import ovh.verbois.retrohub.api.RetroHubApi
+import ovh.verbois.retrohub.core.AppClock
 import ovh.verbois.retrohub.core.parseInstant
+import ovh.verbois.retrohub.core.searchKey
 import ovh.verbois.retrohub.data.AppDatabase
 import ovh.verbois.retrohub.data.GameEntity
 import ovh.verbois.retrohub.data.KeyValueStore
@@ -39,7 +46,9 @@ data class Game(val remote: LibraryGame, val local: LocalRomEntity?) {
     val downloaded: Boolean get() = local != null
     val updateAvailable: Boolean get() = local != null && remote.rom != null && remote.rom.sha256 != local.sha256
     val downloadable: Boolean get() = remote.rom != null && supported
-    val lastPlayed: Instant? get() = parseInstant(remote.lastPlayedAt)
+    val lastPlayed: Instant? = parseInstant(remote.lastPlayedAt)
+    val sortTitle: String = title.lowercase()
+    val searchText: String by lazy { searchKey(title + " " + Consoles.name(console) + " " + (remote.genre ?: "")) }
     val favorite: Boolean get() = remote.favorite
 }
 
@@ -49,18 +58,21 @@ class LibraryRepository(
     private val kv: KeyValueStore,
     private val saveSync: SaveSync,
     scope: CoroutineScope,
+    private val clock: AppClock = AppClock.System,
 ) {
     private val refreshLock = Mutex()
 
+    private val catalog = db.games().observeAll().distinctUntilChanged().map { entities ->
+        entities.mapNotNull { entity ->
+            runCatching { ApiJson.decodeFromString(LibraryGame.serializer(), entity.json) }.getOrNull()
+        }
+    }.flowOn(Dispatchers.Default)
+
     val games: StateFlow<List<Game>> =
-        combine(db.games().observeAll(), db.roms().observeAll()) { entities, roms ->
+        combine(catalog, db.roms().observeAll().distinctUntilChanged()) { catalog, roms ->
             val local = roms.associateBy { it.playGameId }
-            entities.mapNotNull { entity ->
-                runCatching {
-                    ApiJson.decodeFromString(LibraryGame.serializer(), entity.json)
-                }.getOrNull()?.let { Game(it, local[it.playGameId]) }
-            }
-        }.stateIn(scope, SharingStarted.Eagerly, emptyList())
+            catalog.map { Game(it, local[it.playGameId]) }
+        }.flowOn(Dispatchers.Default).stateIn(scope, SharingStarted.Eagerly, emptyList())
 
     suspend fun saveEpoch(): String = kv.string(EPOCH) ?: "initial"
 
@@ -68,14 +80,16 @@ class LibraryRepository(
      * Relit le catalogue (ETag : un 304 ne coûte presque rien). Un save_epoch différent de celui
      * connu signale une restauration du serveur : les sauvegardes locales sont réconciliées.
      */
-    suspend fun refresh(): Boolean = refreshLock.withLock {
-        when (val result = api.library(kv.string(ETAG))) {
-            LibraryResult.NotModified -> false
+    suspend fun refresh(): Boolean = withContext(Dispatchers.IO) {
+        refreshLock.withLock {
+            when (val result = api.library(kv.string(ETAG))) {
+                LibraryResult.NotModified -> false
 
-            is LibraryResult.Updated -> {
-                store(result.manifest)
-                kv.putString(ETAG, result.etag)
-                true
+                is LibraryResult.Updated -> {
+                    store(result.manifest)
+                    kv.putString(ETAG, result.etag)
+                    true
+                }
             }
         }
     }
@@ -132,27 +146,18 @@ class LibraryRepository(
         refresh()
     }
 
-    /** Fiche détaillée (description, captures) gardée pour le hors ligne. */
-    suspend fun detail(id: String, online: Boolean): GameDetail? {
-        val key = "detail:$id"
-        if (online) {
-            runCatching { api.game(id) }.getOrNull()?.let {
-                kv.put(key, GameDetail.serializer(), it)
-                return it
-            }
-        }
-        return kv.get(key, GameDetail.serializer())
-    }
-
     suspend fun consoles(online: Boolean): List<ConsoleCapabilities> {
         val serializer = ListSerializer(ConsoleCapabilities.serializer())
-        if (online) {
-            runCatching { api.consoles() }.getOrNull()?.let {
+        val cached = kv.get(CONSOLES, serializer)
+        val fetched = kv.string(CONSOLES_FETCHED)?.toLongOrNull() ?: 0L
+        if (online && (cached == null || clock.now().toEpochMilliseconds() - fetched >= 300_000)) {
+            api.consoles().let {
                 kv.put(CONSOLES, serializer, it)
+                kv.putString(CONSOLES_FETCHED, clock.now().toEpochMilliseconds().toString())
                 return it
             }
         }
-        return kv.get(CONSOLES, serializer) ?: emptyList()
+        return cached ?: emptyList()
     }
 
     /** Un autre compte s’est connecté : la bibliothèque locale ne lui appartient pas. */
@@ -160,11 +165,14 @@ class LibraryRepository(
         db.games().clear()
         kv.putString(ETAG, null)
         kv.putString(EPOCH, null)
+        kv.putString(CONSOLES, null)
+        kv.putString(CONSOLES_FETCHED, null)
     }
 
     private companion object {
         const val ETAG = "library_etag"
         const val EPOCH = "save_epoch"
         const val CONSOLES = "consoles"
+        const val CONSOLES_FETCHED = "consoles_fetched"
     }
 }

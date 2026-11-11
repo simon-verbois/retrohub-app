@@ -3,6 +3,7 @@ package ovh.verbois.retrohub.ui
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -163,6 +164,8 @@ class UiController(val container: AppContainer, private val scope: CoroutineScop
                 }
             } catch (error: ApiException) {
                 show(error.message ?: "Lancement impossible. Réessayez.")
+            } catch (error: CancellationException) {
+                throw error
             } catch (error: Exception) {
                 show("Lancement impossible. Réessayez.")
             } finally {

@@ -16,7 +16,10 @@ retrohub="${RETROHUB_REPO:-$root/../retrohub}"
 server_port=8011
 app_id="ovh.verbois.retrohub.debug"
 abis="${RETROHUB_TEST_ABIS:-x86_64}"
-gradle=(./gradlew --console=plain "-Pretrohub.abis=$abis")
+variant="${RETROHUB_TEST_VARIANT:-debug}"
+case "$variant" in debug|benchmark) ;; *) echo "Invalid test variant: $variant" >&2; exit 2 ;; esac
+variant_task="${variant^}"
+gradle=(./gradlew --console=plain "-Pretrohub.abis=$abis" "-Pretrohub.testVariant=$variant")
 export ANDROID_SERIAL="${ANDROID_SERIAL:-$(scripts/emulator.sh serial)}"
 backend_pid=""
 
@@ -48,8 +51,16 @@ instrumented() {
   echo "== Instrumented tests (Room, WorkManager, controller navigation)"
   need_device
   ensure_cores
-  "${gradle[@]}" :app:connectedDebugAndroidTest \
+  local reports="app/build/outputs/androidTest-results/connected/$variant"
+  rm -rf "$reports"
+  "${gradle[@]}" :app:connected${variant_task}AndroidTest \
     -Pandroid.testInstrumentationRunnerArguments.notPackage=ovh.verbois.retrohub.e2e
+  # Some runner crashes return a successful Gradle exit code: verify the actual reports too.
+  if ! grep -q '<testcase ' "$reports"/TEST-*.xml ||
+     grep -Eq '<failure|<error|failures="[1-9]|errors="[1-9]' "$reports"/TEST-*.xml; then
+    echo "Instrumented tests did not complete successfully ($reports)." >&2
+    exit 1
+  fi
 }
 
 start_backend() {
@@ -76,7 +87,7 @@ e2e() {
   ensure_cores
   start_backend
   adb -s "$ANDROID_SERIAL" reverse "tcp:$server_port" "tcp:$server_port"
-  "${gradle[@]}" :app:installDebug :app:installDebugAndroidTest
+  "${gradle[@]}" :app:install${variant_task} :app:install${variant_task}AndroidTest
   # Fresh app: first launch, pairing, initial settings.
   adb -s "$ANDROID_SERIAL" shell pm clear "$app_id" >/dev/null
   # The notification prompt (Android 13+) would cover the app during the flow.
@@ -90,11 +101,14 @@ e2e() {
     "$app_id.test/androidx.test.runner.AndroidJUnitRunner" | tr -d '\r')"
   echo "$output" | grep -E "INSTRUMENTATION_STATUS: (test|stack)=|^OK|FAILURES|Tests run" | sed 's/INSTRUMENTATION_STATUS: //' | head -60
   # Full failure trace, to understand it without rerunning.
-  echo "$output" | grep -q "^OK (" || echo "$output" | sed -n '/stack=/,/INSTRUMENTATION_STATUS_CODE/p' | grep -E "^\s+at ovh\.|Caused by|stack=" | head -25
+  echo "$output" | grep -Eq '^OK \([1-9][0-9]* tests?\)' || echo "$output" | sed -n '/stack=/,/INSTRUMENTATION_STATUS_CODE/p' | grep -E "^\s+at ovh\.|Caused by|stack=" | head -25
   rm -rf build/screens && mkdir -p build/screens
   adb -s "$ANDROID_SERIAL" pull "/sdcard/Android/data/$app_id/files/screens/." build/screens/ >/dev/null 2>&1 || true
   echo "Screenshots: $(ls build/screens 2>/dev/null | tr '\n' ' ')"
-  echo "$output" | grep -q "^OK (" || { echo "End-to-end flow failed." >&2; exit 1; }
+  for screen in home-landscape library-landscape selected-landscape game-landscape game-portrait conflict-landscape signed-out-landscape; do
+    [[ -s "build/screens/$screen.png" ]] || { echo "Missing end-to-end screenshot: $screen" >&2; exit 1; }
+  done
+  echo "$output" | grep -Eq '^OK \([1-9][0-9]* tests?\)' || { echo "End-to-end flow failed." >&2; exit 1; }
 }
 
 case "$level" in

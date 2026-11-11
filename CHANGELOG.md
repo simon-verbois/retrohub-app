@@ -10,6 +10,34 @@ change, in plain text. Never rewrite the notes of a published version.
 
 ## [Unreleased]
 
+## [2026.46.6] - 2026-11-11
+
+### Changed
+
+- Rebuilt the app website around large, expandable screenshots, a browsable app preview, clearer installation steps and a restrained layout for phones and desktops.
+- The website now focuses on seven Western European languages instead of twelve.
+- Save and restore games without blocking navigation or reading the previous save into memory.
+- Keep library filters, sorting, scroll position and game focus when returning to a screen; prepare sorting and search away from the interface thread.
+- Show smoother download progress and automatically resume interrupted downloads when the network returns.
+- Reduce the application size with optimized release builds and removal of the unused Material icon collection.
+
+### Fixed
+
+- Identify saves with the ROM actually running on the phone, and refuse incompatible manual save states.
+- Release held buttons, turbo and sticks when pausing or disconnecting a controller, independently for each player.
+- Finish the final save before closing the emulator, return to the library after a backgrounded game, and record each completed session only once.
+- Merge repeated background sync requests while preserving a follow-up for changes made during a sync.
+- Move ROMs through a verified temporary file and clear artwork through its cache manager.
+
+### Removed
+
+- Unused game-detail caching, navigation routes, interface helpers and obsolete dependency declarations.
+
+### Internal
+
+- Exercise optimized builds, native cores and the complete server journey in the Android emulator as part of local CI.
+- Add regression coverage for large snapshots, save compatibility, input release, download progress and retries, background sync and large catalogue search.
+
 ## [2026.46.5] - 2026-11-11
 
 ### Changed

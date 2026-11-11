@@ -79,6 +79,10 @@ class MemorySaveStore(override val fs: FileSystem = FakeFileSystem(), private va
 class MemorySessionStore : SessionStore {
     val sessions = mutableListOf<PlaySessionEntity>()
 
+    override suspend fun add(session: PlaySessionEntity) {
+        sessions += session
+    }
+
     override suspend fun oldest(limit: Int) = sessions.sortedBy { it.startedAt }.take(limit)
 
     override suspend fun remove(ids: List<String>) {

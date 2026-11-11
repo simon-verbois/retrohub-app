@@ -53,9 +53,7 @@ class RoomSessionStore(private val dao: PlaySessionDao) : SessionStore {
         if (ids.isNotEmpty()) dao.delete(ids)
     }
 
-    suspend fun add(session: PlaySessionEntity) = dao.upsert(session)
-
-    fun observeCount(): Flow<Int> = dao.observeCount()
+    override suspend fun add(session: PlaySessionEntity) = dao.upsert(session)
 }
 
 /** Petites valeurs persistantes en JSON (réglages, état de la session, caches). */

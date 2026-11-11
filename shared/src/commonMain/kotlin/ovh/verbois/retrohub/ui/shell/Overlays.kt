@@ -33,7 +33,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -45,7 +47,12 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import ovh.verbois.retrohub.account.Account
+import ovh.verbois.retrohub.core.searchKey
 import ovh.verbois.retrohub.emulation.Consoles
 import ovh.verbois.retrohub.library.Game
 import ovh.verbois.retrohub.ui.UiController
@@ -58,33 +65,26 @@ import ovh.verbois.retrohub.ui.nav.Route
 import ovh.verbois.retrohub.ui.nav.SettingsPage
 import ovh.verbois.retrohub.ui.theme.Palette
 
-/** Ignore les accents et la casse : « pokemon » trouve « Pokémon ». */
-fun searchKey(text: String): String = text.lowercase().map {
-    when (it) {
-        'à', 'â', 'ä', 'á' -> 'a'
-        'é', 'è', 'ê', 'ë' -> 'e'
-        'î', 'ï', 'í' -> 'i'
-        'ô', 'ö', 'ó' -> 'o'
-        'ù', 'û', 'ü', 'ú' -> 'u'
-        'ç' -> 'c'
-        else -> it
-    }
-}.joinToString("").filter { it.isLetterOrDigit() || it == ' ' }
+fun matches(game: Game, query: String): Boolean = searchKey(query).split(' ').filter { it.isNotBlank() }.all { it in game.searchText }
 
-fun matches(game: Game, query: String): Boolean {
+fun searchGames(games: List<Game>, query: String): List<Game> {
     val words = searchKey(query).split(' ').filter { it.isNotBlank() }
-    val haystack = searchKey(game.title + " " + Consoles.name(game.console) + " " + (game.remote.genre ?: ""))
-    return words.all { it in haystack }
+    return if (words.isEmpty()) {
+        games.sortedByDescending { it.lastPlayed }.take(8)
+    } else {
+        games.asSequence().filter { game -> words.all { it in game.searchText } }.take(40).toList()
+    }
 }
 
 @Composable
 fun SearchOverlay(controller: UiController) {
     val games by controller.container.library.games.collectAsState()
     var query by remember { mutableStateOf("") }
-    val results =
-        remember(query, games) {
-            if (query.isBlank()) games.sortedByDescending { it.lastPlayed }.take(8) else games.filter { matches(it, query) }.take(40)
-        }
+    val scope = rememberCoroutineScope()
+    val results by produceState(emptyList<Game>(), query, games) {
+        if (query.isNotBlank()) delay(100)
+        value = withContext(Dispatchers.Default) { searchGames(games, query) }
+    }
     val field = remember { FocusRequester() }
     Box(
         Modifier.fillMaxSize().background(Palette.Scrim).clickable(remember { MutableInteractionSource() }, null) {
@@ -114,7 +114,13 @@ fun SearchOverlay(controller: UiController) {
                 shape = RoundedCornerShape(28.dp),
                 textStyle = MaterialTheme.typography.titleMedium,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                keyboardActions = KeyboardActions(onSearch = { results.firstOrNull()?.let { open(controller, it) } }),
+                keyboardActions = KeyboardActions(onSearch = {
+                    val submitted = query
+                    scope.launch {
+                        val first = withContext(Dispatchers.Default) { searchGames(games, submitted).firstOrNull() }
+                        if (query == submitted) first?.let { open(controller, it) }
+                    }
+                }),
                 colors =
                 OutlinedTextFieldDefaults.colors(
                     focusedBorderColor = Palette.Select,

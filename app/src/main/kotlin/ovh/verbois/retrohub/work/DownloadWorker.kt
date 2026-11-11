@@ -4,9 +4,12 @@ import android.content.Context
 import android.content.pm.ServiceInfo
 import android.os.Build
 import androidx.core.app.NotificationCompat
+import androidx.work.BackoffPolicy
+import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingWorkPolicy
 import androidx.work.ForegroundInfo
+import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.OutOfQuotaPolicy
 import androidx.work.WorkManager
@@ -14,7 +17,9 @@ import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import ovh.verbois.retrohub.R
 import ovh.verbois.retrohub.RetroHubApp
+import ovh.verbois.retrohub.library.DownloadState
 import ovh.verbois.retrohub.platform.Notifications
+import java.util.concurrent.TimeUnit
 
 /**
  * Téléchargement d’un jeu en tâche de premier plan : il continue application fermée, avec sa
@@ -41,6 +46,7 @@ class DownloadWorker(context: Context, params: WorkerParameters) : CoroutineWork
                 }
             }
         if (ok) Notifications.show(applicationContext, notificationId, "« $title » est prêt", "Le jeu est sur le téléphone : il se joue même sans connexion.")
+        if (!ok && (container.downloads.states.value[playGameId] as? DownloadState.Failed)?.retryable == true) return Result.retry()
         return Result.success()
     }
 
@@ -69,9 +75,16 @@ class DownloadWorker(context: Context, params: WorkerParameters) : CoroutineWork
         private fun name(playGameId: String) = "download-$playGameId"
 
         fun enqueue(context: Context, playGameId: String, title: String) {
+            val cellular = (context.applicationContext as RetroHubApp).container.settings.settings.value.cellularDownloads
             val request =
                 OneTimeWorkRequestBuilder<DownloadWorker>()
                     .setInputData(workDataOf(KEY_ID to playGameId, KEY_TITLE to title))
+                    .setConstraints(
+                        Constraints.Builder().setRequiredNetworkType(
+                            if (cellular) NetworkType.CONNECTED else NetworkType.UNMETERED,
+                        ).build(),
+                    )
+                    .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
                     .setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
                     .build()
             WorkManager.getInstance(context).enqueueUniqueWork(name(playGameId), ExistingWorkPolicy.KEEP, request)

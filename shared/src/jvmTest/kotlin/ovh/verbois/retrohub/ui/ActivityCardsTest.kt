@@ -28,6 +28,8 @@ class ActivityCardsTest {
     fun playTimeAndSyncStates() {
         assertEquals("1 h 2 min", playTimeCard(game).value)
         assertEquals("À jour", syncCard(listOf(save(0, "x")), online = true).value)
+        assertEquals("Jeu à mettre à jour", syncCard(listOf(save(0, "x").copy(lastError = "rom_changed")), online = true).value)
+        assertEquals("Conservée ici", syncCard(listOf(save(0, "x").copy(lastError = "too_large")), online = true).value)
         assertEquals("En attente", syncCard(listOf(save(0, "x", local = "b")), online = false).value)
         assertEquals(ActivityCard.Tone.WARNING, syncCard(listOf(save(1, "x", conflict = 3)), online = true).tone)
     }

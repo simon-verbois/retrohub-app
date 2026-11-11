@@ -1,17 +1,10 @@
 package ovh.verbois.retrohub.ui.home
 
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.dp
 import ovh.verbois.retrohub.core.formatBytes
 import ovh.verbois.retrohub.library.DownloadState
 import ovh.verbois.retrohub.library.Game
 import ovh.verbois.retrohub.ui.UiController
-import ovh.verbois.retrohub.ui.components.PrimaryButton
 import ovh.verbois.retrohub.ui.icons.Lucide
 import ovh.verbois.retrohub.ui.nav.Route
 
@@ -36,19 +29,4 @@ fun gameAction(controller: UiController, game: Game, download: DownloadState?): 
         }
 
     else -> GameAction("Pas encore sur le serveur", Lucide.Info) {}
-}
-
-@Composable
-fun GameActionButton(controller: UiController, game: Game, modifier: Modifier = Modifier, height: Dp = 56.dp) {
-    val downloads by controller.container.downloads.states.collectAsState()
-    val action = gameAction(controller, game, downloads[game.playGameId])
-    PrimaryButton(
-        action.label,
-        action.run,
-        modifier,
-        icon = action.icon,
-        loading = controller.launching == game.id,
-        progress = action.progress,
-        height = height,
-    )
 }

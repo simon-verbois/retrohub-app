@@ -117,8 +117,6 @@ private fun Screen(controller: UiController, route: Route) {
 
         Route.Downloads -> DownloadsScreen(controller)
 
-        Route.Search -> HomeScreen(controller)
-
         is Route.Conflict -> WithBack(controller) { ConflictScreen(controller, route.gameId) }
 
         is Route.Progression -> WithBack(controller) { ProgressionScreen(controller, route.gameId) }
