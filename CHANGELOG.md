@@ -10,6 +10,22 @@ change, in plain text. Never rewrite the notes of a published version.
 
 ## [Unreleased]
 
+## [2026.46.5] - 2026-11-11
+
+### Changed
+
+- The app is now signed with its own key: uninstall versions up to 2026.46.3 before installing this one.
+
+### Internal
+
+- The release pipeline reads its configuration from Forgejo variables.
+
+## [2026.46.4] - 2026-11-11
+
+### Changed
+
+- The app is now signed with its own key: uninstall versions up to 2026.46.3 before installing this one.
+
 ## [2026.46.3] - 2026-11-11
 
 ### Internal

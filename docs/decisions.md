@@ -124,7 +124,7 @@ nothing required otherwise.
 ## Signing and distribution
 
 - **Published like Inkora**: the private source lives on Forgejo; an `YYYY.W.N` tag starts the CI,
-  which checks, signs the APK with the distribution key (Forgejo secrets), publishes an audited
+  which checks, signs the APK with the distribution key (Forgejo variables), publishes an audited
   snapshot of the code on GitHub (without private history or internal files) and the release with
   the APK and its SHA-256 sums.
 - Code under the MIT license, like Inkora; because of LibretroDroid, the APK follows the GPL-3.0.
