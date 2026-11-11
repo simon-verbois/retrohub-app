@@ -1,0 +1,54 @@
+package ovh.verbois.retrohub.ui.home
+
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import ovh.verbois.retrohub.core.formatBytes
+import ovh.verbois.retrohub.library.DownloadState
+import ovh.verbois.retrohub.library.Game
+import ovh.verbois.retrohub.ui.UiController
+import ovh.verbois.retrohub.ui.components.PrimaryButton
+import ovh.verbois.retrohub.ui.icons.Lucide
+import ovh.verbois.retrohub.ui.nav.Route
+
+/** L’action principale d’un jeu selon son état : jouer, reprendre, télécharger, choisir… */
+data class GameAction(val label: String, val icon: ImageVector, val progress: Float? = null, val run: () -> Unit)
+
+fun gameAction(controller: UiController, game: Game, download: DownloadState?): GameAction = when {
+    !game.supported -> GameAction("Pas encore jouable ici", Lucide.Info) {}
+
+    download is DownloadState.Running ->
+        GameAction("Téléchargement ${(download.fraction * 100).toInt()} %", Lucide.Download, download.fraction) {}
+
+    game.remote.progressionChoiceRequired -> GameAction("Choisir la progression", Lucide.History) {
+        controller.nav.go(Route.Progression(game.id))
+    }
+
+    game.downloaded -> GameAction(if (game.lastPlayed != null) "Reprendre" else "Jouer", Lucide.Play) { controller.play(game) }
+
+    game.remote.rom != null ->
+        GameAction("Télécharger · ${formatBytes(game.remote.rom.size)}", Lucide.Download) {
+            controller.container.downloads.start(game)
+        }
+
+    else -> GameAction("Pas encore sur le serveur", Lucide.Info) {}
+}
+
+@Composable
+fun GameActionButton(controller: UiController, game: Game, modifier: Modifier = Modifier, height: Dp = 56.dp) {
+    val downloads by controller.container.downloads.states.collectAsState()
+    val action = gameAction(controller, game, downloads[game.playGameId])
+    PrimaryButton(
+        action.label,
+        action.run,
+        modifier,
+        icon = action.icon,
+        loading = controller.launching == game.id,
+        progress = action.progress,
+        height = height,
+    )
+}

@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="{{html_language}}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#173faa">
+  <title>RetroHub — {{title}}</title>
+  <meta name="description" content="{{lead}}">
+  <meta property="og:title" content="RetroHub — {{title}}">
+  <meta property="og:description" content="{{lead}}">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="{{canonical}}">
+  <link rel="canonical" href="{{canonical}}">
+  {{alternates}}
+  <link rel="icon" href="{{asset_prefix}}favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="{{asset_prefix}}styles.css">
+</head>
+<body>
+  <header class="top">
+    <a class="brand" href="#main"><img src="{{asset_prefix}}favicon.svg" width="32" height="32" alt=""> RetroHub</a>
+    <nav aria-label="RetroHub">
+      <a href="#features">{{nav_features}}</a>
+      <a href="#consoles">{{nav_consoles}}</a>
+      <a href="#server">{{nav_server}}</a>
+      <a href="https://github.com/simon-verbois/retrohub-app">GitHub</a>
+    </nav>
+    <details class="languages">
+      <summary><span class="sr-only">{{language}}: </span>{{language_name}} <span aria-hidden="true">⌄</span></summary>
+      <ul>{{language_links}}</ul>
+    </details>
+  </header>
+
+  <main id="main">
+    <section class="hero">
+      <div class="hero-text">
+        <p class="kicker">{{kicker}}</p>
+        <h1>{{title}}</h1>
+        <p class="lead">{{lead}}</p>
+        <div class="actions">
+          <a class="button primary" href="https://github.com/simon-verbois/retrohub-app/releases/latest">{{download}}</a>
+          <a class="button" href="#server">{{server_button}}</a>
+        </div>
+        <a class="coffee" href="https://buymeacoffee.com/simonverbois"><img src="{{asset_prefix}}buy-me-a-coffee.png" width="178" height="50" alt="Buy Me a Coffee"></a>
+      </div>
+      <figure class="screen hero-screen">
+        <img src="{{asset_prefix}}screenshots/home.webp" width="1200" height="540" alt="{{alt_home}}">
+      </figure>
+    </section>
+
+    <section id="server" class="server">
+      <h2>{{server_title}}</h2>
+      <p>{{server_body}}</p>
+      <div class="actions">
+        <a class="button primary" href="https://simon-verbois.github.io/retrohub/">{{server_site}}</a>
+        <a class="button" href="https://github.com/simon-verbois/retrohub">{{server_code}}</a>
+      </div>
+    </section>
+
+    <section id="features" class="features">
+      <h2>{{features_title}}</h2>
+      <div class="grid">
+        <article><h3>{{f1_title}}</h3><p>{{f1_body}}</p></article>
+        <article><h3>{{f2_title}}</h3><p>{{f2_body}}</p></article>
+        <article><h3>{{f3_title}}</h3><p>{{f3_body}}</p></article>
+        <article><h3>{{f4_title}}</h3><p>{{f4_body}}</p></article>
+        <article><h3>{{f5_title}}</h3><p>{{f5_body}}</p></article>
+        <article><h3>{{f6_title}}</h3><p>{{f6_body}}</p></article>
+      </div>
+    </section>
+
+    <section class="gallery-section">
+      <div class="gallery">
+        <figure class="screen"><img src="{{asset_prefix}}screenshots/conflict.webp" width="1200" height="540" loading="lazy" alt="{{alt_conflict}}"><figcaption>{{cap_conflict}}</figcaption></figure>
+        <figure class="screen"><img src="{{asset_prefix}}screenshots/game.webp" width="1200" height="540" loading="lazy" alt="{{alt_game}}"><figcaption>{{cap_game}}</figcaption></figure>
+        <figure class="screen"><img src="{{asset_prefix}}screenshots/library.webp" width="1200" height="540" loading="lazy" alt="{{alt_library}}"><figcaption>{{cap_library}}</figcaption></figure>
+      </div>
+      <p class="note">{{screens_note}}</p>
+    </section>
+
+    <section id="consoles" class="consoles">
+      <h2>{{consoles_title}}</h2>
+      <ul>
+        <li>NES</li><li>Super Nintendo</li><li>Game Boy</li><li>Game Boy Color</li><li>Game Boy Advance</li>
+        <li>Master System</li><li>Mega Drive</li><li>PlayStation</li><li>Nintendo DS</li><li>Nintendo 64</li>
+        <li>GameCube</li><li>Atari 2600</li><li>Dreamcast</li>
+      </ul>
+    </section>
+
+    <section class="install">
+      <h2>{{install_title}}</h2>
+      <ol>
+        <li><a href="https://github.com/simon-verbois/retrohub-app/releases/latest">{{install_1}}</a></li>
+        <li>{{install_2}}</li>
+        <li>{{install_3}}</li>
+      </ol>
+    </section>
+  </main>
+
+  <footer>
+    <p>{{footer_license}}</p>
+    <p>{{footer_disclaimer}}</p>
+  </footer>
+</body>
+</html>

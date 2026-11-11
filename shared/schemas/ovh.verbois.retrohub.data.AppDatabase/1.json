@@ -1,0 +1,325 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 1,
+    "identityHash": "ffd5340e41321e5352063973332ebe28",
+    "entities": [
+      {
+        "tableName": "games",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `playGameId` TEXT NOT NULL, `title` TEXT NOT NULL, `console` TEXT NOT NULL, `favorite` INTEGER NOT NULL, `lastPlayedAt` TEXT, `playedSeconds` INTEGER NOT NULL, `position` INTEGER NOT NULL, `json` TEXT NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "playGameId",
+            "columnName": "playGameId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "title",
+            "columnName": "title",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "console",
+            "columnName": "console",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "favorite",
+            "columnName": "favorite",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastPlayedAt",
+            "columnName": "lastPlayedAt",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "playedSeconds",
+            "columnName": "playedSeconds",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "position",
+            "columnName": "position",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "json",
+            "columnName": "json",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_games_console",
+            "unique": false,
+            "columnNames": [
+              "console"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_games_console` ON `${TABLE_NAME}` (`console`)"
+          },
+          {
+            "name": "index_games_playGameId",
+            "unique": false,
+            "columnNames": [
+              "playGameId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_games_playGameId` ON `${TABLE_NAME}` (`playGameId`)"
+          }
+        ]
+      },
+      {
+        "tableName": "local_roms",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`playGameId` TEXT NOT NULL, `gameId` TEXT NOT NULL, `console` TEXT NOT NULL, `title` TEXT NOT NULL, `path` TEXT NOT NULL, `sha256` TEXT NOT NULL, `size` INTEGER NOT NULL, `downloadedAt` TEXT NOT NULL, PRIMARY KEY(`playGameId`))",
+        "fields": [
+          {
+            "fieldPath": "playGameId",
+            "columnName": "playGameId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "gameId",
+            "columnName": "gameId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "console",
+            "columnName": "console",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "title",
+            "columnName": "title",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "path",
+            "columnName": "path",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sha256",
+            "columnName": "sha256",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "size",
+            "columnName": "size",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "downloadedAt",
+            "columnName": "downloadedAt",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "playGameId"
+          ]
+        }
+      },
+      {
+        "tableName": "local_saves",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`gameId` TEXT NOT NULL, `kind` TEXT NOT NULL, `slot` INTEGER NOT NULL, `console` TEXT NOT NULL, `baseRevision` INTEGER NOT NULL, `baseSha` TEXT, `localSha` TEXT, `localPlayedAt` TEXT, `core` TEXT NOT NULL, `romSha` TEXT NOT NULL, `conflictRevision` INTEGER, `conflictSha` TEXT, `conflictPlayedAt` TEXT, `conflictDevice` TEXT, `conflictCore` TEXT, `lastError` TEXT, PRIMARY KEY(`gameId`, `kind`, `slot`))",
+        "fields": [
+          {
+            "fieldPath": "gameId",
+            "columnName": "gameId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "kind",
+            "columnName": "kind",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "slot",
+            "columnName": "slot",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "console",
+            "columnName": "console",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "baseRevision",
+            "columnName": "baseRevision",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "baseSha",
+            "columnName": "baseSha",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "localSha",
+            "columnName": "localSha",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "localPlayedAt",
+            "columnName": "localPlayedAt",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "core",
+            "columnName": "core",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "romSha",
+            "columnName": "romSha",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "conflictRevision",
+            "columnName": "conflictRevision",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "conflictSha",
+            "columnName": "conflictSha",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "conflictPlayedAt",
+            "columnName": "conflictPlayedAt",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "conflictDevice",
+            "columnName": "conflictDevice",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "conflictCore",
+            "columnName": "conflictCore",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "lastError",
+            "columnName": "lastError",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "gameId",
+            "kind",
+            "slot"
+          ]
+        }
+      },
+      {
+        "tableName": "play_sessions",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`clientId` TEXT NOT NULL, `gameId` TEXT NOT NULL, `startedAt` TEXT NOT NULL, `endedAt` TEXT NOT NULL, `playedSeconds` INTEGER NOT NULL, PRIMARY KEY(`clientId`))",
+        "fields": [
+          {
+            "fieldPath": "clientId",
+            "columnName": "clientId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "gameId",
+            "columnName": "gameId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "startedAt",
+            "columnName": "startedAt",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "endedAt",
+            "columnName": "endedAt",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "playedSeconds",
+            "columnName": "playedSeconds",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "clientId"
+          ]
+        }
+      },
+      {
+        "tableName": "settings",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`key` TEXT NOT NULL, `value` TEXT NOT NULL, PRIMARY KEY(`key`))",
+        "fields": [
+          {
+            "fieldPath": "key",
+            "columnName": "key",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "value",
+            "columnName": "value",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "key"
+          ]
+        }
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'ffd5340e41321e5352063973332ebe28')"
+    ]
+  }
+}

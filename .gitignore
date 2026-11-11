@@ -1,0 +1,21 @@
+# Gradle, Kotlin and build outputs
+.gradle/
+.kotlin/
+build/
+*.iml
+.idea/
+.DS_Store
+local.properties
+artifacts/
+# libretro cores and Dolphin Sys folder, downloaded by scripts/fetch-cores.sh
+app/src/main/jniLibs/
+app/src/main/assets/dolphin-sys.zip
+# Local configuration and signing
+.env
+.env.*
+*.jks
+*.keystore
+*.p12
+keystore.properties
+__pycache__/
+*.py[cod]
