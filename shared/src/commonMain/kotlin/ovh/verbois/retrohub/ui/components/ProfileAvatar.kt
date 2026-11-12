@@ -25,10 +25,13 @@ import ovh.verbois.retrohub.ui.theme.Palette
 
 /** Cached server image; loading failures fall back to the initial, including while offline. */
 @Composable
-fun ProfileAvatar(username: String, server: String, avatar: AccountAvatar?, modifier: Modifier = Modifier) {
+fun ProfileAvatar(username: String, server: String, avatar: AccountAvatar?, modifier: Modifier = Modifier, showBackground: Boolean = true) {
     val url = avatarImageUrl(server, avatar)
     var loaded by remember(url) { mutableStateOf(false) }
-    Box(modifier.clip(CircleShape).background(Palette.Raised).border(1.dp, Palette.Line, CircleShape), contentAlignment = Alignment.Center) {
+    Box(
+        modifier.clip(CircleShape).then(if (showBackground) Modifier.background(Palette.Raised).border(1.dp, Palette.Line, CircleShape) else Modifier),
+        contentAlignment = Alignment.Center,
+    ) {
         if (!loaded) Text(username.take(1).uppercase(), style = MaterialTheme.typography.labelLarge, color = Palette.Text)
         if (url != null) {
             AsyncImage(url, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop, onState = { loaded = it is AsyncImagePainter.State.Success })

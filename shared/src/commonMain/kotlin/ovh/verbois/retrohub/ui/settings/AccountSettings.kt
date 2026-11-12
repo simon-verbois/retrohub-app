@@ -22,6 +22,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -41,6 +43,7 @@ import ovh.verbois.retrohub.core.formatRelative
 import ovh.verbois.retrohub.core.parseInstant
 import ovh.verbois.retrohub.sync.SyncPhase
 import ovh.verbois.retrohub.ui.UiController
+import ovh.verbois.retrohub.ui.components.AutoFocus
 import ovh.verbois.retrohub.ui.components.ChoiceRow
 import ovh.verbois.retrohub.ui.components.ConfirmDialog
 import ovh.verbois.retrohub.ui.components.DialogField
@@ -56,6 +59,7 @@ import ovh.verbois.retrohub.ui.components.SettingRow
 import ovh.verbois.retrohub.ui.components.SettingsGroup
 import ovh.verbois.retrohub.ui.components.SliderRow
 import ovh.verbois.retrohub.ui.components.SwitchRow
+import ovh.verbois.retrohub.ui.components.controllerDialog
 import ovh.verbois.retrohub.ui.icons.Lucide
 import ovh.verbois.retrohub.ui.nav.Route
 import ovh.verbois.retrohub.ui.nav.SettingsPage
@@ -338,8 +342,9 @@ private fun platformLabel(platform: String): String? = when (platform) {
 
 @Composable
 private fun PairingDialog(code: PairingCode, onDismiss: () -> Unit) {
+    val first = remember { FocusRequester() }
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        GlassPanel(Modifier.widthIn(max = 460.dp).padding(24.dp)) {
+        GlassPanel(Modifier.widthIn(max = 460.dp).padding(24.dp).controllerDialog(onDismiss)) {
             Column(
                 Modifier.background(Palette.BackgroundHigh).padding(24.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp),
@@ -360,9 +365,10 @@ private fun PairingDialog(code: PairingCode, onDismiss: () -> Unit) {
                 parseInstant(code.expiresAt)?.let {
                     Text("Valable jusqu’à ${ovh.verbois.retrohub.core.formatDate(it)}.", style = MaterialTheme.typography.bodySmall)
                 }
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) { GlassButton("Fermer", onDismiss) }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) { GlassButton("Fermer", onDismiss, Modifier.focusRequester(first)) }
             }
         }
+        AutoFocus(first)
     }
 }
 

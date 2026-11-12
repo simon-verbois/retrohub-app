@@ -5,6 +5,7 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -31,10 +32,12 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -45,6 +48,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalDensity
@@ -182,21 +186,43 @@ fun <T> ChoiceRow(
     recommended: T? = null,
 ) {
     var open by remember { mutableStateOf(false) }
-    Column {
-        SettingRow(title, subtitle = subtitle, icon = icon, onClick = { open = !open }, value = label(selected)) {
+    val rowFocus = remember { FocusRequester() }
+    val optionFocus = remember { FocusRequester() }
+    val close = {
+        open = false
+        rowFocus.requestFocus()
+    }
+    LaunchedEffect(open) {
+        if (open) {
+            withFrameNanos { }
+            optionFocus.requestFocus()
+        }
+    }
+    Column(
+        Modifier.focusGroup().onKeyEvent { event ->
+            if (open && event.key in listOf(Key.ButtonB, Key.Escape)) {
+                if (event.type == KeyEventType.KeyUp) close()
+                true
+            } else {
+                false
+            }
+        },
+    ) {
+        SettingRow(title, Modifier.focusRequester(rowFocus), subtitle = subtitle, icon = icon, onClick = { open = !open }, value = label(selected)) {
             Icon(if (open) Lucide.ChevronUp else Lucide.ChevronDown, null, Modifier.size(20.dp), tint = Palette.TextFaint)
         }
         AnimatedVisibility(open, enter = expandVertically(), exit = shrinkVertically()) {
             Column(Modifier.padding(start = if (icon != null) 56.dp else 16.dp, end = 16.dp, bottom = 10.dp)) {
-                options.forEach { option ->
+                options.forEachIndexed { index, option ->
                     Row(
                         Modifier
                             .fillMaxWidth()
                             .heightIn(min = 48.dp)
+                            .then(if (option == selected || (selected !in options && index == 0)) Modifier.focusRequester(optionFocus) else Modifier)
                             .semantics { this.selected = option == selected }
                             .consoleFocus(RoundedCornerShape(14.dp), {
                                 onSelect(option)
-                                open = false
+                                close()
                             }, focusScale = 1.01f, role = Role.RadioButton)
                             .padding(horizontal = 12.dp, vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -312,16 +338,10 @@ fun ConfirmDialog(
     focusDismiss: Boolean = false,
 ) {
     val dismissFocus = remember { FocusRequester() }
+    val confirmFocus = remember { FocusRequester() }
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         GlassPanel(
-            Modifier.widthIn(max = 460.dp).padding(24.dp).onPreviewKeyEvent { event ->
-                if (event.key == Key.ButtonB || event.key == Key.Escape) {
-                    if (event.type == KeyEventType.KeyUp) onDismiss()
-                    true
-                } else {
-                    false
-                }
-            },
+            Modifier.widthIn(max = 460.dp).padding(24.dp).controllerDialog(onDismiss),
         ) {
             Column(
                 Modifier.background(Palette.SkyLow).verticalScroll(rememberScrollState()).padding(24.dp),
@@ -336,10 +356,11 @@ fun ConfirmDialog(
                     secondary = dismiss,
                     onSecondary = onDismiss,
                     secondaryModifier = Modifier.focusRequester(dismissFocus),
+                    primaryModifier = Modifier.focusRequester(confirmFocus),
                 )
             }
         }
-        if (focusDismiss) AutoFocus(dismissFocus)
+        AutoFocus(if (focusDismiss || destructive) dismissFocus else confirmFocus)
     }
 }
 

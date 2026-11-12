@@ -7,6 +7,38 @@ import kotlin.test.assertTrue
 
 class GameLayoutsTest {
     @Test
+    fun overlayUsesTheSameMaximalViewportAsAControllerInEveryDsOrientation() {
+        for ((width, height) in listOf(640f to 295f, 360f to 780f, 800f to 1280f)) {
+            for (ds in DsLayout.entries) {
+                for (rotation in GameRotation.entries) {
+                    val aspect = rotation.aspect(GameLayouts.dsAspect(ds))
+                    val full = GameLayouts.compute(width, height, aspect, false, controlsUnit = 48f)
+                    val overlay = GameLayouts.compute(width, height, aspect, true, controlsUnit = 48f, preset = TouchPreset.OVERLAY)
+                    assertEquals(ControlsPlacement.OVERLAY, overlay.controls)
+                    assertEquals(full.game, overlay.game)
+                }
+            }
+        }
+    }
+
+    @Test
+    fun presetsKeepTheImageInsideTheScreenWithoutChangingItsRatio() {
+        for ((width, height) in listOf(640f to 295f, 320f to 640f, 800f to 1280f)) {
+            for (preset in TouchPreset.entries) {
+                for (aspect in listOf(4f / 3f, 512f / 192f, 2f / 3f)) {
+                    for (scale in listOf(0.75f, 1f, 1.35f)) {
+                        val game = GameLayouts.compute(width, height, aspect, true, controlsUnit = 48f * scale, preset = preset).game
+                        assertTrue(game.left >= 0 && game.top >= 0 && game.right <= 1.001f && game.bottom <= 1.001f)
+                        assertEquals(aspect, game.width * width / (game.height * height), 0.001f)
+                    }
+                }
+            }
+        }
+        val compact = GameLayouts.compute(640f, 295f, 512f / 192f, true, controlsUnit = 48f, preset = TouchPreset.COMPACT)
+        assertEquals(ControlsPlacement.SIDES, compact.controls)
+    }
+
+    @Test
     fun portraitPutsTheGameOnTopAndControlsBelow() {
         val layout = GameLayouts.compute(1080f, 2400f, 4f / 3f, touchControls = true, topInset = 100f)
         assertEquals(ControlsPlacement.BELOW, layout.controls)

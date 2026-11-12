@@ -22,10 +22,7 @@ import ovh.verbois.retrohub.resources.manrope_extrabold
 import ovh.verbois.retrohub.resources.manrope_regular
 import ovh.verbois.retrohub.resources.manrope_semibold
 
-/**
- * Couleurs du « ciel » du web (frontend/src/app/globals.css : --sky-*, verre, texte blanc), en
- * version claire (le bleu du site) et sombre (le même ciel, de nuit).
- */
+/** The azure console sky, opaque text and glossy controls, in day and night variants. */
 @Immutable
 data class SkyScheme(
     val dark: Boolean,
@@ -50,58 +47,76 @@ data class SkyScheme(
     val success: Color,
     val warning: Color,
     val danger: Color,
+    val buttonTop: Color,
+    val buttonBottom: Color,
+    val buttonFocusTop: Color,
+    val buttonFocusBottom: Color,
+    val primaryTop: Color,
+    val primaryBottom: Color,
 )
 
 val LightSky =
     SkyScheme(
         dark = false,
-        skyTop = Color(0xFF1A47BC),
-        skyMid = Color(0xFF173FAA),
-        skyLow = Color(0xFF14389A),
-        glowTop = Color(0xFF265BD4),
-        glowA = Color(0x576EA5FF),
-        glowB = Color(0x4D4682FF),
-        glowBottom = Color(0x730A1E6E),
+        skyTop = Color(0xFF0C6F9D),
+        skyMid = Color(0xFF0B638F),
+        skyLow = Color(0xFF084C76),
+        glowTop = Color(0xFF0C7196),
+        glowA = Color(0x181AA7BC),
+        glowB = Color(0x142C8FAA),
+        glowBottom = Color(0x60032A4B),
         text = Color(0xFFFFFFFF),
-        textDim = Color(0xFFC8D6FF),
-        textFaint = Color(0xB3C8D6FF),
-        glass = Color(0x21FFFFFF),
-        glassStrong = Color(0x38FFFFFF),
-        line = Color(0x38FFFFFF),
-        accent = Color(0xFFFFFFFF),
-        onAccent = Color(0xFF123FAE),
-        deep = Color(0xF214358F),
-        scrim = Color(0xD9103082),
-        field = Color(0x52061656),
+        textDim = Color(0xFFF0FAFF),
+        textFaint = Color(0xFFEAF8FF),
+        glass = Color(0x70062645),
+        glassStrong = Color(0xB3094868),
+        line = Color(0x548FDBEF),
+        accent = Color(0xFFF3FDFF),
+        onAccent = Color(0xFF043349),
+        deep = Color(0xFF063751),
+        scrim = Color(0xE6032339),
+        field = Color(0xE006304A),
         success = Color(0xFF7BE8B0),
         warning = Color(0xFFFFD27A),
         danger = Color(0xFFFFB4AB),
+        buttonTop = Color(0xFF0D668F),
+        buttonBottom = Color(0xFF06446C),
+        buttonFocusTop = Color(0xFF096E96),
+        buttonFocusBottom = Color(0xFF075F8D),
+        primaryTop = Color(0xFFFFFFFF),
+        primaryBottom = Color(0xFFCDEFFF),
     )
 
 val DarkSky =
     SkyScheme(
         dark = true,
-        skyTop = Color(0xFF0D2462),
-        skyMid = Color(0xFF09194B),
-        skyLow = Color(0xFF06113A),
-        glowTop = Color(0xFF16337E),
-        glowA = Color(0x385082F0),
-        glowB = Color(0x2E3264E6),
-        glowBottom = Color(0x8C030A28),
-        text = Color(0xFFEEF2FF),
-        textDim = Color(0xFFAFC0F0),
-        textFaint = Color(0x99AFC0F0),
-        glass = Color(0x1AFFFFFF),
-        glassStrong = Color(0x2BFFFFFF),
-        line = Color(0x2EFFFFFF),
-        accent = Color(0xFFEEF2FF),
-        onAccent = Color(0xFF09194B),
-        deep = Color(0xF20A1A4C),
-        scrim = Color(0xD9050E30),
-        field = Color(0x52020A2E),
+        skyTop = Color(0xFF06283D),
+        skyMid = Color(0xFF062337),
+        skyLow = Color(0xFF041B2C),
+        glowTop = Color(0xFF0B3E58),
+        glowA = Color(0x142487AA),
+        glowB = Color(0x102A8FAD),
+        glowBottom = Color(0x8C02101C),
+        text = Color(0xFFFFFFFF),
+        textDim = Color(0xFFDFF4FF),
+        textFaint = Color(0xFFC4E4F2),
+        glass = Color(0x70041525),
+        glassStrong = Color(0xB3083B55),
+        line = Color(0x548FDBEF),
+        accent = Color(0xFF86DDFF),
+        onAccent = Color(0xFF03273A),
+        deep = Color(0xFF052A3F),
+        scrim = Color(0xE6021423),
+        field = Color(0xE0032033),
         success = Color(0xFF6FD9A2),
         warning = Color(0xFFF5C86A),
         danger = Color(0xFFFFA59A),
+        buttonTop = Color(0xFF0A5474),
+        buttonBottom = Color(0xFF06344F),
+        buttonFocusTop = Color(0xFF0A698E),
+        buttonFocusBottom = Color(0xFF084B73),
+        primaryTop = Color(0xFFB7F1FF),
+        primaryBottom = Color(0xFF60CDEC),
     )
 
 /**
@@ -130,10 +145,15 @@ object Palette {
     val Accent get() = scheme.accent
     val OnAccent get() = scheme.onAccent
     val Select get() = scheme.text
-    val Focus get() = Color.White
     val Success get() = scheme.success
     val Danger get() = scheme.danger
     val Warning get() = scheme.warning
+    val ButtonTop get() = scheme.buttonTop
+    val ButtonBottom get() = scheme.buttonBottom
+    val ButtonFocusTop get() = scheme.buttonFocusTop
+    val ButtonFocusBottom get() = scheme.buttonFocusBottom
+    val PrimaryTop get() = scheme.primaryTop
+    val PrimaryBottom get() = scheme.primaryBottom
 
     // Boutons des manettes : couleurs fixes, lisibles sur les deux ciels.
     val PadA = Color(0xFF3FB27F)

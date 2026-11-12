@@ -9,17 +9,21 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.focusGroup
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
@@ -33,11 +37,15 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -45,17 +53,29 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
@@ -76,10 +96,14 @@ import ovh.verbois.retrohub.resources.download_confirm_title
 import ovh.verbois.retrohub.sync.SyncPhase
 import ovh.verbois.retrohub.sync.SyncStatus
 import ovh.verbois.retrohub.ui.UiController
+import ovh.verbois.retrohub.ui.components.AutoFocus
 import ovh.verbois.retrohub.ui.components.ConfirmDialog
+import ovh.verbois.retrohub.ui.components.ConsoleMenuItem
 import ovh.verbois.retrohub.ui.components.GlassPanel
 import ovh.verbois.retrohub.ui.components.ProfileAvatar
+import ovh.verbois.retrohub.ui.components.consoleButtonSurface
 import ovh.verbois.retrohub.ui.components.consoleFocus
+import ovh.verbois.retrohub.ui.components.controllerDialog
 import ovh.verbois.retrohub.ui.icons.Lucide
 import ovh.verbois.retrohub.ui.nav.Route
 import ovh.verbois.retrohub.ui.nav.Section
@@ -95,10 +119,42 @@ fun ConsoleShell(controller: UiController, account: Account, content: @Composabl
     val online by container.platform.online.collectAsState()
     val gamepad by container.platform.gamepadConnected.collectAsState()
     val settings by container.settings.settings.collectAsState()
-    val route = controller.nav.current
     val contentRoute = controller.nav.contentRoute
     val screenStates = rememberSaveableStateHolder()
+    val searchState = remember { HeaderSearchState() }
+    var profileAnchor by remember { mutableStateOf<Rect?>(null) }
+    val keyboard = LocalSoftwareKeyboardController.current
+    val focus = LocalFocusManager.current
+    val density = LocalDensity.current
     val navigationFocus = remember { ovh.verbois.retrohub.ui.components.NavigationFocus() }
+    var restoreHeaderFocus by remember { mutableStateOf(false) }
+    val closeSearch = {
+        keyboard?.hide()
+        focus.clearFocus()
+        controller.searching = false
+        restoreHeaderFocus = true
+        Unit
+    }
+    LaunchedEffect(controller.searching, restoreHeaderFocus) {
+        if (!controller.searching && restoreHeaderFocus) {
+            withFrameNanos { }
+            runCatching { navigationFocus.header.requestFocus() }
+            restoreHeaderFocus = false
+        }
+    }
+    LaunchedEffect(controller.searching, searchState.fieldFocused, searchState.resultsFocused) {
+        if (!controller.searching) {
+            searchState.query = ""
+            searchState.hasResults = false
+            if (searchState.hadFocus) keyboard?.hide()
+            searchState.hadFocus = false
+        } else if (searchState.fieldFocused || searchState.resultsFocused) {
+            searchState.hadFocus = true
+        } else if (searchState.hadFocus) {
+            delay(60)
+            if (!searchState.fieldFocused && !searchState.resultsFocused) controller.searching = false
+        }
+    }
     controller.downloadRequest?.let { game ->
         ConfirmDialog(
             stringResource(Res.string.download_confirm_title),
@@ -128,8 +184,8 @@ fun ConsoleShell(controller: UiController, account: Account, content: @Composabl
         HintsMode.AUTO -> gamepad
     }
     androidx.compose.runtime.CompositionLocalProvider(ovh.verbois.retrohub.ui.components.LocalNavigationFocus provides navigationFocus) {
-        Box(
-            Modifier.fillMaxSize().onPreviewKeyEvent { event ->
+        BoxWithConstraints(
+            Modifier.fillMaxSize().onKeyEvent { event ->
                 val button = when (event.key) {
                     Key.ButtonB, Key.Escape -> UiController.Button.B
                     Key.ButtonY -> UiController.Button.Y
@@ -142,18 +198,29 @@ fun ConsoleShell(controller: UiController, account: Account, content: @Composabl
                 if (button == null) {
                     false
                 } else {
-                    if (event.type == KeyEventType.KeyUp) controller.onButton(button)
+                    if (event.type == KeyEventType.KeyUp) {
+                        if (button == UiController.Button.B && controller.searching) closeSearch() else controller.onButton(button)
+                    }
                     true
                 }
             },
         ) {
-            // Only controls are inset: the shared background continues behind the camera and system bars.
-            Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
+            // Home covers can scroll behind the cutout; fixed controls stay in the safe area.
+            val horizontalInsets = WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal)
+            Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Vertical))) {
                 if (Section.of(contentRoute) != null) {
-                    TopBar(controller, account, sync, online, compact = controller.portrait, section = Section.of(contentRoute))
-                    if (controller.portrait) {
-                        SectionTabs(controller, Section.of(contentRoute), Modifier.fillMaxWidth().padding(horizontal = 10.dp))
-                    }
+                    TopBar(
+                        controller,
+                        account,
+                        sync,
+                        online,
+                        compact = controller.portrait,
+                        section = Section.of(contentRoute),
+                        modifier = Modifier.windowInsetsPadding(horizontalInsets),
+                        searchState = searchState,
+                        closeSearch = closeSearch,
+                        onProfileBounds = { profileAnchor = it },
+                    )
                 }
                 Box(Modifier.weight(1f).fillMaxWidth().padding(bottom = if (showHints) 32.dp else 0.dp)) {
                     AnimatedContent(
@@ -162,14 +229,43 @@ fun ConsoleShell(controller: UiController, account: Account, content: @Composabl
                         label = "screen",
                     ) { target ->
                         screenStates.SaveableStateProvider(target.toString()) {
-                            when (target) {
-                                Route.Search -> SearchOverlay(controller)
-                                else -> content(target)
+                            val insets = if (target == Route.Home && settings.useDisplayCutout) WindowInsets(0) else horizontalInsets
+                            Box(Modifier.fillMaxSize().windowInsetsPadding(insets)) {
+                                content(target)
                             }
                         }
                     }
-                    if (route == Route.User) AccountMenu(controller, onClose = { controller.back() })
+                    if (controller.searching) {
+                        Box(Modifier.fillMaxSize().pointerInput(Unit) { detectTapGestures { closeSearch() } })
+                    }
+                    Box(Modifier.fillMaxSize().windowInsetsPadding(horizontalInsets)) {
+                        AccountMenu(
+                            controller,
+                            account,
+                            profileAnchor.takeIf {
+                                Section.of(contentRoute) !=
+                                    null
+                            },
+                            onClose = { controller.back() },
+                        )
+                    }
                 }
+            }
+            if (controller.searching && Section.of(contentRoute) == null) {
+                TopBar(
+                    controller, account, sync, online, controller.portrait, null,
+                    Modifier.align(Alignment.TopCenter).windowInsetsPadding(WindowInsets.safeDrawing), searchState, closeSearch,
+                )
+            }
+            if (controller.searching && searchState.query.isNotBlank() && searchState.bounds.width > 0f) {
+                val dropdownHeight = (maxHeight - with(density) { searchState.bounds.bottom.toDp() } - 12.dp).coerceAtLeast(0.dp)
+                SearchDropdown(
+                    controller,
+                    searchState,
+                    closeSearch,
+                    Modifier.offset { IntOffset(searchState.bounds.left.toInt(), searchState.bounds.bottom.toInt() + with(density) { 6.dp.roundToPx() }) }
+                        .width(with(density) { searchState.bounds.width.toDp() }).heightIn(max = dropdownHeight),
+                )
             }
             if (showHints) {
                 Box(Modifier.align(Alignment.BottomEnd).windowInsetsPadding(WindowInsets.safeDrawing)) { HintsBar() }
@@ -189,10 +285,23 @@ fun ConsoleShell(controller: UiController, account: Account, content: @Composabl
 }
 
 @Composable
-private fun TopBar(controller: UiController, account: Account, sync: SyncStatus, online: Boolean, compact: Boolean, section: Section?) {
+private fun TopBar(
+    controller: UiController,
+    account: Account,
+    sync: SyncStatus,
+    online: Boolean,
+    compact: Boolean,
+    section: Section?,
+    modifier: Modifier = Modifier,
+    searchState: HeaderSearchState,
+    closeSearch: () -> Unit,
+    onProfileBounds: (Rect) -> Unit = {},
+) {
     val tree = ovh.verbois.retrohub.ui.components.LocalNavigationFocus.current
+    val diameter = statusBubbleSize()
+    val touchDiameter = diameter.coerceAtLeast(48.dp)
     Row(
-        Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(horizontal = if (compact) 16.dp else 20.dp)
+        modifier.fillMaxWidth().heightIn(min = touchDiameter + 8.dp).padding(horizontal = if (compact) 16.dp else 20.dp)
             .focusGroup().focusProperties {
                 up = FocusRequester.Cancel
                 down = tree.content
@@ -200,43 +309,40 @@ private fun TopBar(controller: UiController, account: Account, sync: SyncStatus,
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        if (compact) {
-            Text("RetroHub", Modifier.weight(1f), style = MaterialTheme.typography.titleLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        } else {
-            SectionTabs(controller, section, Modifier.weight(1f))
+        Box(Modifier.weight(1f).height(touchDiameter)) {
+            if (!controller.searching) {
+                if (compact) {
+                    CompactSectionMenu(controller, section, Modifier.align(Alignment.CenterStart).fillMaxWidth().padding(end = touchDiameter + 8.dp))
+                } else {
+                    SectionTabs(controller, section, Modifier.fillMaxWidth().padding(end = touchDiameter + 8.dp))
+                }
+            }
+            HeaderSearch(controller, searchState, diameter, closeSearch, Modifier.fillMaxSize())
         }
-        BarIcon(
-            Lucide.Search,
-            "Rechercher",
-            Modifier.then(
+        val (icon, tint, label) = profileStatus(sync, online)
+        Box(
+            Modifier.size(touchDiameter).onGloballyPositioned { onProfileBounds(it.boundsInWindow()) }.testTag("header-profile-button").then(
                 if (section ==
-                    Section.SEARCH
+                    Section.USER
                 ) {
                     Modifier.focusRequester(tree.header)
                 } else {
                     Modifier
                 },
-            ),
-            selected = section == Section.SEARCH,
-        ) {
-            controller.searching = true
-        }
-        val (icon, tint, label) = profileStatus(sync, online)
-        Box(
-            Modifier.size(48.dp).then(if (section == Section.USER) Modifier.focusRequester(tree.header) else Modifier)
+            )
                 .focusProperties { right = FocusRequester.Cancel }
                 .semantics { contentDescription = "Compte et menu · $label" }
-                .consoleFocus(CircleShape, { controller.menuOpen = true }),
+                .consoleFocus(CircleShape, { controller.menuOpen = true }, focusScale = 1.08f, highlightFocus = false),
             contentAlignment = Alignment.Center,
         ) {
-            Box(Modifier.size(24.dp)) {
-                ProfileAvatar(account.username, account.server, account.avatar, Modifier.fillMaxSize())
+            Box(Modifier.size(diameter)) {
+                ProfileAvatar(account.username, account.server, account.avatar, Modifier.fillMaxSize().testTag("header-profile-avatar"), showBackground = false)
                 Box(
-                    Modifier.align(Alignment.TopEnd).offset(x = 3.dp, y = (-3).dp).size(10.dp)
+                    Modifier.align(Alignment.TopEnd).offset(x = 2.dp, y = (-2).dp).size(9.dp)
                         .clip(CircleShape).background(tint).border(1.dp, Palette.SkyLow, CircleShape),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Icon(icon, null, Modifier.size(8.dp), tint = Palette.SkyLow)
+                    Icon(icon, null, Modifier.size(7.dp), tint = Palette.SkyLow)
                 }
             }
         }
@@ -273,7 +379,77 @@ fun SectionTabs(controller: UiController, section: Section?, modifier: Modifier 
                 item == section,
                 Modifier.then(if (item == section) Modifier.focusRequester(tree.header) else Modifier)
                     .focusProperties { if (item == Section.HOME) left = FocusRequester.Cancel },
-            ) { controller.nav.section(item) }
+            ) {
+                controller.searching = false
+                controller.nav.section(item)
+            }
+        }
+    }
+}
+
+/** Portrait keeps the four destinations in one compact header control. */
+@Composable
+private fun CompactSectionMenu(controller: UiController, section: Section?, modifier: Modifier = Modifier) {
+    var open by remember { mutableStateOf(false) }
+    var pending by remember { mutableStateOf<Section?>(null) }
+    val tree = ovh.verbois.retrohub.ui.components.LocalNavigationFocus.current
+    val windowFocused = LocalWindowInfo.current.isWindowFocused
+    LaunchedEffect(pending, open, windowFocused) {
+        val target = pending
+        if (target != null && !open && windowFocused) {
+            controller.nav.section(target)
+            // The popup restores its opener; hand focus to the new page after its entry exists.
+            withFrameNanos { }
+            withFrameNanos { }
+            if (controller.nav.current == target.route) runCatching { tree.content.requestFocus() }
+            pending = null
+        }
+    }
+    val first = remember { FocusRequester() }
+    Box(modifier) {
+        Row(
+            Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("section-menu")
+                .focusRequester(tree.header).consoleFocus(Pill, { open = true }, label = "Changer de section")
+                .padding(horizontal = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Text(
+                (section ?: Section.HOME).title,
+                Modifier.weight(1f),
+                style = MaterialTheme.typography.labelLarge,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Icon(Lucide.ChevronDown, null, Modifier.size(16.dp), tint = Palette.Text)
+        }
+        androidx.compose.material3.DropdownMenu(
+            expanded = open,
+            onDismissRequest = { open = false },
+            modifier = Modifier.controllerDialog({ open = false }, dismissOnStart = true),
+            containerColor = Palette.Deep,
+            shape = RoundedCornerShape(18.dp),
+        ) {
+            Section.entries.filter { it.tab }.forEach { item ->
+                ConsoleMenuItem(
+                    item.title,
+                    modifier = Modifier.testTag("section-choice-${item.name.lowercase()}").then(
+                        if (item ==
+                            (section ?: Section.HOME)
+                        ) {
+                            Modifier.focusRequester(first)
+                        } else {
+                            Modifier
+                        },
+                    ),
+                    selected = item == section,
+                    onClick = {
+                        open = false
+                        pending = item
+                    },
+                )
+            }
+            if (open) AutoFocus(first)
         }
     }
 }
@@ -294,18 +470,11 @@ private fun SectionTab(title: String, active: Boolean, modifier: Modifier = Modi
 }
 
 @Composable
-private fun BarIcon(icon: ImageVector, label: String, modifier: Modifier = Modifier, selected: Boolean = false, onClick: () -> Unit) {
-    Box(
-        modifier.size(48.dp).semantics { contentDescription = label }.consoleFocus(CircleShape, onClick).clip(CircleShape)
-            .background(if (selected) Palette.Glass else Color.Transparent),
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(icon, null, Modifier.size(24.dp), tint = Palette.Text)
-    }
-}
+private fun statusBubbleSize() = with(LocalDensity.current) { 18.sp.toDp() }.plus(12.dp).coerceAtLeast(40.dp)
 
 @Composable
 internal fun StatusPill(platform: Platform) {
+    val textStyle = MaterialTheme.typography.labelLarge.copy(fontSize = 14.sp, lineHeight = 18.sp)
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val power by produceState(PowerStatus(), platform, lifecycle) {
         lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
@@ -325,18 +494,20 @@ internal fun StatusPill(platform: Platform) {
     }
     val local = now.toLocalDateTime(TimeZone.currentSystemDefault())
     Row(
-        Modifier.clip(Pill).background(Palette.Glass).border(1.dp, Palette.Line, Pill).padding(horizontal = 10.dp, vertical = 8.dp)
-            .semantics(mergeDescendants = true) {},
+        Modifier.heightIn(
+            min = statusBubbleSize(),
+        ).testTag("header-status").semantics(mergeDescendants = true) {}
+            .consoleButtonSurface(Pill).padding(horizontal = 8.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        horizontalArrangement = Arrangement.spacedBy(5.dp),
     ) {
-        Text("${local.hour.toString().padStart(2, '0')}:${local.minute.toString().padStart(2, '0')}", style = MaterialTheme.typography.labelLarge, maxLines = 1)
+        Text("${local.hour.toString().padStart(2, '0')}:${local.minute.toString().padStart(2, '0')}", style = textStyle, maxLines = 1)
         power.phone?.let { level ->
-            Box(Modifier.width(1.dp).height(16.dp).background(Palette.Line))
+            Box(Modifier.width(1.dp).height(14.dp).background(Palette.Line))
             Icon(
                 if (level.charging) Lucide.Zap else Lucide.Battery,
                 null,
-                Modifier.size(16.dp),
+                Modifier.size(14.dp),
                 tint = if (level.percent <=
                     20
                 ) {
@@ -356,8 +527,8 @@ internal fun StatusPill(platform: Platform) {
             )
         }
         power.controllers.take(1).forEach { controller ->
-            Box(Modifier.width(1.dp).height(16.dp).background(Palette.Line))
-            Icon(Lucide.Gamepad2, null, Modifier.size(16.dp), tint = Palette.Text)
+            Box(Modifier.width(1.dp).height(14.dp).background(Palette.Line))
+            Icon(Lucide.Gamepad2, null, Modifier.size(14.dp), tint = Palette.Text)
             Text(
                 "${controller.level.percent} %",
                 Modifier.semantics {

@@ -8,6 +8,7 @@ import ovh.verbois.retrohub.emulation.MenuShortcut
 import ovh.verbois.retrohub.emulation.Orientation
 import ovh.verbois.retrohub.emulation.PortraitPosition
 import ovh.verbois.retrohub.emulation.Shader
+import ovh.verbois.retrohub.emulation.TouchPreset
 
 /** Tout ce dont l’écran de jeu a besoin, préparé avant le lancement (passé en JSON). */
 @Serializable
@@ -35,6 +36,7 @@ data class LaunchPlan(
     val audio: Boolean = true,
     val touchOpacity: Float = 0.6f,
     val touchScale: Float = 1f,
+    val touchPreset: TouchPreset = TouchPreset.COMFORT,
     val hideTouchWithGamepad: Boolean = true,
     val haptics: Boolean = true,
     val showFps: Boolean = false,

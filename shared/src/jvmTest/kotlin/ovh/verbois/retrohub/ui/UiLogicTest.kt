@@ -105,24 +105,39 @@ class UiLogicTest {
     }
 
     @Test
+    fun searchOverlaysTheCurrentPageWithoutAddingNestedOverlays() {
+        val nav = Navigator()
+        nav.go(Route.Library("nds"))
+        nav.section(Section.SEARCH)
+        assertEquals(Route.Search, nav.current)
+        assertEquals(Route.Library("nds"), nav.contentRoute)
+        nav.section(Section.USER)
+        assertEquals(Route.User, nav.current)
+        assertEquals(Route.Library("nds"), nav.contentRoute)
+        nav.back()
+        assertEquals(Route.Library("nds"), nav.current)
+        nav.section(Section.SEARCH)
+        nav.back()
+        assertEquals(Route.Library("nds"), nav.current)
+    }
+
+    @Test
     fun shoulderNavigationFollowsVisibleSectionsWithoutWrapping() {
         val nav = Navigator()
         nav.cycleSection(-1)
         assertEquals(Route.Home, nav.current)
-        for (route in listOf(Route.Favorites, Route.Downloads, Route.Catalogue, Route.Search, Route.User)) {
+        for (route in listOf(Route.Favorites, Route.Downloads, Route.Catalogue)) {
             nav.cycleSection(1)
             assertEquals(route, nav.current)
         }
         nav.cycleSection(1)
-        assertEquals(Route.User, nav.current)
+        assertEquals(Route.Catalogue, nav.current)
         nav.go(Route.Settings())
         nav.cycleSection(-1)
-        assertEquals(Route.Search, nav.current)
-        nav.cycleSection(-1)
-        assertEquals(Route.Catalogue, nav.current)
-        nav.cycleSection(-1)
         assertEquals(Route.Downloads, nav.current)
-        assertTrue(nav.back())
+        nav.cycleSection(-1)
+        assertEquals(Route.Favorites, nav.current)
+        nav.cycleSection(-1)
         assertEquals(Route.Home, nav.current)
         assertFalse(nav.back())
     }

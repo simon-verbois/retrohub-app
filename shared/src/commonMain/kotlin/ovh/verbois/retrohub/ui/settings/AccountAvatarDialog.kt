@@ -67,6 +67,7 @@ import ovh.verbois.retrohub.ui.components.GlassPanel
 import ovh.verbois.retrohub.ui.components.MessageBanner
 import ovh.verbois.retrohub.ui.components.ProfileAvatar
 import ovh.verbois.retrohub.ui.components.consoleFocus
+import ovh.verbois.retrohub.ui.components.controllerDialog
 import ovh.verbois.retrohub.ui.icons.Lucide
 import ovh.verbois.retrohub.ui.theme.Palette
 
@@ -139,14 +140,7 @@ fun AvatarPicker(
     Dialog(onDismissRequest = dismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         CompositionLocalProvider(LocalDensity provides density) {
             GlassPanel(
-                Modifier.widthIn(max = 560.dp).fillMaxWidth().fillMaxHeight(0.9f).padding(16.dp).onPreviewKeyEvent { event ->
-                    if (event.key == Key.ButtonB || event.key == Key.Escape) {
-                        if (event.type == KeyEventType.KeyUp) dismiss()
-                        true
-                    } else {
-                        false
-                    }
-                },
+                Modifier.widthIn(max = 560.dp).fillMaxWidth().fillMaxHeight(0.9f).padding(16.dp).controllerDialog(dismiss),
             ) {
                 Column(Modifier.fillMaxSize().background(Palette.SkyLow).padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text("Photo de profil", style = MaterialTheme.typography.headlineMedium)

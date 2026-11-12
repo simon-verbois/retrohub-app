@@ -1,6 +1,7 @@
 package ovh.verbois.retrohub.ui.catalogue
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -68,6 +69,7 @@ import ovh.verbois.retrohub.ui.components.GlassButton
 import ovh.verbois.retrohub.ui.components.LocalNavigationFocus
 import ovh.verbois.retrohub.ui.components.ProgressLine
 import ovh.verbois.retrohub.ui.components.SettingsGroup
+import ovh.verbois.retrohub.ui.components.controllerDialog
 import ovh.verbois.retrohub.ui.home.GameCard
 import ovh.verbois.retrohub.ui.icons.Lucide
 import ovh.verbois.retrohub.ui.nav.Route
@@ -101,10 +103,28 @@ fun CatalogueScreen(controller: UiController) {
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val tree = LocalNavigationFocus.current
     val field = remember { FocusRequester() }
+    val filtersFocus = remember { FocusRequester() }
     val first = remember { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
     val focusManager = LocalFocusManager.current
-    SideEffect { tree.content = field }
+    SideEffect {
+        tree.content = if (online) {
+            filtersFocus
+        } else if (result?.items?.isNotEmpty() == true) {
+            first
+        } else {
+            tree.header
+        }
+    }
+    AutoFocus(
+        if (online) {
+            filtersFocus
+        } else if (result?.items?.isNotEmpty() == true) {
+            first
+        } else {
+            tree.header
+        },
+    )
     val query = CatalogueQuery(search, console, language, installed, source, genre, year.toIntOrNull(), sort, page, settings.preferFrench)
     LaunchedEffect(query, online, refresh) {
         if (!online) return@LaunchedEffect
@@ -151,19 +171,30 @@ fun CatalogueScreen(controller: UiController) {
                 },
                 Modifier.weight(1f).focusRequester(field).focusProperties {
                     up = tree.header
-                    down = if (result?.items?.isNotEmpty() == true) first else FocusRequester.Cancel
+                    down = if (result?.items?.isNotEmpty() == true) first else filtersFocus
+                    right = filtersFocus
                 },
                 label = { Text("Chercher dans le catalogue") },
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                 keyboardActions = KeyboardActions(onSearch = {
                     keyboard?.hide()
-                    focusManager.clearFocus()
+                    if (result?.items?.isNotEmpty() == true) first.requestFocus() else filtersFocus.requestFocus()
                 }),
                 singleLine = true,
                 enabled = online,
                 shape = RoundedCornerShape(20.dp),
             )
-            GlassButton("Filtres", { filters = true }, icon = Lucide.SlidersHorizontal, enabled = online)
+            GlassButton(
+                "Filtres",
+                { filters = true },
+                Modifier.focusRequester(filtersFocus).focusProperties {
+                    up = tree.header
+                    left = field
+                    down = if (result?.items?.isNotEmpty() == true) first else FocusRequester.Cancel
+                },
+                icon = Lucide.SlidersHorizontal,
+                enabled = online,
+            )
         }
         if (!online) Text("Connectez le téléphone pour actualiser le catalogue.", style = MaterialTheme.typography.bodySmall, color = Palette.TextDim)
         jobs.take(2).forEach { job ->
@@ -310,14 +341,7 @@ internal fun CatalogueDialog(title: String, onDismiss: () -> Unit, content: @Com
             Modifier.widthIn(
                 max = 600.dp,
             ).fillMaxWidth().background(Palette.Deep, RoundedCornerShape(24.dp)).verticalScroll(rememberScrollState()).padding(20.dp)
-                .focusRequester(first).onPreviewKeyEvent { event ->
-                    if (event.key == Key.ButtonB || event.key == Key.Escape) {
-                        if (event.type == KeyEventType.KeyUp) onDismiss()
-                        true
-                    } else {
-                        false
-                    }
-                },
+                .focusRequester(first).focusGroup().controllerDialog(onDismiss),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             Text(title, style = MaterialTheme.typography.headlineSmall)

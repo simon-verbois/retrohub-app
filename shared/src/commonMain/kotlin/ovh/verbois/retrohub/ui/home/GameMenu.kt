@@ -25,6 +25,7 @@ import ovh.verbois.retrohub.library.Game
 import ovh.verbois.retrohub.ui.UiController
 import ovh.verbois.retrohub.ui.components.AutoFocus
 import ovh.verbois.retrohub.ui.components.consoleFocus
+import ovh.verbois.retrohub.ui.components.controllerDialog
 import ovh.verbois.retrohub.ui.icons.Lucide
 import ovh.verbois.retrohub.ui.nav.Route
 import ovh.verbois.retrohub.ui.nav.SettingsPage
@@ -39,10 +40,11 @@ fun GameMenu(controller: UiController, game: Game) {
     DropdownMenu(
         expanded = controller.gameMenu,
         onDismissRequest = close,
+        modifier = Modifier.controllerDialog(close, dismissOnStart = true),
         containerColor = Palette.Deep,
         shape = RoundedCornerShape(18.dp),
     ) {
-        AutoFocus(first)
+        if (controller.gameMenu) AutoFocus(first)
         val action = gameAction(controller, game, downloads[game.playGameId])
         Item(action.icon, action.label, Modifier.focusRequester(first)) {
             close()

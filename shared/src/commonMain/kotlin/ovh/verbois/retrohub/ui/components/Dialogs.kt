@@ -53,7 +53,7 @@ fun FormDialog(title: String, text: String?, fields: List<DialogField>, confirm:
         busy = false
     }
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        GlassPanel(Modifier.widthIn(max = 460.dp).padding(24.dp)) {
+        GlassPanel(Modifier.widthIn(max = 460.dp).padding(24.dp).controllerDialog(onDismiss)) {
             Column(
                 Modifier.background(Palette.SkyLow).verticalScroll(rememberScrollState()).padding(24.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),

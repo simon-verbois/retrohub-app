@@ -10,6 +10,37 @@ change, in plain text. Never rewrite the notes of a published version.
 
 ## [Unreleased]
 
+## [2026.46.9] - 2026-11-12
+
+### Added
+
+- Choose Comfort, Full screen or Compact touch controls with visual previews, a per-console override and an in-game switch; keep custom positions separate for each preset and orientation.
+
+### Changed
+
+- Enlarge the game area with more compact touch clusters, reposition shoulder and system buttons, and keep Menu and Fast forward in a discreet clock-style capsule at the upper-right corner.
+- Apply the azure cyan palette in day and night modes, strengthen secondary text contrast and give buttons, search and status controls a shared glossy, finely textured finish with cyan focus lighting.
+- Give profile shortcuts soft gradient shading and lit edges, and point the menu toward the profile button.
+- Replace the profile list with a compact quick-action grid, account header and synchronization footer, with directional controller navigation and a layout that resizes and rearranges to keep every action visible without scrolling.
+- Replace the portrait app name and second navigation row with a dropdown for Home, Favorites, Downloads and Catalogue.
+- Make the search and clock/battery bubbles more compact, keep comfortable touch targets, and show the profile picture at the same diameter without an extra background.
+- Expand search to the left inside the top bar and show matching games in an aligned dropdown without replacing the current page.
+- Use cover grids for downloaded games and put a compact storage card first, with detailed usage available from that card.
+- Replace white controller focus outlines with a soft highlight and scale, including on selected home covers.
+- Bring the home title and game information closer together and enlarge covers downward while keeping their top spacing.
+
+### Fixed
+
+- Trigger controller actions only once per A press, including favorite toggles and confirmations.
+- Keep the chosen home cover selected and focused when returning from settings or opening a game outside the visible row.
+- Keep controller shortcuts inside the active menu or dialog, restore focus after inline choices, support A consistently in dropdown menus, limit shoulder navigation to the four tabs, and return through pause submenus before resuming a game.
+- Clearly show whether the selected game is a favorite on the home action button.
+- Let home covers scroll to the screen edges when full-screen display is enabled, while keeping the header and game actions clear of the camera cutout.
+
+### Internal
+
+- Restart the owned test emulator before optimized-build checks to isolate native rendering state between variants.
+
 ## [2026.46.8] - 2026-11-12
 
 ### Added

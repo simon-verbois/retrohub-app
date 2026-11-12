@@ -61,6 +61,7 @@ class DsLifecycleTest {
                         click(rotation.label)
                         val frame = GameActivity.current?.get()?.frames?.value ?: 0
                         device.pressBack()
+                        device.pressBack()
                         waitForFrames(frame + 10)
                         val bitmap = instrumentation.uiAutomation.takeScreenshot()
                         val unit = 48f * context.resources.displayMetrics.density

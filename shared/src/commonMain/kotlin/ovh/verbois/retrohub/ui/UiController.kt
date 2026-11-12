@@ -30,7 +30,7 @@ class UiController(val container: AppContainer, private val scope: CoroutineScop
         get() = nav.current == Route.Search
         set(value) {
             if (value) {
-                nav.go(Route.Search)
+                nav.section(ovh.verbois.retrohub.ui.nav.Section.SEARCH)
             } else if (searching) {
                 nav.back()
             }
@@ -39,7 +39,7 @@ class UiController(val container: AppContainer, private val scope: CoroutineScop
         get() = nav.current == Route.User
         set(value) {
             if (value) {
-                nav.go(Route.User)
+                nav.section(ovh.verbois.retrohub.ui.nav.Section.USER)
             } else if (menuOpen) {
                 nav.back()
             }

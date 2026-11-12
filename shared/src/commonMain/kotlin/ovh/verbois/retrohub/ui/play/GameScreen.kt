@@ -42,10 +42,12 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -54,9 +56,15 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
@@ -64,6 +72,7 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import ovh.verbois.retrohub.core.formatDate
@@ -79,14 +88,17 @@ import ovh.verbois.retrohub.emulation.GameLayouts
 import ovh.verbois.retrohub.emulation.GameRotation
 import ovh.verbois.retrohub.emulation.PadKey
 import ovh.verbois.retrohub.emulation.PortraitPosition
+import ovh.verbois.retrohub.emulation.TouchPreset
 import ovh.verbois.retrohub.game.Cheat
 import ovh.verbois.retrohub.game.GameSession
 import ovh.verbois.retrohub.game.InputRouter
 import ovh.verbois.retrohub.game.SlotInfo
 import ovh.verbois.retrohub.sync.SyncPhase
 import ovh.verbois.retrohub.sync.SyncStatus
+import ovh.verbois.retrohub.ui.components.ChoiceRow
 import ovh.verbois.retrohub.ui.components.ConfirmDialog
 import ovh.verbois.retrohub.ui.components.GlassButton
+import ovh.verbois.retrohub.ui.components.consoleButtonSurface
 import ovh.verbois.retrohub.ui.components.consoleFocus
 import ovh.verbois.retrohub.ui.icons.Lucide
 import ovh.verbois.retrohub.ui.theme.Palette
@@ -105,6 +117,7 @@ fun GameScreen(
     gamepadConnected: StateFlow<Boolean>,
     syncStatus: StateFlow<SyncStatus>,
     menuRequests: Flow<Unit>,
+    backRequests: Flow<Unit> = emptyFlow(),
     haptic: () -> Unit,
     onQuit: () -> Unit,
     /** Enregistre un changement des réglages de la console (options avancées, commandes tactiles). */
@@ -128,6 +141,7 @@ fun GameScreen(
     var overwrite by remember { mutableStateOf<Int?>(null) }
     var editing by remember { mutableStateOf(false) }
     var touchLayout by remember { mutableStateOf(plan.touchLayout) }
+    var touchPreset by remember { mutableStateOf(plan.touchPreset) }
     var cheats by remember { mutableStateOf(plan.cheats) }
     val router =
         remember {
@@ -164,8 +178,26 @@ fun GameScreen(
         }
     }
     val showTouch = !(gamepad && plan.hideTouchWithGamepad)
+    val handleBack by rememberUpdatedState {
+        when {
+            confirmQuit -> confirmQuit = false
+            confirmReset -> confirmReset = false
+            overwrite != null -> overwrite = null
+            editing -> editing = false
+            page != MenuPage.MAIN -> page = MenuPage.MAIN
+            else -> session.resume()
+        }
+    }
+    LaunchedEffect(backRequests) { backRequests.collect { handleBack() } }
     BoxWithConstraints(
-        Modifier.fillMaxSize().background(Color.Black).then(if (!plan.useDisplayCutout) Modifier.windowInsetsPadding(WindowInsets.displayCutout) else Modifier),
+        Modifier.fillMaxSize().background(Color.Black).onKeyEvent { event ->
+            if (ui.paused && event.key in listOf(Key.ButtonB, Key.Escape)) {
+                if (event.type == KeyEventType.KeyUp) handleBack()
+                true
+            } else {
+                false
+            }
+        }.then(if (!plan.useDisplayCutout) Modifier.windowInsetsPadding(WindowInsets.displayCutout) else Modifier),
     ) {
         val density = LocalDensity.current
         val portrait = maxHeight > maxWidth
@@ -183,6 +215,7 @@ fun GameScreen(
                     portraitCentered = plan.portraitPosition == PortraitPosition.CENTER,
                     controlsUnit = (48.dp * plan.touchScale).toPx(),
                     portraitControlRows = if (pad.leftStick && pad.dpad) 6.6f else 5.5f,
+                    preset = touchPreset,
                 )
             }
         val cutout = WindowInsets.displayCutout
@@ -200,8 +233,16 @@ fun GameScreen(
             ).coerceIn(0f, 1f)
         val safeGameLeft = ((layout.game.left * screenWidth - controlsLeft) / (screenWidth - controlsLeft - controlsRight).coerceAtLeast(1f)).coerceIn(0f, 1f)
         val controlsModifier = if (plan.useDisplayCutout) Modifier.windowInsetsPadding(cutout) else Modifier
-        val suffix = if (portrait) "@p" else "@l"
-        val groupLayout = touchLayout.filterKeys { it.endsWith(suffix) }.mapKeys { it.key.removeSuffix(suffix) }
+        val orientationSuffix = if (portrait) "@p" else "@l"
+        val suffix = "@${touchPreset.name.lowercase()}$orientationSuffix"
+        val custom = touchLayout.filterKeys { it.endsWith(suffix) }.mapKeys { it.key.removeSuffix(suffix) }
+        val groupLayout = if (custom.isEmpty() && touchPreset == TouchPreset.COMFORT) {
+            touchLayout.filterKeys { it.endsWith(orientationSuffix) && it.count { char -> char == '@' } == 1 }
+                .mapKeys { it.key.removeSuffix(orientationSuffix) }
+        } else {
+            custom
+        }
+        LaunchedEffect(touchPreset, portrait) { router.releaseAll() }
         LaunchedEffect(layout.game) { engine.setViewport(layout.game) }
         LaunchedEffect(rotation, dsLayout) {
             if (spec.dualScreen) engine.setOptions(mapOf("melonds_screen_layout" to CoreOptions.dsLayoutValue(dsLayout, plan.dsSwapScreens)))
@@ -240,71 +281,75 @@ fun GameScreen(
                 )
             }
         }
-        if (editing) {
-            TouchControls(
-                padSpec(spec.pad).let { if (plan.analog) it.copy(leftStick = true) else it },
-                layout.controls,
-                maxOf(plan.touchOpacity, 0.8f),
-                plan.touchScale,
-                onKey = { _, _ -> },
-                onStick = { _, _, _ -> },
-                onScreenTouch = {},
-                onHaptic = {},
-                modifier = controlsModifier,
-                gameBottom = safeGameBottom,
-                gameLeft = safeGameLeft,
-                layout = groupLayout,
-                editing = true,
-                onLayout = { id, place -> touchLayout = touchLayout + (id + suffix to place) },
-            ) {}
-            TouchEditorBar(
-                Modifier.align(Alignment.TopCenter).windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top)).padding(top = 8.dp),
-                onReset = { touchLayout = touchLayout.filterKeys { !it.endsWith(suffix) } },
-                onDone = {
-                    editing = false
-                    val saved = touchLayout
-                    onConsoleSettings { it.copy(touchLayout = saved) }
-                    session.resume()
-                },
-            )
-        } else if (showTouch && !ui.paused) {
-            TouchControls(
-                padSpec(spec.pad).let { if (plan.analog) it.copy(leftStick = true) else it },
-                layout.controls,
-                plan.touchOpacity,
-                plan.touchScale,
-                onKey = { key, down -> router.key(key, down) },
-                onStick = { stick, x, y -> router.stick(stick, x, y) },
-                onScreenTouch = { point ->
-                    val x = point?.x?.plus(controlsLeft)
-                    val y = point?.y?.plus(controlsTop)
-                    val game = layout.game
-                    if (x == null || y == null || x < game.left * screenWidth || x > game.right * screenWidth || y < game.top * screenHeight ||
-                        y > game.bottom * screenHeight
-                    ) {
-                        engine.touch(null, null)
-                    } else {
-                        val (u, v) = rotation.unrotate((x / screenWidth - game.left) / game.width, (y / screenHeight - game.top) / game.height)
-                        engine.touch((game.left + u * game.width) * screenWidth, (game.top + v * game.height) * screenHeight)
-                    }
-                },
-                onHaptic = { if (plan.haptics) haptic() },
-                modifier = controlsModifier,
-                gameBottom = safeGameBottom,
-                gameLeft = safeGameLeft,
-                layout = groupLayout,
-            ) {
+        key(touchPreset, portrait, dsLayout) {
+            if (editing) {
+                TouchControls(
+                    padSpec(spec.pad).let { if (plan.analog) it.copy(leftStick = true) else it },
+                    layout.controls,
+                    maxOf(plan.touchOpacity, 0.8f),
+                    plan.touchScale,
+                    onKey = { _, _ -> },
+                    onStick = { _, _, _ -> },
+                    onScreenTouch = {},
+                    onHaptic = {},
+                    modifier = controlsModifier,
+                    gameBottom = safeGameBottom,
+                    gameLeft = safeGameLeft,
+                    layout = groupLayout,
+                    editing = true,
+                    onLayout = { id, place -> touchLayout = touchLayout + (id + suffix to place) },
+                )
+                TouchEditorBar(
+                    Modifier.align(Alignment.TopCenter).windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top)).padding(top = 8.dp),
+                    onReset = {
+                        touchLayout =
+                            touchLayout.filterKeys {
+                                !it.endsWith(suffix) &&
+                                    !(touchPreset == TouchPreset.COMFORT && it.endsWith(orientationSuffix) && it.count { char -> char == '@' } == 1)
+                            }
+                    },
+                    onDone = {
+                        editing = false
+                        val saved = touchLayout
+                        onConsoleSettings { it.copy(touchLayout = saved) }
+                        session.resume()
+                    },
+                )
+            } else if (showTouch && !ui.paused) {
+                TouchControls(
+                    padSpec(spec.pad).let { if (plan.analog) it.copy(leftStick = true) else it },
+                    layout.controls,
+                    plan.touchOpacity,
+                    plan.touchScale,
+                    onKey = { key, down -> router.key(key, down) },
+                    onStick = { stick, x, y -> router.stick(stick, x, y) },
+                    onScreenTouch = { point ->
+                        val x = point?.x?.plus(controlsLeft)
+                        val y = point?.y?.plus(controlsTop)
+                        val game = layout.game
+                        if (x == null || y == null || x < game.left * screenWidth || x > game.right * screenWidth || y < game.top * screenHeight ||
+                            y > game.bottom * screenHeight
+                        ) {
+                            engine.touch(null, null)
+                        } else {
+                            val (u, v) = rotation.unrotate((x / screenWidth - game.left) / game.width, (y / screenHeight - game.top) / game.height)
+                            engine.touch((game.left + u * game.width) * screenWidth, (game.top + v * game.height) * screenHeight)
+                        }
+                    },
+                    onHaptic = { if (plan.haptics) haptic() },
+                    modifier = controlsModifier,
+                    gameBottom = safeGameBottom,
+                    gameLeft = safeGameLeft,
+                    layout = groupLayout,
+                )
+            }
+        }
+        if (!ui.paused && !editing) {
+            Box(Modifier.align(Alignment.TopEnd).windowInsetsPadding(WindowInsets.safeDrawing).padding(top = 4.dp, end = 12.dp)) {
                 InGameButtons(ui.fastForward, onMenu = {
                     page = MenuPage.MAIN
                     session.pause()
                 }, onFastForward = { session.toggleFastForward() })
-            }
-        } else if (!ui.paused) {
-            Box(Modifier.align(Alignment.TopCenter).windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top)).padding(top = 8.dp)) {
-                InGameButtons(ui.fastForward, onMenu = {
-                    page = MenuPage.MAIN
-                    session.pause()
-                }, onFastForward = { session.toggleFastForward() }, faint = true)
             }
         }
         if (plan.showFps) FpsText(engine.frames, Modifier.align(Alignment.TopEnd).windowInsetsPadding(WindowInsets.safeDrawing).padding(12.dp))
@@ -348,6 +393,11 @@ fun GameScreen(
                 dsLayout = dsLayout,
                 onDsLayout = { if (portrait) dsPortrait = it else dsLandscape = it },
                 rotation = rotation,
+                touchPreset = touchPreset,
+                onTouchPreset = { value ->
+                    touchPreset = value
+                    onConsoleSettings { it.copy(touchPreset = value) }
+                },
                 onRotation = { value ->
                     rotation = value
                     onRotation(value)
@@ -443,23 +493,25 @@ private fun TouchEditorBar(modifier: Modifier, onReset: () -> Unit, onDone: () -
 }
 
 @Composable
-private fun InGameButtons(fastForward: Boolean, onMenu: () -> Unit, onFastForward: () -> Unit, faint: Boolean = false) {
-    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        SmallRound(Lucide.Menu, "Menu du jeu", onMenu, faint)
-        SmallRound(Lucide.FastForward, if (fastForward) "Vitesse normale" else "Avance rapide", onFastForward, faint, active = fastForward)
+private fun InGameButtons(fastForward: Boolean, onMenu: () -> Unit, onFastForward: () -> Unit) {
+    val shape = RoundedCornerShape(50)
+    Box(Modifier.size(width = 96.dp, height = 48.dp).testTag("game-utility-dock").semantics { contentDescription = "Commandes du jeu" }) {
+        Box(Modifier.align(Alignment.Center).fillMaxWidth().height(32.dp).consoleButtonSurface(shape))
+        Row(Modifier.fillMaxSize()) {
+            SmallRound(Lucide.Menu, "Menu du jeu", onMenu)
+            SmallRound(Lucide.FastForward, if (fastForward) "Vitesse normale" else "Avance rapide", onFastForward, active = fastForward)
+        }
     }
 }
 
 @Composable
-private fun SmallRound(icon: ImageVector, label: String, onClick: () -> Unit, faint: Boolean, active: Boolean = false) {
+private fun SmallRound(icon: ImageVector, label: String, onClick: () -> Unit, active: Boolean = false) {
     Box(
-        Modifier.size(40.dp).semantics { contentDescription = label }.consoleFocus(CircleShape, onClick).clip(CircleShape)
-            .background(
-                if (active) Palette.Accent else Color(if (faint) 0x33000000 else 0x55000000),
-            ).border(1.dp, Color(0x55FFFFFF), CircleShape),
+        Modifier.size(48.dp).semantics { contentDescription = label }.consoleFocus(CircleShape, onClick, focusScale = 1f),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(icon, null, Modifier.size(20.dp), tint = if (active) Palette.OnAccent else Color.White.copy(alpha = if (faint) 0.6f else 0.9f))
+        if (active) Box(Modifier.size(28.dp).clip(CircleShape).background(Palette.Accent))
+        Icon(icon, null, Modifier.size(16.dp), tint = if (active) Palette.OnAccent else Palette.Text)
     }
 }
 
@@ -494,6 +546,8 @@ private fun PauseMenu(
     dsLayout: DsLayout,
     onDsLayout: (DsLayout) -> Unit,
     rotation: GameRotation,
+    touchPreset: TouchPreset,
+    onTouchPreset: (TouchPreset) -> Unit,
     onRotation: (GameRotation) -> Unit,
     onReset: () -> Unit,
     onSaveSlot: (SlotInfo) -> Unit,
@@ -602,6 +656,7 @@ private fun PauseMenu(
 
                 MenuPage.SCREENS -> {
                     BackEntry(Modifier.focusRequester(first)) { onPage(MenuPage.MAIN) }
+                    ChoiceRow("Disposition tactile", TouchPreset.entries, touchPreset, { it.label }, onTouchPreset)
                     Text("Rotation de l’image", style = MaterialTheme.typography.titleMedium)
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         GameRotation.entries.forEach { option ->

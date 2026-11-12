@@ -11,6 +11,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
 import androidx.lifecycle.Lifecycle
@@ -188,8 +189,14 @@ private fun Screen(controller: UiController, route: Route) {
 /** Pages hors sections : un simple retour en haut, le titre est dans la page. */
 @Composable
 private fun WithBack(controller: UiController, content: @Composable () -> Unit) {
+    val parent = ovh.verbois.retrohub.ui.components.LocalNavigationFocus.current
+    val navigation = remember { ovh.verbois.retrohub.ui.components.NavigationFocus() }
+    androidx.compose.runtime.SideEffect { parent.content = navigation.header }
     androidx.compose.foundation.layout.Column(Modifier.fillMaxSize()) {
-        ovh.verbois.retrohub.ui.components.PageHeader(null, { controller.nav.back() })
-        Box(Modifier.weight(1f).fillMaxSize()) { content() }
+        ovh.verbois.retrohub.ui.components.PageHeader(null, { controller.nav.back() }, backModifier = Modifier.focusRequester(navigation.header))
+        CompositionLocalProvider(ovh.verbois.retrohub.ui.components.LocalNavigationFocus provides navigation) {
+            Box(Modifier.weight(1f).fillMaxSize()) { content() }
+        }
     }
+    ovh.verbois.retrohub.ui.components.AutoFocus(navigation.header)
 }

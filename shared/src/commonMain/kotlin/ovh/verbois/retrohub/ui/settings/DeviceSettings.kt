@@ -84,6 +84,7 @@ import ovh.verbois.retrohub.ui.components.SettingRow
 import ovh.verbois.retrohub.ui.components.SettingsGroup
 import ovh.verbois.retrohub.ui.components.SliderRow
 import ovh.verbois.retrohub.ui.components.SwitchRow
+import ovh.verbois.retrohub.ui.components.TouchPresetSelector
 import ovh.verbois.retrohub.ui.icons.Lucide
 import ovh.verbois.retrohub.ui.library.StorageSummary
 import ovh.verbois.retrohub.ui.nav.Section
@@ -222,6 +223,7 @@ internal fun ControlsPage(controller: UiController) {
         }, { v -> repo.update { it.copy(hints = v) } }, null, Lucide.Keyboard)
     }
     SectionLabel("Commandes tactiles")
+    TouchPresetSelector(settings.touchPreset) { value -> repo.update { it.copy(touchPreset = value) } }
     SettingsGroup {
         SliderRow("Opacité", settings.touchOpacity, 0.2f..1f, { v ->
             repo.update { it.copy(touchOpacity = v) }

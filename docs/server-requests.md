@@ -1,8 +1,9 @@
 # Requests to the RetroHub server
 
 Needs found on the app side. Checked items are implemented and tested in the `../retrohub`
-server as of **2026-11-11**, deployed to production in **2026.46.4** (requests 1–6 first shipped
-in **2026.46.2**, request 7 in **2026.46.3**, request 8 in **2026.46.4**).
+server as of **2026-11-12**, deployed to production in **2026.46.5** (requests 1–6 first shipped
+in **2026.46.2**, request 7 in **2026.46.3**, request 8 in **2026.46.4**; the avatar
+replacement and request 9 shipped in **2026.46.5**).
 The app's fallback behavior is kept below where it still matters for older servers.
 
 1. [x] **Add Dreamcast** to `consoles.py`:
@@ -104,7 +105,13 @@ The app's fallback behavior is kept below where it still matters for older serve
      reconnect. The temporary verification device was removed afterward.
 
 8. [x] **Ship a self-hosted default-avatar catalogue and share the chosen avatar across clients.**
-   - Selected upstream: [DiceBear](https://github.com/dicebear/dicebear), whose generator is
+   - Owner-approved replacement in **2026.46.5**: **260** local avatars from **Mario, Zelda,
+     Sonic and Pokémon**, replacing the initial DiceBear catalogue. Includes PokéSprite,
+     PAdventures, PokéAPI (Game Boy/GBA/DS), SpriteCollab portraits and expressions, the Mario
+     archive, wrenr Zelda NES sprites, Outertoaster Sonic customs and SAT-R Sonic Advance 2.
+     Commits, source bytes, crops, credits and licenses are pinned in
+     `../retrohub/resources/avatars/`. No LoL or Baechu portraits are included.
+   - Initial upstream for **2026.46.4**: [DiceBear](https://github.com/dicebear/dicebear), whose generator is
      [MIT licensed](https://github.com/dicebear/dicebear/blob/10.x/LICENSE). Use only the
      **Pixel Art**, **Pixel Art Neutral**, **Identicon** and **Shapes** collections for the initial
      catalogue: their artwork is **CC0 1.0**, independently of the generator's license
@@ -124,15 +131,15 @@ The app's fallback behavior is kept below where it still matters for older serve
    - Requested native capability: advertise `account_avatars` in `/native/status.features` only
      when the following endpoints and image assets are ready. The app consumes the contract below;
      the authoritative implemented contract must also be added to `docs/native-api.md`.
-   - `GET /account/avatars` returns `{"avatars": [{"id": "pixel-art-001", "name": "Pixel 1",
-     "url": "/api/v1/account/avatars/pixel-art-001.png?v=<content-hash>"}], "default_avatar": <item>}`.
+   - `GET /account/avatars` returns `{"avatars": [{"id": "pokemon-portrait-pikachu", "name": "Pikachu · Portrait",
+     "url": "/api/v1/account/avatars/pokemon-portrait-pikachu.png?v=<content-hash>"}], "default_avatar": <item>}`.
      The default is one of the catalogue items. Return the complete bounded catalogue in stable
      order. Names are short and readable; IDs are opaque to clients.
      Images are served by RetroHub as PNG with immutable, versioned URLs, not arbitrary remote URLs
      or executable SVG content. The app accepts only `/api/v1/account/avatars/…` image paths.
    - `GET /account/avatar` returns `{"avatar": <catalogue item or null>}` for the authenticated
      user (the chosen image, or the resolved default). `PUT /account/avatar` with
-     `{"avatar_id": "pixel-art-001"}` returns the same shape after saving. `{"avatar_id": null}`
+     `{"avatar_id": "pokemon-portrait-pikachu"}` returns the same shape after saving. `{"avatar_id": null}`
      restores that account's stable default avatar, returned in
      `avatar`; `default_avatar` in the catalogue lets the app preview this reset option.
      Validate membership in the catalogue; reject unknown IDs without changing the current choice.
@@ -178,6 +185,31 @@ The app's fallback behavior is kept below where it still matters for older serve
      after closing an unsaved preview. The production package includes all sources and notices;
      a separate container check passed without networking. The temporary test device was revoked.
 
+   - Replacement validation: all 260 final PNGs are nonempty, 128 × 128 and packaged with their
+     originals and notices (including the editable Sonic Aseprite source). Rendering preserves
+     pixels, isolates fixed poses and removes the Sonic custom sheet background. DiceBear choices
+     transparently resolve to a stable new account default; the new default pool is fixed and
+     balanced across the four universes. The web picker filters by the optional descriptor field
+     `collection`; native clients may ignore that additive field.
+   - Release **2026.46.5** passed the full Forgejo pipeline and live HTTPS checks of every avatar,
+     its hash, authenticated access, caching and all four web picker filters. The temporary
+     verification device was removed. The standalone HTML comparison was deleted as requested.
+
+9. [x] **Hide disabled sources from Explorer and its filters.**
+   - `GET /games` excludes games available only from disabled providers before pagination and
+     counting, including searches and explicit source filters. `GET /sources` returns enabled
+     providers only; `/admin/providers` still lists disabled providers for reactivation.
+   - A merged game stays visible when another version has an enabled provider or is a local
+     import. Detail pages omit disabled remote versions; stale download/file-choice requests are
+     rejected with 409. Re-enabling the provider restores discovery without another sync.
+   - Personal library/favorites, installed ROMs, progressions and `/native/library` remain
+     available. Catalogue sort/filter options cannot bypass source visibility.
+   - Tests cover browser-session and native-token reads, administration disable/re-enable,
+     merged games, totals/pagination, stale requests, local imports and installed progression.
+   - Production verification: before release, all 14 disabled providers still exposed games.
+     In **2026.46.5**, each returns zero Explorer results and all are absent from `/sources`.
+     The production activation settings were kept intact during verification.
+
 ## Verification
 
 Run from `../retrohub`:
@@ -185,16 +217,16 @@ Run from `../retrohub`:
 - `uv run --directory backend ruff check src tests migrations`
 - `uv run --directory backend ruff format --check src tests migrations`
 - `uv run --directory backend mypy src`
-- `uv run --directory backend pytest`: **211 passed, 3 skipped** (PostgreSQL-specific tests).
+- `uv run --directory backend pytest`: **217 passed, 3 skipped** (PostgreSQL-specific tests).
 - Frontend `npm run typecheck`, `npm run format:check`, `npm run build`, then
   `npx playwright test`: **27 passed**. Pairing and avatar screenshots were inspected in both themes.
 - Compose configuration rendering checked with optional Android fields unset and configured.
-- Forgejo production pipeline **2026.46.4**: quality (including PostgreSQL), image publication
-  and deployment all succeeded ([run 19](http://192.168.0.151/simonverbois/retrohub/actions/runs/19)).
-- Live `/health` is healthy, `/native/status` reports **2026.46.4**, `library_events` and `account_avatars`, and
+- Forgejo production pipeline **2026.46.5**: quality (including PostgreSQL), image publication
+  and deployment all succeeded ([run 20](http://192.168.0.151/simonverbois/retrohub/actions/runs/20)).
+- Live `/health` is healthy, `/native/status` reports **2026.46.5**, `library_events` and `account_avatars`, and
   all application pods are ready. The PostgreSQL pod identity and restart count were unchanged.
 
-The verification above covers server requests 1–8. Request 8's separate local client validation
+The verification above covers server requests 1–9. Request 8's separate local client validation
 is recorded in the request itself. The app now consumes the SSE capability;
 older servers and interrupted streams retain conditional polling. Protocol, coalescing, reconnection,
 revocation and polling fallback are covered separately in the app unit tests; the Android end-to-end

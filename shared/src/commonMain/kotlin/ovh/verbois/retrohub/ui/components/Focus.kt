@@ -3,7 +3,6 @@ package ovh.verbois.retrohub.ui.components
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
-import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.gestures.animateScrollBy
@@ -21,8 +20,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.drawOutline
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.InputMode
 import androidx.compose.ui.input.key.Key
@@ -34,7 +35,6 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalInputModeManager
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import ovh.verbois.retrohub.ui.theme.Palette
@@ -55,8 +55,7 @@ val LocalNavSound = staticCompositionLocalOf<() -> Unit> { {} }
 internal val ConfirmKeys = setOf(Key.ButtonA, Key.Enter, Key.NumPadEnter, Key.DirectionCenter, Key.Spacebar)
 
 /**
- * Élément sélectionnable à la manette, au clavier et au toucher : anneau de focus blanc quand on
- * navigue aux touches (comme :focus-visible), léger agrandissement, enfoncement au toucher.
+ * Controller and keyboard focus uses a soft highlight and scale; touch presses gently shrink.
  */
 @Composable
 fun Modifier.consoleFocus(
@@ -64,7 +63,7 @@ fun Modifier.consoleFocus(
     onClick: (() -> Unit)?,
     enabled: Boolean = true,
     focusScale: Float = 1.04f,
-    ringWidth: Dp = 3.dp,
+    highlightFocus: Boolean = true,
     role: Role = Role.Button,
     label: String? = null,
     onFocus: (Boolean) -> Unit = {},
@@ -87,7 +86,7 @@ fun Modifier.consoleFocus(
         },
         spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow),
     )
-    val ring by animateFloatAsState(if (focused && keyboard) 1f else 0f)
+    val highlight by animateFloatAsState(if (focused && keyboard && highlightFocus) 1f else 0f)
     LaunchedEffect(focused) { if (focused) intoView.bringIntoView() }
     return this
         .bringIntoViewRequester(intoView)
@@ -101,10 +100,13 @@ fun Modifier.consoleFocus(
             }
             focused = it.isFocused
             onFocus(it.isFocused)
-        }.onKeyEvent { event ->
-            if (enabled && onClick != null && event.type == KeyEventType.KeyUp && event.key == Key.ButtonA) {
-                haptics()
-                onClick()
+        }.onPreviewKeyEvent { event ->
+            if (enabled && onClick != null && event.key == Key.ButtonA) {
+                // Consume both edges before combinedClickable can perform its own activation.
+                if (event.type == KeyEventType.KeyUp) {
+                    haptics()
+                    onClick()
+                }
                 true
             } else if (enabled && onLongClick != null && event.key == Key.ButtonX) {
                 if (event.type == KeyEventType.KeyUp) {
@@ -131,7 +133,12 @@ fun Modifier.consoleFocus(
         ) {
             haptics()
             onClick?.invoke()
-        }.then(if (ring > 0f) Modifier.border(ringWidth, Palette.Focus.copy(alpha = ring), shape) else Modifier)
+        }.drawWithContent {
+            drawContent()
+            if (highlight > 0f) {
+                drawOutline(shape.createOutline(size, layoutDirection, this), Palette.ButtonFocusTop.copy(alpha = highlight * 0.22f))
+            }
+        }
 }
 
 /**
@@ -168,6 +175,18 @@ class NavigationFocus {
 }
 
 val LocalNavigationFocus = staticCompositionLocalOf { NavigationFocus() }
+
+/** Dismiss the local overlay first and keep global shortcuts out of the page underneath. */
+fun Modifier.controllerDialog(onDismiss: () -> Unit, dismissOnStart: Boolean = false): Modifier = onKeyEvent { event ->
+    val back = event.key == Key.ButtonB || event.key == Key.Escape ||
+        (dismissOnStart && (event.key == Key.ButtonStart || event.key == Key.Menu))
+    if (back) {
+        if (event.type == KeyEventType.KeyUp) onDismiss()
+        true
+    } else {
+        event.key in setOf(Key.ButtonY, Key.ButtonL1, Key.ButtonR1, Key.ButtonStart, Key.ButtonSelect, Key.Menu)
+    }
+}
 
 /** Scroll past the last setting too, so informational storage rows stay reachable with a pad. */
 @Composable

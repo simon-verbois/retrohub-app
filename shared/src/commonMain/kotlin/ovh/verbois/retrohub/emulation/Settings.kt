@@ -59,6 +59,13 @@ enum class ThemeMode(val label: String) {
 }
 
 @Serializable
+enum class TouchPreset(val label: String) {
+    COMFORT("Confort"),
+    OVERLAY("Plein écran"),
+    COMPACT("Compacte"),
+}
+
+@Serializable
 enum class HintsMode(val label: String) {
     AUTO("Avec une manette"),
     ALWAYS("Toujours"),
@@ -168,6 +175,7 @@ data class ConsoleSettings(
     val remap: Map<String, Int> = emptyMap(),
     /** Éditeur tactile : groupe (« left », « right », « shoulders », « center ») et orientation → placement. */
     val touchLayout: Map<String, ControlPlacement> = emptyMap(),
+    val touchPreset: TouchPreset? = null,
     /** Options libretro avancées, prioritaires sur tout le reste. */
     val options: Map<String, String> = emptyMap(),
 )
@@ -183,6 +191,7 @@ data class AppSettings(
     val haptics: Boolean = true,
     val touchOpacity: Float = 0.6f,
     val touchScale: Float = 1f,
+    val touchPreset: TouchPreset = TouchPreset.COMFORT,
     val hideTouchWithGamepad: Boolean = true,
     val hints: HintsMode = HintsMode.AUTO,
     /** Partagé avec le compte (préférence auto_save_seconds du web). */

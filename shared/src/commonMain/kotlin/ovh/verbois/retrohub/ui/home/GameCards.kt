@@ -23,7 +23,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.contentDescription
@@ -61,10 +60,10 @@ fun GameTile(
         modifier
             .size(side)
             .semantics { contentDescription = game.title }
-            .consoleFocus(shape, onClick, focusScale = 1f, ringWidth = 0.dp, onFocus = { if (it) onFocus() }, onLongClick = onLongClick)
+            .consoleFocus(shape, onClick, focusScale = 1f, onFocus = { if (it) onFocus() }, onLongClick = onLongClick)
             .shadow(if (selected) 12.dp else 6.dp, shape)
             .clip(shape)
-            .border(if (selected) 3.dp else 1.dp, if (selected) Color.White else Palette.Line, shape),
+            .border(1.dp, Palette.Line, shape),
     ) {
         GameArt(game.remote.coverUrl, game.console, game.title, Modifier.fillMaxSize(), muted = !game.downloaded)
         if (download is DownloadState.Running) {
@@ -75,10 +74,10 @@ fun GameTile(
 
 /** Carte de grille (bibliothèque, accueil en portrait) : jaquette, titre, console et dernière partie. */
 @Composable
-fun GameCard(game: Game, onClick: () -> Unit, modifier: Modifier = Modifier, download: DownloadState? = null) {
+fun GameCard(game: Game, onClick: () -> Unit, modifier: Modifier = Modifier, download: DownloadState? = null, onLongClick: (() -> Unit)? = null) {
     val shape = RoundedCornerShape(18.dp)
     Column(
-        modifier.consoleFocus(shape, onClick, focusScale = 1.05f, label = game.title),
+        modifier.consoleFocus(shape, onClick, focusScale = 1.05f, label = game.title, onLongClick = onLongClick),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Box(Modifier.fillMaxWidth().aspectRatio(1f).shadow(12.dp, shape).clip(shape).border(1.dp, Palette.Line, shape)) {
@@ -110,6 +109,16 @@ fun GameCard(game: Game, onClick: () -> Unit, modifier: Modifier = Modifier, dow
                     )
                 }
             }
+        }
+        if (download is DownloadState.Failed) {
+            Text(
+                download.message,
+                Modifier.padding(horizontal = 4.dp),
+                style = MaterialTheme.typography.bodySmall,
+                color = Palette.Warning,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
     }
 }

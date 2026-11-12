@@ -81,7 +81,7 @@ enum class Section(val title: String, val route: Route, val tab: Boolean = true)
 class Navigator(start: Route = Route.Home) {
     val stack = mutableStateListOf(start)
     val current: Route get() = stack.last()
-    val contentRoute: Route get() = stack.lastOrNull { it != Route.User } ?: Route.Home
+    val contentRoute: Route get() = stack.lastOrNull { it != Route.User && it != Route.Search } ?: Route.Home
 
     /** Sens de la dernière transition, pour l’animation. */
     val forward = mutableStateOf(true)
@@ -93,8 +93,9 @@ class Navigator(start: Route = Route.Home) {
     }
 
     fun section(section: Section) {
-        if (section == Section.USER) {
-            go(Route.User)
+        if (section == Section.USER || section == Section.SEARCH) {
+            while (stack.size > 1 && (current == Route.User || current == Route.Search)) stack.removeAt(stack.lastIndex)
+            go(section.route)
             return
         }
         val from = Section.of(stack.first())
@@ -104,8 +105,9 @@ class Navigator(start: Route = Route.Home) {
     }
 
     fun cycleSection(step: Int) {
-        val current = if (this.current is Route.Settings) Section.USER else Section.of(this.current) ?: Section.of(stack.first()) ?: Section.HOME
-        val next = Section.entries[(current.ordinal + step).coerceIn(0, Section.entries.lastIndex)]
+        val tabs = Section.entries.filter { it.tab }
+        val current = stack.asReversed().firstNotNullOfOrNull { route -> Section.of(route)?.takeIf { it.tab } } ?: Section.HOME
+        val next = tabs[(tabs.indexOf(current) + step).coerceIn(0, tabs.lastIndex)]
         if (next != current) section(next)
     }
 

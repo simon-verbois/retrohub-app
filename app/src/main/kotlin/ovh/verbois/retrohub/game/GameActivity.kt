@@ -50,6 +50,7 @@ class GameActivity : ComponentActivity() {
     private lateinit var session: GameSession
     private lateinit var retroView: GLRetroView
     private val menuRequests = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    private val backRequests = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     private val held = mutableSetOf<Int>()
     private lateinit var plan: LaunchPlan
     private lateinit var router: InputRouter
@@ -140,7 +141,7 @@ class GameActivity : ComponentActivity() {
             this,
             object : OnBackPressedCallback(true) {
                 override fun handleOnBackPressed() {
-                    menuRequests.tryEmit(Unit)
+                    if (session.ui.value.paused) backRequests.tryEmit(Unit) else menuRequests.tryEmit(Unit)
                 }
             },
         )
@@ -154,6 +155,7 @@ class GameActivity : ComponentActivity() {
                         app.platform.gamepadConnected,
                         container.sync.status,
                         menuRequests,
+                        backRequests = backRequests,
                         haptic = { app.platform.vibrate(10) },
                         onQuit = { finish() },
                         onConsoleSettings = { change -> container.settings.update { it.withConsole(plan.console, change) } },
@@ -204,11 +206,15 @@ class GameActivity : ComponentActivity() {
             return true
         }
         if (paused) {
-            if (event.action == KeyEvent.ACTION_UP && (code == KeyEvent.KEYCODE_BUTTON_B || code == KeyEvent.KEYCODE_ESCAPE)) {
-                session.resume()
+            if (event.action == KeyEvent.ACTION_DOWN && KeyEvent.isGamepadButton(code) && window.decorView.isInTouchMode) {
+                window.decorView.requestFocusFromTouch()
+            }
+            if (super.dispatchKeyEvent(event)) return true
+            if (code == KeyEvent.KEYCODE_BUTTON_B || code == KeyEvent.KEYCODE_ESCAPE) {
+                if (event.action == KeyEvent.ACTION_UP) backRequests.tryEmit(Unit)
                 return true
             }
-            return super.dispatchKeyEvent(event)
+            return false
         }
         val key = remapped(code) ?: padKey(event) ?: return super.dispatchKeyEvent(event)
         if (event.repeatCount > 0) return true

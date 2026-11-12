@@ -151,6 +151,7 @@ class GameLauncher(
                     audio = settings.audio,
                     touchOpacity = settings.touchOpacity,
                     touchScale = settings.touchScale,
+                    touchPreset = consoleSettings.touchPreset ?: settings.touchPreset,
                     hideTouchWithGamepad = settings.hideTouchWithGamepad,
                     haptics = settings.haptics,
                     showFps = settings.showFps,

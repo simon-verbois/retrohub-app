@@ -48,6 +48,11 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextRange
@@ -124,7 +129,14 @@ fun Onboarding(container: AppContainer, state: AuthState.SignedOut) {
     LaunchedEffect(Unit) { if (step == Step.LOGIN) checkServer(next = false) }
 
     Box(
-        Modifier.fillMaxSize().background(
+        Modifier.fillMaxSize().onKeyEvent { event ->
+            if (step != Step.WELCOME && event.key in listOf(Key.ButtonB, Key.Escape)) {
+                if (event.type == KeyEventType.KeyUp) step = if (step == Step.LOGIN) Step.SERVER else Step.WELCOME
+                true
+            } else {
+                false
+            }
+        }.background(
             Brush.verticalGradient(listOf(Palette.SkyTop, Palette.SkyLow)),
         ).windowInsetsPadding(WindowInsets.safeDrawing).imePadding(),
     ) {

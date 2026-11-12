@@ -9,12 +9,20 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.calculateEndPadding
+import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -29,6 +37,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -38,6 +47,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.layout.SubcomposeLayout
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -97,11 +107,17 @@ fun HomeScreen(controller: UiController) {
     val selected = ordered.firstOrNull { it.id == controller.homeGame } ?: games.firstOrNull { it.id == controller.homeGame } ?: ordered.firstOrNull()
     LaunchedEffect(selected?.console) { controller.backdrop = Backdrop(null, selected?.console) }
     if (selected == null) {
+        val emptyFocus = remember { FocusRequester() }
+        val navigation = LocalNavigationFocus.current
+        SideEffect { navigation.content = if (sync.phase == SyncPhase.SYNCING) navigation.header else emptyFocus }
+        AutoFocus(if (sync.phase == SyncPhase.SYNCING) navigation.header else emptyFocus)
         if (sync.phase == SyncPhase.SYNCING) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = Palette.Accent) }
         } else {
             CenteredMessage("Votre salle d’arcade est prête", "Ajoutez des jeux à votre bibliothèque depuis RetroHub sur le web.", Lucide.Gamepad2) {
-                GlassButton("Actualiser", { controller.syncNow() }, icon = Lucide.RefreshCw)
+                GlassButton("Actualiser", {
+                    controller.syncNow()
+                }, Modifier.focusRequester(emptyFocus).focusProperties { up = navigation.header }, icon = Lucide.RefreshCw)
             }
         }
         return
@@ -116,11 +132,14 @@ fun HomeScreen(controller: UiController) {
     SideEffect { tree.content = selectedFocus }
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val actionWidth = (maxWidth - HomeEdge * 2).coerceAtLeast(148.dp)
-        val tile = if (controller.portrait) (maxWidth * 0.3f).coerceIn(96.dp, 144.dp) else (maxHeight * 0.36f).coerceIn(88.dp, 148.dp)
+        val tile = if (controller.portrait) (maxWidth * 0.32f).coerceIn(96.dp, 156.dp) else (maxHeight * 0.4f).coerceIn(88.dp, 160.dp)
         val short = maxHeight < 360.dp
         SubcomposeLayout(Modifier.fillMaxSize().testTag("home-content")) { constraints ->
             val details = subcompose("details") {
-                Column(Modifier.fillMaxWidth().padding(horizontal = HomeEdge), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column(
+                    Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal)).padding(horizontal = HomeEdge),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
                     Text(
                         selected.title,
                         Modifier.semantics {
@@ -151,7 +170,8 @@ fun HomeScreen(controller: UiController) {
                             Lucide.Heart,
                             if (selected.favorite) "Retirer des favoris" else "Ajouter aux favoris",
                             { controller.toggleFavorite(selected) },
-                            tint = if (selected.favorite) Palette.Accent else Palette.Text,
+                            modifier = Modifier.testTag("home-favorite"),
+                            selected = selected.favorite,
                         )
                         Box {
                             RoundButton(
@@ -193,17 +213,28 @@ private fun GameRow(
     actions: FocusRequester,
 ) {
     val downloads by controller.container.downloads.states.collectAsState()
+    val settings by controller.container.settings.settings.collectAsState()
+    val edgeInsets = if (settings.useDisplayCutout) WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal) else WindowInsets(0)
+    val edgePadding = edgeInsets.asPaddingValues()
+    val direction = LocalLayoutDirection.current
     val tree = LocalNavigationFocus.current
     val row = games.take(16).let { if (selected in it) it else listOf(selected) + it.take(15) }
-    val state = rememberLazyListState()
+    val entryGame = remember { selected.id }
+    val state = key(entryGame) { rememberLazyListState(initialFirstVisibleItemIndex = row.indexOfFirst { it.id == selected.id }.coerceAtLeast(0)) }
     LaunchedEffect(selected.id) {
         val index = row.indexOfFirst { it.id == selected.id }
         if (index >= 0 && state.layoutInfo.visibleItemsInfo.none { it.key == selected.id }) state.scrollToItem(index)
     }
     LazyRow(
         state = state,
-        modifier = Modifier.fillMaxWidth().testTag("home-games").height(tile * 1.2f + 16.dp).focusGroup(),
-        contentPadding = PaddingValues(horizontal = HomeEdge, vertical = 8.dp),
+        modifier = Modifier.fillMaxWidth().testTag("home-games").height(tile * 1.2f + 16.dp)
+            .focusProperties { onEnter = { runCatching { requesters[selected.id]?.requestFocus() } } }.focusGroup(),
+        contentPadding = PaddingValues(
+            start = HomeEdge + edgePadding.calculateStartPadding(direction),
+            end = HomeEdge + edgePadding.calculateEndPadding(direction),
+            top = 8.dp,
+            bottom = 8.dp,
+        ),
         horizontalArrangement = Arrangement.spacedBy(14.dp),
         verticalAlignment = Alignment.Top,
     ) {

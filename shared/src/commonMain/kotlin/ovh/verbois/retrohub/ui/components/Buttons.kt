@@ -41,6 +41,7 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
@@ -75,8 +76,7 @@ fun PrimaryButton(
         modifier
             .heightIn(min = height)
             .consoleFocus(Pill, onClick, enabled = enabled && !loading, focusScale = 1.05f)
-            .clip(Pill)
-            .background(if (enabled) Palette.Accent else Palette.Accent.copy(alpha = 0.45f))
+            .consoleButtonSurface(Pill, primary = true, enabled = enabled)
             .then(if (fraction != null) Modifier.drawBehind { drawProgress(fraction, stripes, glow) } else Modifier),
         contentAlignment = Alignment.Center,
     ) {
@@ -150,9 +150,7 @@ fun GlassButton(
         modifier
             .heightIn(min = height)
             .consoleFocus(Pill, onClick, enabled = enabled)
-            .clip(Pill)
-            .background(Palette.GlassLight)
-            .border(1.dp, Palette.Line, Pill)
+            .consoleButtonSurface(Pill, enabled = enabled)
             .padding(horizontal = 20.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterHorizontally),
@@ -183,14 +181,15 @@ fun RoundButton(
     Box(
         modifier
             .size(size)
-            .semantics { contentDescription = label }
+            .semantics {
+                contentDescription = label
+                this.selected = selected
+            }
             .consoleFocus(CircleShape, onClick, focusScale = 1.08f)
-            .clip(CircleShape)
-            .background(if (selected) Palette.Text else background)
-            .border(1.dp, Palette.Line, CircleShape),
+            .consoleButtonSurface(CircleShape, primary = selected, base = background.takeIf { !selected && it != Palette.GlassLight }),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(icon, null, Modifier.size(size * 0.42f), tint = if (selected) Palette.Background else tint)
+        Icon(icon, null, Modifier.size(size * 0.42f), tint = if (selected) Palette.OnAccent else tint)
     }
 }
 
@@ -201,9 +200,7 @@ fun FilterChip(text: String, selected: Boolean, onClick: () -> Unit, modifier: M
         modifier
             .heightIn(min = 48.dp)
             .consoleFocus(Pill, onClick)
-            .clip(Pill)
-            .background(if (selected) Palette.Text else Palette.GlassLight)
-            .border(1.dp, if (selected) Palette.Text else Palette.Line, Pill)
+            .consoleButtonSurface(Pill, primary = selected)
             .padding(PaddingValues(horizontal = 16.dp, vertical = 10.dp)),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -212,7 +209,7 @@ fun FilterChip(text: String, selected: Boolean, onClick: () -> Unit, modifier: M
         Text(
             text,
             style = MaterialTheme.typography.labelLarge.copy(fontSize = MaterialTheme.typography.labelMedium.fontSize),
-            color = if (selected) Palette.Background else Palette.Text,
+            color = if (selected) Palette.OnAccent else Palette.Text,
         )
     }
 }

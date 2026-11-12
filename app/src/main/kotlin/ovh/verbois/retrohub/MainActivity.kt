@@ -109,6 +109,9 @@ class MainActivity : ComponentActivity() {
         if (button != null && ui != null && ui.container.account.auth.value is AuthState.SignedIn &&
             ui.container.settings.settings.value.setupDone
         ) {
+            if (event.action == KeyEvent.ACTION_DOWN && window.decorView.isInTouchMode) window.decorView.requestFocusFromTouch()
+            // Focused controls and modal windows get the first chance to handle shortcuts.
+            if (super.dispatchKeyEvent(event)) return true
             if (event.action == KeyEvent.ACTION_UP && event.repeatCount == 0) {
                 ui.onButton(button)
             }

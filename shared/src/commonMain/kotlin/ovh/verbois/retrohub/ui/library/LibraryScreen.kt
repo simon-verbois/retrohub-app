@@ -14,15 +14,11 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -48,7 +44,6 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -60,18 +55,19 @@ import ovh.verbois.retrohub.library.Game
 import ovh.verbois.retrohub.library.StorageUsage
 import ovh.verbois.retrohub.ui.Backdrop
 import ovh.verbois.retrohub.ui.UiController
+import ovh.verbois.retrohub.ui.components.AutoFocus
 import ovh.verbois.retrohub.ui.components.CenteredMessage
 import ovh.verbois.retrohub.ui.components.ConfirmDialog
-import ovh.verbois.retrohub.ui.components.GameArt
+import ovh.verbois.retrohub.ui.components.ConsoleMenuItem
 import ovh.verbois.retrohub.ui.components.GlassPanel
 import ovh.verbois.retrohub.ui.components.LocalNavigationFocus
 import ovh.verbois.retrohub.ui.components.ProgressLine
 import ovh.verbois.retrohub.ui.components.RoundButton
 import ovh.verbois.retrohub.ui.components.consoleFocus
+import ovh.verbois.retrohub.ui.components.controllerDialog
 import ovh.verbois.retrohub.ui.home.GameCard
 import ovh.verbois.retrohub.ui.icons.Lucide
 import ovh.verbois.retrohub.ui.theme.Palette
-import ovh.verbois.retrohub.ui.theme.consoleColor
 
 enum class Sort(val label: String) {
     RECENT("Récents"),
@@ -206,7 +202,7 @@ fun LibraryScreen(controller: UiController, console: String?, favoritesOnly: Boo
     }
 }
 
-/** Jeux présents sur le téléphone, espace utilisé et suppression (les sauvegardes restent). */
+/** Downloaded games use the same cover cards as the library, with storage first. */
 @Composable
 fun DownloadsScreen(controller: UiController) {
     val container = controller.container
@@ -215,82 +211,108 @@ fun DownloadsScreen(controller: UiController) {
     val scope = rememberCoroutineScope()
     var usage by remember { mutableStateOf<StorageUsage?>(null) }
     var confirm by remember { mutableStateOf<Game?>(null) }
+    var menuGame by remember { mutableStateOf<String?>(null) }
     val tree = LocalNavigationFocus.current
     val first = remember { FocusRequester() }
     val downloading = remember(downloads) { downloads.keys }
     val local = remember(games, downloading) { games.filter { it.downloaded || it.playGameId in downloading }.sortedBy { it.sortTitle } }
-    SideEffect { tree.content = if (local.isEmpty()) tree.header else first }
-    ovh.verbois.retrohub.ui.components.AutoFocus(if (local.isEmpty()) tree.header else first)
-    LaunchedEffect(local.size) { usage = container.downloads.usage() }
+    val grid = rememberLazyGridState()
+    SideEffect { tree.content = first }
+    ovh.verbois.retrohub.ui.components.AutoFocus(first)
+    LaunchedEffect(local) { usage = container.downloads.usage() }
     LaunchedEffect(Unit) { controller.backdrop = Backdrop(null, local.firstOrNull()?.console) }
-    LazyColumn(
-        Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = 24.dp, end = 24.dp, bottom = 24.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        item { usage?.let { StorageSummary(it) } }
-        if (local.isEmpty()) {
-            item {
-                Text(
-                    "Aucun jeu sur ce téléphone.",
-                    Modifier.padding(vertical = 24.dp),
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = Palette.TextDim,
-                )
-            }
-        }
-        items(local, key = { it.id }) { game ->
-            val state = downloads[game.playGameId]
-            Row(
-                Modifier.fillMaxWidth().then(
-                    if (game.id ==
-                        local.firstOrNull()?.id
-                    ) {
-                        Modifier.focusRequester(first).focusProperties { up = tree.header }
-                    } else {
-                        Modifier
+    androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize().padding(horizontal = 18.dp)) {
+        val minimum = if (controller.portrait) 116.dp else 128.dp
+        val columns = (maxWidth / (minimum + 12.dp)).toInt().coerceAtLeast(1)
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(columns),
+            state = grid,
+            modifier = Modifier.fillMaxSize().focusGroup().testTag("downloads-grid"),
+            contentPadding = PaddingValues(6.dp, 8.dp, 6.dp, 24.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            item(key = "storage") {
+                StorageCard(
+                    usage,
+                    {
+                        controller.nav.go(ovh.verbois.retrohub.ui.nav.Route.Settings(ovh.verbois.retrohub.ui.nav.SettingsPage.STORAGE))
+                    },
+                    Modifier.focusRequester(first).focusProperties {
+                        up = tree.header
+                        left = FocusRequester.Cancel
+                        if (local.isEmpty()) right = FocusRequester.Cancel
+                        if (local.size < columns) down = FocusRequester.Cancel
                     },
                 )
-                    .clip(RoundedCornerShape(18.dp)).background(Palette.Glass).consoleFocus(RoundedCornerShape(18.dp), {
-                        controller.showGame(game.id)
-                    }, focusScale = 1.01f).padding(12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(14.dp),
-            ) {
-                GameArt(
-                    game.remote.coverUrl,
-                    game.console,
-                    game.title,
-                    Modifier.width(64.dp).aspectRatio(1f).clip(RoundedCornerShape(12.dp)),
-                    showTitleOnFallback = false,
-                    muted = !game.downloaded,
-                )
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(game.title, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.size(7.dp).clip(RoundedCornerShape(50)).background(consoleColor(game.console)))
-                        Text(
-                            Consoles.name(game.console) + (game.local?.let { " · ${formatBytes(it.size)}" } ?: ""),
-                            style = MaterialTheme.typography.bodySmall,
-                        )
-                        if (game.updateAvailable) Text("· Mise à jour disponible", style = MaterialTheme.typography.bodySmall, color = Palette.Accent)
+            }
+            itemsIndexed(local, key = { _, game -> game.id }) { index, game ->
+                val position = index + 1
+                val state = downloads[game.playGameId]
+                val menuFocus = remember { FocusRequester() }
+                Box {
+                    GameCard(
+                        game,
+                        { controller.showGame(game.id) },
+                        Modifier.testTag("download-game-${game.id}").focusProperties {
+                            if (position < columns) up = tree.header
+                            if (position % columns == 0) left = FocusRequester.Cancel
+                            if (position % columns == columns - 1 || index == local.lastIndex) right = FocusRequester.Cancel
+                            if (position + columns > local.size) down = FocusRequester.Cancel
+                        },
+                        download = state,
+                        onLongClick = { menuGame = game.id },
+                    )
+                    androidx.compose.material3.DropdownMenu(
+                        expanded = menuGame == game.id,
+                        onDismissRequest = { menuGame = null },
+                        modifier = Modifier.focusRequester(menuFocus).focusGroup().controllerDialog({ menuGame = null }, dismissOnStart = true),
+                        containerColor = Palette.Deep,
+                        shape = RoundedCornerShape(16.dp),
+                    ) {
+                        if (state is ovh.verbois.retrohub.library.DownloadState.Running) {
+                            ConsoleMenuItem(
+                                "Annuler le téléchargement",
+                                icon = Lucide.X,
+                                onClick = {
+                                    menuGame = null
+                                    container.downloads.cancel(game.playGameId)
+                                },
+                            )
+                        }
+                        if (state is ovh.verbois.retrohub.library.DownloadState.Failed) {
+                            if (state.retryable) {
+                                ConsoleMenuItem(
+                                    "Réessayer",
+                                    icon = Lucide.RefreshCw,
+                                    onClick = {
+                                        menuGame = null
+                                        container.downloads.start(game)
+                                    },
+                                )
+                            }
+                            ConsoleMenuItem(
+                                "Annuler le téléchargement",
+                                icon = Lucide.X,
+                                onClick = {
+                                    menuGame = null
+                                    container.downloads.cancel(game.playGameId)
+                                },
+                            )
+                        }
+                        if (game.downloaded && state !is ovh.verbois.retrohub.library.DownloadState.Running) {
+                            ConsoleMenuItem(
+                                "Supprimer du téléphone",
+                                icon = Lucide.Trash2,
+                                tint = Palette.Danger,
+                                onClick = {
+                                    menuGame = null
+                                    confirm = game
+                                },
+                            )
+                        }
+                        if (menuGame == game.id) AutoFocus(menuFocus)
                     }
-                    when (state) {
-                        is ovh.verbois.retrohub.library.DownloadState.Running -> ProgressLine(state.fraction, Modifier.fillMaxWidth().padding(top = 4.dp))
-
-                        is ovh.verbois.retrohub.library.DownloadState.Failed -> Text(
-                            state.message,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Palette.Warning,
-                        )
-
-                        null -> {}
-                    }
-                }
-                if (state is ovh.verbois.retrohub.library.DownloadState.Running) {
-                    RoundButton(Lucide.X, "Annuler le téléchargement", { container.downloads.cancel(game.playGameId) }, size = 44.dp)
-                } else if (game.downloaded) {
-                    RoundButton(Lucide.Trash2, "Supprimer ${game.title} du téléphone", { confirm = game }, size = 44.dp, tint = Palette.Danger)
                 }
             }
         }
@@ -311,6 +333,34 @@ fun DownloadsScreen(controller: UiController) {
             onDismiss = { confirm = null },
             destructive = true,
         )
+    }
+}
+
+@Composable
+private fun StorageCard(usage: StorageUsage?, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val shape = RoundedCornerShape(18.dp)
+    Column(modifier.testTag("downloads-storage").consoleFocus(shape, onClick), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Box(Modifier.fillMaxWidth().aspectRatio(1f).clip(shape).background(Palette.Glass)) {
+            Column(
+                Modifier.align(Alignment.Center).padding(12.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Icon(Lucide.HardDrive, null, Modifier.size(32.dp), tint = Palette.Text)
+                Text(usage?.let { formatBytes(it.total) } ?: "…", style = MaterialTheme.typography.headlineMedium, color = Palette.Text, maxLines = 1)
+                Text("utilisés", style = MaterialTheme.typography.bodySmall)
+            }
+            usage?.let {
+                ProgressLine(
+                    (it.total.toDouble() / (it.total + it.free).coerceAtLeast(1)).toFloat(),
+                    Modifier.align(Alignment.BottomCenter).padding(12.dp).fillMaxWidth(),
+                )
+            }
+        }
+        Column(Modifier.padding(horizontal = 4.dp)) {
+            Text("Stockage", style = MaterialTheme.typography.titleMedium)
+            Text(usage?.let { "${formatBytes(it.free)} libres" } ?: "…", style = MaterialTheme.typography.bodySmall, maxLines = 1)
+        }
     }
 }
 
@@ -358,11 +408,13 @@ private fun FilterMenu(
     modifier: Modifier = Modifier,
 ) {
     var open by remember { mutableStateOf(false) }
+    val menuFocus = remember { FocusRequester() }
     Box {
         RoundButton(Lucide.SlidersHorizontal, "Filtrer et trier", { open = true }, modifier, size = 48.dp, selected = filter != null || sort != Sort.RECENT)
         androidx.compose.material3.DropdownMenu(
             expanded = open,
             onDismissRequest = { open = false },
+            modifier = Modifier.focusRequester(menuFocus).focusGroup().controllerDialog({ open = false }, dismissOnStart = true),
             containerColor = Palette.Deep,
             shape = androidx.compose.foundation.shape.RoundedCornerShape(18.dp),
         ) {
@@ -384,6 +436,7 @@ private fun FilterMenu(
                     }
                 }
             }
+            if (open) AutoFocus(menuFocus)
         }
     }
 }

@@ -34,6 +34,7 @@ import ovh.verbois.retrohub.emulation.Orientation
 import ovh.verbois.retrohub.emulation.PadKey
 import ovh.verbois.retrohub.emulation.Region
 import ovh.verbois.retrohub.emulation.Shader
+import ovh.verbois.retrohub.emulation.TouchPreset
 import ovh.verbois.retrohub.resources.Res
 import ovh.verbois.retrohub.resources.console_analog_description
 import ovh.verbois.retrohub.resources.console_aspect_description
@@ -250,6 +251,15 @@ internal fun ConsolePage(controller: UiController, id: String) {
     }
     SectionLabel("Commandes")
     SettingsGroup {
+        ChoiceRow(
+            "Disposition tactile",
+            listOf<TouchPreset?>(null) + TouchPreset.entries,
+            console.touchPreset,
+            { it?.label ?: "Selon l’appareil (${settings.touchPreset.label})" },
+            { value -> update { it.copy(touchPreset = value) } },
+            icon = Lucide.Hand,
+        )
+        GroupDivider()
         if (CoreOptions.supportsAnalog(id)) {
             SwitchRow("Manette analogique (DualShock)", console.analog == true, { v ->
                 update { it.copy(analog = v) }

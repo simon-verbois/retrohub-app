@@ -3,8 +3,12 @@ package ovh.verbois.retrohub.e2e
 import android.graphics.Bitmap
 import android.view.InputDevice
 import android.view.KeyEvent
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assertIsFocused
+import androidx.compose.ui.test.assertIsNotSelected
+import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
@@ -14,6 +18,7 @@ import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.test.performScrollTo
@@ -37,7 +42,10 @@ import ovh.verbois.retrohub.MainActivity
 import ovh.verbois.retrohub.RetroHubApp
 import ovh.verbois.retrohub.account.AuthState
 import ovh.verbois.retrohub.api.FEATURE_LIBRARY_EVENTS
+import ovh.verbois.retrohub.emulation.ThemeMode
+import ovh.verbois.retrohub.emulation.TouchPreset
 import ovh.verbois.retrohub.game.GameActivity
+import ovh.verbois.retrohub.ui.theme.Palette
 import java.io.File
 
 /**
@@ -82,7 +90,21 @@ class EndToEndTest {
         waitUntil(30_000, "jeu dans le catalogue") { container.library.games.value.any { it.title == title } }
         waitText("Téléchargés")
         screenshot("home-landscape")
-        click("Catalogue")
+        pad(KeyEvent.KEYCODE_BUTTON_R1)
+        waitText("Aucun favori pour l’instant")
+        pad(KeyEvent.KEYCODE_BUTTON_R1)
+        rule.onNodeWithTag("downloads-storage").assertIsFocused()
+        pad(KeyEvent.KEYCODE_BUTTON_R1)
+        waitFocused("Filtres")
+        pad(KeyEvent.KEYCODE_BUTTON_R1)
+        rule.onNodeWithTag("header-search-field").assertDoesNotExist()
+        pad(KeyEvent.KEYCODE_BUTTON_A)
+        waitFocused("Console")
+        pad(KeyEvent.KEYCODE_BUTTON_A)
+        pad(KeyEvent.KEYCODE_BUTTON_B)
+        rule.onNodeWithText("Console").assertIsFocused()
+        pad(KeyEvent.KEYCODE_BUTTON_B)
+        waitFocused("Filtres")
         waitText("Chercher dans le catalogue")
         rule.onNode(hasSetTextAction()).performTextInput(title)
         rule.onNode(hasSetTextAction()).performImeAction()
@@ -129,6 +151,16 @@ class EndToEndTest {
         search.performTextInput(title)
         waitText(title)
         rule.onAllNodesWithText(title, useUnmergedTree = true).fetchSemanticsNodes()
+        rule.waitUntil(10_000) { rule.onAllNodesWithTag("search-result-$gameId").fetchSemanticsNodes().isNotEmpty() }
+        screenshot("search-dropdown-landscape")
+        pad(KeyEvent.KEYCODE_DPAD_DOWN)
+        rule.onNodeWithTag("search-result-$gameId").assertIsFocused()
+        pad(KeyEvent.KEYCODE_BUTTON_B)
+        rule.onNodeWithTag("header-search-field").assertDoesNotExist()
+        rule.onNodeWithText("Accueil").assertIsFocused()
+        pad(KeyEvent.KEYCODE_BUTTON_Y)
+        rule.onNode(hasSetTextAction()).performTextInput(title)
+        rule.waitUntil(10_000) { rule.onAllNodesWithTag("search-result-$gameId").fetchSemanticsNodes().isNotEmpty() }
         search.performImeAction()
 
         // Le jeu est choisi sur l’accueil ; toucher sa tuile lance l’action : ici le téléchargement,
@@ -145,12 +177,48 @@ class EndToEndTest {
         val expected = backend.game(gameId)["rom"]!!.jsonObject["sha256"]!!.jsonPrimitive.content
         assertEquals(expected, Backend.sha256(File(local.path).readBytes()))
         assertEquals(Backend.sha256(rom), expected)
-        screenshot("selected-landscape")
-        pad(KeyEvent.KEYCODE_BUTTON_START)
-        waitText("Paramètres de l’application")
-        screenshot("profile-menu-landscape")
+        rule.onNodeWithTag("home-favorite").performClick()
+        waitUntil(10_000, "favori enregistré") { backend.game(gameId)["favorite"]!!.jsonPrimitive.content == "true" }
+        rule.onNodeWithTag("home-favorite").assertIsSelected()
+        click("Favoris")
+        rule.waitUntil(10_000) { rule.onAllNodesWithTag("library-game-$gameId").fetchSemanticsNodes().isNotEmpty() }
+        rule.onNodeWithTag("library-game-$gameId").performClick()
+        rule.onNodeWithTag("home-favorite").assertIsSelected().performClick()
+        waitUntil(10_000, "favori retiré") { backend.game(gameId)["favorite"]!!.jsonPrimitive.content == "false" }
+        rule.onNodeWithTag("home-favorite").assertIsNotSelected()
+        click("Téléchargés")
+        rule.onNodeWithTag("downloads-storage").assertExists()
+        rule.onNodeWithTag("download-game-$gameId").assertExists()
+        screenshot("downloads-landscape")
+        pad(KeyEvent.KEYCODE_DPAD_RIGHT)
+        rule.onNodeWithTag("download-game-$gameId").assertIsFocused()
+        pad(KeyEvent.KEYCODE_BUTTON_X)
+        waitFocused("Supprimer du téléphone")
+        pad(KeyEvent.KEYCODE_BUTTON_A)
+        waitFocused("Annuler")
         pad(KeyEvent.KEYCODE_BUTTON_B)
-        waitGone("Paramètres de l’application")
+        rule.onNodeWithTag("download-game-$gameId").assertIsFocused()
+        rule.onNodeWithTag("download-game-$gameId").performClick()
+        screenshot("selected-landscape")
+        pad(KeyEvent.KEYCODE_BUTTON_SELECT)
+        waitFocused("Retour")
+        waitText("Paramètres")
+        pad(KeyEvent.KEYCODE_BUTTON_B)
+        waitText("Jouer")
+        instrumentation.setInTouchMode(true)
+        pad(KeyEvent.KEYCODE_BUTTON_START)
+        waitFocused("Paramètres")
+        screenshot("profile-menu-landscape")
+        val originalTheme = container.settings.settings.value.theme
+        for (mode in listOf(ThemeMode.LIGHT, ThemeMode.DARK)) {
+            runBlocking { container.settings.updateNow { it.copy(theme = mode) } }
+            rule.waitUntil(5_000) { Palette.scheme.dark == (mode == ThemeMode.DARK) }
+            screenshot("profile-menu-${mode.name.lowercase()}-landscape")
+        }
+        runBlocking { container.settings.updateNow { it.copy(theme = originalTheme) } }
+        rule.waitForIdle()
+        pad(KeyEvent.KEYCODE_BUTTON_B)
+        waitGone("Mon compte")
         clickDescription("Options du jeu")
         click("Options du jeu")
         waitText("Rotation de l’image")
@@ -174,16 +242,26 @@ class EndToEndTest {
         device.setOrientationLandscape()
         Thread.sleep(11_000)
         screenshot("game-landscape")
+        checkTouchPresets()
         // Rotation, advanced options and background saves also run against the optimized build.
         device.setOrientationNatural()
         waitFrames(180)
         screenshot("game-portrait")
         device.setOrientationLandscape()
         pad(KeyEvent.KEYCODE_MENU)
-        click("Options de l’émulateur")
-        waitText("Retour")
-        click("Retour")
-        click("Reprendre")
+        waitFocused("Reprendre")
+        focusDownTo("Image et écrans")
+        pad(KeyEvent.KEYCODE_BUTTON_A)
+        waitFocused("Retour")
+        pad(KeyEvent.KEYCODE_BUTTON_B)
+        waitFocused("Reprendre")
+        focusDownTo("Options de l’émulateur")
+        pad(KeyEvent.KEYCODE_BUTTON_A)
+        waitFocused("Retour")
+        pad(KeyEvent.KEYCODE_BUTTON_B)
+        waitFocused("Reprendre")
+        pad(KeyEvent.KEYCODE_BUTTON_B)
+        waitFrames((GameActivity.current?.get()?.frames?.value ?: 0) + 10)
         val gameIntent = android.content.Intent(GameActivity.current!!.get()!!.intent)
         device.pressHome()
         waitUntil(15_000, "sauvegarde au passage en arrière-plan") {
@@ -332,7 +410,7 @@ class EndToEndTest {
     private fun checkSettingsAndBackGesture() {
         waitText("Téléchargés")
         pad(KeyEvent.KEYCODE_BUTTON_START)
-        click("Paramètres de l’application")
+        click("Paramètres")
         click("Réglages des consoles")
         click("Nintendo DS")
         device.setOrientationNatural()
@@ -350,6 +428,10 @@ class EndToEndTest {
         click("Utiliser tout l’écran")
         assertTrue(container.settings.settings.value.useDisplayCutout)
         device.pressBack()
+        click("Commandes")
+        rule.onNodeWithText("Compacte").performScrollTo()
+        screenshot("touch-presets-settings-portrait")
+        device.pressBack()
         device.pressBack()
         click("Accueil")
         waitText("Téléchargés")
@@ -363,7 +445,7 @@ class EndToEndTest {
         val target = catalogue["avatars"]!!.jsonArray.map { it.jsonObject }.first { it["id"]!!.jsonPrimitive.content != defaultId }
         val targetId = target["id"]!!.jsonPrimitive.content
         pad(KeyEvent.KEYCODE_BUTTON_START)
-        click("Compte RetroHub")
+        click("Mon compte")
         click("Photo de profil")
         waitText("Par défaut")
         rule.onNodeWithTag("account-avatar-$targetId").performScrollTo().performClick()
@@ -384,22 +466,61 @@ class EndToEndTest {
     }
 
     private fun saveStateInSlot(slot: Int) {
-        clickDescription("Menu du jeu")
-        waitText("Sauvegarder la partie")
-        click("Sauvegarder la partie")
+        pad(KeyEvent.KEYCODE_MENU)
+        waitFocused("Reprendre")
+        pad(KeyEvent.KEYCODE_DPAD_DOWN)
+        pad(KeyEvent.KEYCODE_BUTTON_A)
         waitText("Emplacement $slot")
-        click("Emplacement $slot")
+        waitFocused("Retour")
+        pad(KeyEvent.KEYCODE_DPAD_DOWN)
+        repeat(slot - 1) { pad(KeyEvent.KEYCODE_DPAD_RIGHT) }
+        rule.onNodeWithText("Emplacement $slot").assertIsFocused()
+        pad(KeyEvent.KEYCODE_BUTTON_A)
         waitGone("Choisissez un emplacement")
         Thread.sleep(500)
     }
 
+    private fun checkTouchPresets() {
+        for (preset in listOf(TouchPreset.OVERLAY, TouchPreset.COMPACT, TouchPreset.COMFORT)) {
+            val current = container.settings.settings.value.console("nes").touchPreset ?: container.settings.settings.value.touchPreset
+            pad(KeyEvent.KEYCODE_MENU)
+            waitFocused("Reprendre")
+            focusDownTo("Image et écrans")
+            pad(KeyEvent.KEYCODE_BUTTON_A)
+            waitFocused("Retour")
+            focusDownTo("Disposition tactile")
+            pad(KeyEvent.KEYCODE_BUTTON_A)
+            val delta = preset.ordinal - current.ordinal
+            repeat(kotlin.math.abs(delta)) { pad(if (delta > 0) KeyEvent.KEYCODE_DPAD_DOWN else KeyEvent.KEYCODE_DPAD_UP) }
+            pad(KeyEvent.KEYCODE_BUTTON_A)
+            rule.waitUntil(5_000) { container.settings.settings.value.console("nes").touchPreset == preset }
+            pad(KeyEvent.KEYCODE_BUTTON_B)
+            waitFocused("Reprendre")
+            pad(KeyEvent.KEYCODE_BUTTON_B)
+            waitFrames((GameActivity.current?.get()?.frames?.value ?: 0) + 10)
+            val dock = rule.onNodeWithTag("game-utility-dock", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+            assertTrue(dock.left > device.displayWidth * 0.7f && dock.top < device.displayHeight * 0.15f)
+            screenshot("touch-${preset.name.lowercase()}-landscape")
+        }
+    }
+
     private fun quitGame() {
-        clickDescription("Menu du jeu")
-        waitText("Quitter")
-        click("Quitter")
+        pad(KeyEvent.KEYCODE_MENU)
+        waitFocused("Reprendre")
+        focusDownTo("Quitter")
+        pad(KeyEvent.KEYCODE_BUTTON_A)
         // Confirmation : le bouton de la fenêtre est le dernier « Quitter » affiché.
         waitText("Quitter la partie ?")
-        rule.onAllNodesWithText("Quitter").fetchSemanticsNodes().size.let { count -> rule.onAllNodesWithText("Quitter")[count - 1].performClick() }
+        pad(KeyEvent.KEYCODE_BUTTON_B)
+        waitGone("Quitter la partie ?")
+        waitFocused("Quitter")
+        pad(KeyEvent.KEYCODE_BUTTON_A)
+        waitText("Quitter la partie ?")
+        rule.waitUntil(5_000) {
+            val nodes = rule.onAllNodesWithText("Quitter").fetchSemanticsNodes()
+            nodes.lastOrNull()?.let { runCatching { it.config[SemanticsProperties.Focused] }.getOrDefault(false) } == true
+        }
+        pad(KeyEvent.KEYCODE_BUTTON_A)
         waitUntil(20_000, "fin de la partie") { GameActivity.current?.get()?.isDestroyed != false }
         rule.waitForIdle()
     }
@@ -457,6 +578,22 @@ class EndToEndTest {
         rule.waitUntil(15_000) { rule.onAllNodesWithContentDescription(description).fetchSemanticsNodes().isNotEmpty() }
         rule.onAllNodesWithContentDescription(description)[0].performClick()
         rule.waitForIdle()
+    }
+
+    private fun waitFocused(text: String) {
+        rule.waitUntil(5_000) {
+            runCatching {
+                rule.onNode(hasText(text) or hasContentDescription(text)).fetchSemanticsNode().config[SemanticsProperties.Focused]
+            }.getOrDefault(false)
+        }
+    }
+
+    private fun focusDownTo(text: String) {
+        repeat(14) {
+            if (runCatching { rule.onNodeWithText(text).fetchSemanticsNode().config[SemanticsProperties.Focused] }.getOrDefault(false)) return
+            pad(KeyEvent.KEYCODE_DPAD_DOWN)
+        }
+        rule.onNodeWithText(text).assertIsFocused()
     }
 
     private fun waitUntil(timeout: Long, what: String, condition: () -> Boolean) {

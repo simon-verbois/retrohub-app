@@ -32,6 +32,7 @@ fun ActionButtons(
     secondaryModifier: Modifier = Modifier,
     entryFocus: FocusRequester? = null,
     parentFocus: FocusRequester? = null,
+    primaryModifier: Modifier = Modifier,
 ) {
     val primaryFocus = remember { FocusRequester() }
     val secondaryFocus = remember { FocusRequester() }
@@ -67,17 +68,25 @@ fun ActionButtons(
         } else {
             Modifier
         }
-        val primaryModifier = primaryNavigation.then(if (entryFocus != null && !horizontal) Modifier.focusRequester(entryFocus) else Modifier)
+        val mainModifier = primaryModifier.then(primaryNavigation).then(
+            if (entryFocus != null &&
+                !horizontal
+            ) {
+                Modifier.focusRequester(entryFocus)
+            } else {
+                Modifier
+            },
+        )
         val otherModifier = secondaryModifier.then(secondaryNavigation)
             .then(if (entryFocus != null && horizontal) Modifier.focusRequester(entryFocus) else Modifier)
         if (horizontal && secondary != null) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
                 GlassButton(secondary, onSecondary, otherModifier, icon = secondaryIcon)
-                PrimaryButton(primary, onPrimary, Modifier.weight(1f).then(primaryModifier), icon = primaryIcon, loading = loading)
+                PrimaryButton(primary, onPrimary, Modifier.weight(1f).then(mainModifier), icon = primaryIcon, loading = loading)
             }
         } else {
             Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                PrimaryButton(primary, onPrimary, Modifier.fillMaxWidth().then(primaryModifier), icon = primaryIcon, loading = loading)
+                PrimaryButton(primary, onPrimary, Modifier.fillMaxWidth().then(mainModifier), icon = primaryIcon, loading = loading)
                 if (secondary != null) GlassButton(secondary, onSecondary, otherModifier, icon = secondaryIcon)
             }
         }

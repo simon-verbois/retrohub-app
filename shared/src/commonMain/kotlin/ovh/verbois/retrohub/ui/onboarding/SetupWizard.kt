@@ -44,6 +44,11 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
@@ -113,7 +118,14 @@ fun SetupWizard(container: AppContainer, username: String) {
     val steps = 4
     BoxWithConstraints(
         Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Palette.SkyTop, Palette.SkyLow)))
-            .windowInsetsPadding(WindowInsets.safeDrawing),
+            .windowInsetsPadding(WindowInsets.safeDrawing).onKeyEvent { event ->
+                if (step > 0 && event.key in listOf(Key.ButtonB, Key.Escape)) {
+                    if (event.type == KeyEventType.KeyUp) step--
+                    true
+                } else {
+                    false
+                }
+            },
         contentAlignment = Alignment.Center,
     ) {
         val compact = maxHeight < 480.dp
