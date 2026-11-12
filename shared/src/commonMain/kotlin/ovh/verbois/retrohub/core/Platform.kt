@@ -16,6 +16,12 @@ interface TokenVault {
 
 enum class DeviceClass { MODEST, CAPABLE, POWERFUL }
 
+data class BatteryLevel(val percent: Int, val charging: Boolean = false)
+
+data class ControllerBattery(val name: String, val level: BatteryLevel)
+
+data class PowerStatus(val phone: BatteryLevel? = null, val controllers: List<ControllerBattery> = emptyList())
+
 /** Ce que chaque plateforme fournit au code partagé. */
 interface Platform {
     /** « android » ou « ios », envoyé au serveur avec le nom de l’appareil. */
@@ -74,6 +80,9 @@ interface Platform {
     fun playClick()
 
     fun batteryLow(): Boolean
+
+    /** Only batteries and levels actually reported by the operating system. */
+    fun powerStatus(): PowerStatus = PowerStatus()
 
     /** Partage d’un rapport (journal de l’application et état) pour signaler un problème. */
     fun shareLogs(summary: String)

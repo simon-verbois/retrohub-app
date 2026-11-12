@@ -18,6 +18,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import ovh.verbois.retrohub.emulation.CoreVariable
 import ovh.verbois.retrohub.emulation.EmulatorEngine
+import ovh.verbois.retrohub.emulation.GameRotation
 import ovh.verbois.retrohub.emulation.NormRect
 import ovh.verbois.retrohub.emulation.PadKey
 import ovh.verbois.retrohub.emulation.Shader
@@ -26,7 +27,7 @@ import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
 /** Le moteur LibretroDroid derrière l’interface partagée [EmulatorEngine]. */
-class LibretroEngine(private val view: GLRetroView, private val restoreOnReset: Boolean = false) : EmulatorEngine {
+class LibretroEngine(private val view: GLRetroView, private val corePath: String, private val restoreOnReset: Boolean = false) : EmulatorEngine {
     private val frameCount = MutableStateFlow(0L)
     override val frames: StateFlow<Long> = frameCount
     private val errorFlow = MutableSharedFlow<String>(extraBufferCapacity = 4)
@@ -143,6 +144,16 @@ class LibretroEngine(private val view: GLRetroView, private val restoreOnReset: 
 
     override fun setViewport(rect: NormRect) {
         view.queueEvent { LibretroDroid.setViewport(rect.left, rect.top, rect.width, rect.height) }
+    }
+
+    override fun setRotation(rotation: GameRotation, aspect: Float) {
+        view.queueEvent {
+            if (NativeDisplay.configure(corePath, rotation.degrees, aspect)) {
+                LibretroDroid.refreshAspectRatio()
+            } else {
+                errorFlow.tryEmit("L’image n’a pas pu être tournée. Réessayez depuis le menu du jeu.")
+            }
+        }
     }
 
     override fun setOptions(options: Map<String, String>) {

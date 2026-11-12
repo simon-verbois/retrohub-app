@@ -3,6 +3,7 @@ package ovh.verbois.retrohub.game
 import kotlinx.serialization.Serializable
 import ovh.verbois.retrohub.emulation.ControlPlacement
 import ovh.verbois.retrohub.emulation.DsLayout
+import ovh.verbois.retrohub.emulation.GameRotation
 import ovh.verbois.retrohub.emulation.MenuShortcut
 import ovh.verbois.retrohub.emulation.Orientation
 import ovh.verbois.retrohub.emulation.PortraitPosition
@@ -28,6 +29,7 @@ data class LaunchPlan(
     val shader: Shader = Shader.SHARP,
     val dsLayoutPortrait: DsLayout = DsLayout.STACKED,
     val dsLayoutLandscape: DsLayout = DsLayout.SIDE_BY_SIDE,
+    val dsSwapScreens: Boolean = false,
     val fastForwardSpeed: Int = 3,
     val autoSaveSeconds: Int = 60,
     val audio: Boolean = true,
@@ -41,6 +43,8 @@ data class LaunchPlan(
     val gameCode: String? = null,
     val dolphinUserDir: String? = null,
     val integerScale: Boolean = false,
+    val rotation: GameRotation = GameRotation.NORMAL,
+    val displayAspect: Float? = null,
     val portraitPosition: PortraitPosition = PortraitPosition.TOP,
     val useDisplayCutout: Boolean = false,
     val orientation: Orientation = Orientation.AUTO,

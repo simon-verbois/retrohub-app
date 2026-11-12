@@ -17,6 +17,10 @@ import org.junit.runner.RunWith
 import ovh.verbois.retrohub.RetroHubApp
 import ovh.verbois.retrohub.api.ApiJson
 import ovh.verbois.retrohub.core.sha256
+import ovh.verbois.retrohub.emulation.DsLayout
+import ovh.verbois.retrohub.emulation.GameLayouts
+import ovh.verbois.retrohub.emulation.GameRotation
+import ovh.verbois.retrohub.emulation.Orientation
 import java.io.File
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -28,6 +32,96 @@ class DsLifecycleTest {
     private val context get() = instrumentation.targetContext
     private val container get() = (context.applicationContext as RetroHubApp).container
     private val device = UiDevice.getInstance(instrumentation)
+
+    @Test
+    fun dsImageRotatesWithoutCroppingOrChangingItsProportions() {
+        device.setOrientationNatural()
+        val dir = File(context.filesDir, "ds-rotation-test").apply { mkdirs() }
+        val rom = File(dir, "screen.nds").apply { writeBytes(cartridge()) }
+        val plan = LaunchPlan(
+            "ds-rotation", "ds-rotation", "Rotation Nintendo DS", "nds", "melonds", rom.path, sha256(rom.readBytes()),
+            File(dir, "system").apply { mkdirs() }.path, File(dir, "saves").apply { mkdirs() }.path, File(dir, "battery.sav").path, false,
+            options = mapOf(
+                "melonds_boot_directly" to "enabled",
+                "melonds_screen_layout" to "Top/Bottom",
+            ),
+            orientation = Orientation.PORTRAIT, useDisplayCutout = true,
+        )
+        val intent = Intent(context, GameActivity::class.java).putExtra(GameActivity.EXTRA_PLAN, ApiJson.encodeToString(LaunchPlan.serializer(), plan))
+        try {
+            ActivityScenario.launch<GameActivity>(intent).use {
+                waitForFrames(30)
+                for (ds in listOf(DsLayout.STACKED, DsLayout.SIDE_BY_SIDE)) {
+                    device.pressKeyCode(KeyEvent.KEYCODE_MENU)
+                    click("Image et écrans")
+                    click(ds.label)
+                    for (rotation in GameRotation.entries) {
+                        device.pressKeyCode(KeyEvent.KEYCODE_MENU)
+                        click("Image et écrans")
+                        click(rotation.label)
+                        val frame = GameActivity.current?.get()?.frames?.value ?: 0
+                        device.pressBack()
+                        waitForFrames(frame + 10)
+                        val bitmap = instrumentation.uiAutomation.takeScreenshot()
+                        val unit = 48f * context.resources.displayMetrics.density
+                        val layout = GameLayouts.compute(
+                            bitmap.width.toFloat(),
+                            bitmap.height.toFloat(),
+                            rotation.aspect(GameLayouts.dsAspect(ds)),
+                            true,
+                            controlsUnit = unit,
+                        )
+                        var left = bitmap.width
+                        var right = 0
+                        var top = bitmap.height
+                        var bottom = 0
+                        val pixels = IntArray(bitmap.width * bitmap.height)
+                        bitmap.getPixels(pixels, 0, bitmap.width, 0, 0, bitmap.width, bitmap.height)
+                        pixels.forEachIndexed { index, color ->
+                            if (android.graphics.Color.green(color) > 160 &&
+                                android.graphics.Color.red(color) < 80 && android.graphics.Color.blue(color) < 80
+                            ) {
+                                val x = index % bitmap.width
+                                val y = index / bitmap.width
+                                left = minOf(left, x)
+                                right = maxOf(right, x)
+                                top = minOf(top, y)
+                                bottom = maxOf(bottom, y)
+                            }
+                        }
+                        val halfWidth = rotation.sideways == (ds == DsLayout.STACKED)
+                        val expectedWidth = layout.game.width * bitmap.width * if (halfWidth) 0.5f else 1f
+                        val expectedHeight = layout.game.height * bitmap.height * if (halfWidth) 1f else 0.5f
+                        val positions = if (ds == DsLayout.STACKED) {
+                            listOf("top", "right", "bottom", "left")
+                        } else {
+                            listOf("left", "top", "right", "bottom")
+                        }
+                        val position = positions[rotation.ordinal]
+                        val expectedLeft = (layout.game.left + if (position == "right") layout.game.width / 2 else 0f) * bitmap.width
+                        val expectedTop = (layout.game.top + if (position == "bottom") layout.game.height / 2 else 0f) * bitmap.height
+                        val pictures = File(context.getExternalFilesDir(null), "test-screens").apply { mkdirs() }
+                        File(pictures, "ds-${ds.name.lowercase()}-rotation-${rotation.degrees}.png").outputStream().use { stream ->
+                            bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, stream)
+                        }
+                        assertTrue(
+                            "${rotation.label}: width ${right - left + 1}, expected $expectedWidth",
+                            kotlin.math.abs(right - left + 1 - expectedWidth) < 12f,
+                        )
+                        assertTrue(
+                            "${rotation.label}: height ${bottom - top + 1}, expected $expectedHeight",
+                            kotlin.math.abs(bottom - top + 1 - expectedHeight) < 12f,
+                        )
+                        assertTrue("${ds.name} ${rotation.label}: left $left, expected $expectedLeft", kotlin.math.abs(left - expectedLeft) < 12f)
+                        assertTrue("${ds.name} ${rotation.label}: top $top, expected $expectedTop", kotlin.math.abs(top - expectedTop) < 12f)
+                        bitmap.recycle()
+                    }
+                }
+            }
+        } finally {
+            device.setOrientationLandscape()
+        }
+    }
 
     @Test
     fun dsSurvivesBackgroundSaveReturnAndRepeatedReset() {

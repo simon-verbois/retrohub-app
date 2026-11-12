@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
@@ -43,9 +44,19 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupProperties
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -61,6 +72,7 @@ import ovh.verbois.retrohub.ui.components.GlassPanel
 import ovh.verbois.retrohub.ui.components.LocalNavigationFocus
 import ovh.verbois.retrohub.ui.components.RoundButton
 import ovh.verbois.retrohub.ui.components.consoleFocus
+import ovh.verbois.retrohub.ui.components.controllerVerticalScroll
 import ovh.verbois.retrohub.ui.icons.Lucide
 import ovh.verbois.retrohub.ui.nav.Route
 import ovh.verbois.retrohub.ui.nav.SettingsPage
@@ -177,52 +189,79 @@ private fun open(controller: UiController, game: Game) {
 
 /** Menu du profil (Start) : comme le menu déroulant d’une console. */
 @Composable
-fun AccountMenu(controller: UiController, account: Account, onClose: () -> Unit) {
+fun AccountMenu(controller: UiController, onClose: () -> Unit) {
     val first = remember { FocusRequester() }
-    val tree = LocalNavigationFocus.current
-    SideEffect { tree.content = first }
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopEnd) {
-        GlassPanel(Modifier.padding(horizontal = 16.dp, vertical = 8.dp).widthIn(max = 420.dp).fillMaxWidth(), shape = RoundedCornerShape(24.dp)) {
-            Column(
-                Modifier.background(Palette.SkyLow).verticalScroll(rememberScrollState()).focusGroup()
-                    .focusProperties {
-                        left = FocusRequester.Cancel
-                        right = FocusRequester.Cancel
+    val density = LocalDensity.current
+    val openSettings = { page: SettingsPage ->
+        controller.menuOpen = false
+        controller.nav.go(Route.Settings(page))
+    }
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val panelWidth = minOf(360.dp, (maxWidth - 32.dp).coerceAtLeast(48.dp))
+        val panelHeight = (maxHeight - 16.dp).coerceAtLeast(48.dp)
+        Popup(
+            alignment = Alignment.TopEnd,
+            offset = with(density) { IntOffset(-16.dp.roundToPx(), 8.dp.roundToPx()) },
+            onDismissRequest = onClose,
+            properties = PopupProperties(focusable = true),
+        ) {
+            GlassPanel(Modifier.width(panelWidth).heightIn(max = panelHeight).testTag("profile-menu"), shape = RoundedCornerShape(20.dp)) {
+                Column(
+                    Modifier.background(Palette.SkyLow).controllerVerticalScroll(rememberScrollState()).focusGroup()
+                        .onPreviewKeyEvent { event ->
+                            if (event.key in listOf(Key.ButtonB, Key.Escape, Key.ButtonStart, Key.Menu)) {
+                                if (event.type == KeyEventType.KeyUp) onClose()
+                                true
+                            } else {
+                                false
+                            }
+                        }
+                        .focusProperties {
+                            left = FocusRequester.Cancel
+                            right = FocusRequester.Cancel
+                        }
+                        .padding(vertical = 8.dp),
+                ) {
+                    MenuItem(
+                        Lucide.SlidersHorizontal,
+                        "Paramètres de l’application",
+                        Modifier.focusRequester(first).focusProperties {
+                            up = FocusRequester.Cancel
+                        },
+                    ) {
+                        openSettings(SettingsPage.ROOT)
                     }
-                    .padding(vertical = 10.dp),
-            ) {
-                Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text("Profil", Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
-                    RoundButton(Lucide.X, "Fermer le profil", onClose, size = 48.dp)
+                    MenuItem(Lucide.Gamepad2, "Commandes et manette") { openSettings(SettingsPage.CONTROLS) }
+                    MenuItem(Lucide.Layers, "Réglages des consoles") { openSettings(SettingsPage.CONSOLES) }
+                    MenuItem(Lucide.RefreshCw, "Synchroniser maintenant") {
+                        onClose()
+                        controller.syncNow()
+                    }
+                    MenuItem(Lucide.HardDrive, "Stockage") { openSettings(SettingsPage.STORAGE) }
+                    MenuItem(
+                        Lucide.UserRound,
+                        "Compte RetroHub",
+                        Modifier.focusProperties {
+                            down = FocusRequester.Cancel
+                        },
+                    ) { openSettings(SettingsPage.ACCOUNT) }
                 }
-                MenuItem(Lucide.SlidersHorizontal, "Paramètres de l’application", Modifier.focusRequester(first).focusProperties { up = tree.header }) {
-                    controller.nav.go(Route.Settings())
-                }
-                MenuItem(Lucide.Gamepad2, "Commandes et manette") { controller.nav.go(Route.Settings(SettingsPage.CONTROLS)) }
-                MenuItem(Lucide.Layers, "Réglages des consoles") { controller.nav.go(Route.Settings(SettingsPage.CONSOLES)) }
-                MenuItem(Lucide.RefreshCw, "Synchroniser maintenant") { controller.syncNow() }
-                MenuItem(Lucide.HardDrive, "Stockage") { controller.nav.go(Route.Settings(SettingsPage.STORAGE)) }
-                MenuItem(
-                    Lucide.UserRound,
-                    "Compte RetroHub",
-                    Modifier.focusProperties {
-                        down = FocusRequester.Cancel
-                    },
-                ) { controller.nav.go(Route.Settings(SettingsPage.ACCOUNT)) }
             }
+            AutoFocus(first)
         }
     }
-    AutoFocus(first)
 }
 
 @Composable
 private fun MenuItem(icon: ImageVector, label: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
     Row(
-        modifier.fillMaxWidth().heightIn(min = 54.dp).consoleFocus(RoundedCornerShape(14.dp), onClick, focusScale = 1.01f).padding(horizontal = 20.dp),
+        modifier.fillMaxWidth().heightIn(
+            min = 48.dp,
+        ).consoleFocus(RoundedCornerShape(14.dp), onClick, focusScale = 1.01f).padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Icon(icon, null, Modifier.size(22.dp), tint = Palette.Select)
+        Icon(icon, null, Modifier.size(20.dp), tint = Palette.Select)
         Text(label, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
     }
 }

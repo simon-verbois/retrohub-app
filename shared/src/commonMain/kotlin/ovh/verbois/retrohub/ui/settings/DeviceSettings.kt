@@ -97,37 +97,37 @@ internal fun AppearancePage(controller: UiController) {
     SettingsGroup {
         ChoiceRow("Thème", ThemeMode.entries, settings.theme, {
             it.label
-        }, { v -> repo.update { it.copy(theme = v) } }, stringResource(Res.string.setting_theme_description), Lucide.Palette, recommended = ThemeMode.SYSTEM)
+        }, { v -> repo.update { it.copy(theme = v) } }, null, Lucide.Palette, recommended = ThemeMode.SYSTEM)
         GroupDivider()
         SwitchRow("Fond animé", settings.animatedBackground, { v ->
             repo.update { it.copy(animatedBackground = v) }
-        }, stringResource(Res.string.setup_background_description), Lucide.Sparkles)
+        }, null, Lucide.Sparkles)
         GroupDivider()
         SwitchRow("Réduire les animations", settings.reduceMotion, { v ->
             repo.update { it.copy(reduceMotion = v) }
-        }, stringResource(Res.string.setting_motion_description), Lucide.Pause)
+        }, null, Lucide.Pause)
         GroupDivider()
         ChoiceRow("Taille du texte", TextSize.entries, settings.textSize, { it.label }, { v ->
             repo.update { it.copy(textSize = v) }
-        }, stringResource(Res.string.setting_text_description), Lucide.Type, recommended = TextSize.NORMAL)
+        }, null, Lucide.Type, recommended = TextSize.NORMAL)
         GroupDivider()
         SwitchRow("Sons de navigation", settings.navigationSounds, { v ->
             repo.update { it.copy(navigationSounds = v) }
-        }, stringResource(Res.string.setting_navigation_sound_description), Lucide.Music)
+        }, null, Lucide.Music)
     }
     SectionLabel("Accueil")
     SettingsGroup {
         ChoiceRow("Ordre des jeux", HomeOrder.entries, settings.homeOrder, { it.label }, { v ->
             repo.update { it.copy(homeOrder = v) }
-        }, stringResource(Res.string.setting_order_description), Lucide.List, recommended = HomeOrder.RECENT)
+        }, null, Lucide.List, recommended = HomeOrder.RECENT)
         GroupDivider()
         SwitchRow("Seulement les jeux téléchargés", settings.offlineOnly, { v ->
             repo.update { it.copy(offlineOnly = v) }
-        }, stringResource(Res.string.setting_offline_description), Lucide.WifiOff)
+        }, null, Lucide.WifiOff)
         GroupDivider()
         SwitchRow("Relancer le dernier jeu", settings.startOnLastGame, { v ->
             repo.update { it.copy(startOnLastGame = v) }
-        }, stringResource(Res.string.setting_start_last_description), Lucide.Play)
+        }, null, Lucide.Play)
     }
     SectionLabel("Consoles affichées")
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -147,19 +147,19 @@ internal fun DisplayPage(controller: UiController) {
     SettingsGroup {
         SwitchRow(stringResource(Res.string.setting_fullscreen), settings.useDisplayCutout, { v ->
             repo.update { it.copy(useDisplayCutout = v) }
-        }, stringResource(Res.string.setting_fullscreen_description), Lucide.Maximize)
+        }, null, Lucide.Maximize)
         GroupDivider()
         ChoiceRow("Orientation en jeu", Orientation.entries, settings.orientation, { it.label }, { v ->
             repo.update { it.copy(orientation = v) }
-        }, stringResource(Res.string.setting_orientation_description), Lucide.Smartphone, recommended = Orientation.AUTO)
+        }, null, Lucide.Smartphone, recommended = Orientation.AUTO)
         GroupDivider()
         ChoiceRow("Image en portrait", PortraitPosition.entries, settings.portraitPosition, { it.label }, { v ->
             repo.update { it.copy(portraitPosition = v) }
-        }, stringResource(Res.string.setting_portrait_image_description), Lucide.Rows2, recommended = PortraitPosition.TOP)
+        }, null, Lucide.Rows2, recommended = PortraitPosition.TOP)
         GroupDivider()
         SwitchRow("Compteur d’images", settings.showFps, { v ->
             repo.update { it.copy(showFps = v) }
-        }, stringResource(Res.string.setting_fps_description), Lucide.Gauge)
+        }, null, Lucide.Gauge)
     }
 }
 
@@ -183,15 +183,15 @@ internal fun ControlsPage(controller: UiController) {
         GroupDivider()
         ChoiceRow("Ouvrir le menu en jeu", MenuShortcut.entries, settings.menuShortcut, { it.label }, { v ->
             repo.update { it.copy(menuShortcut = v) }
-        }, stringResource(Res.string.setting_menu_shortcut_description), Lucide.Menu, recommended = MenuShortcut.SELECT_START)
+        }, null, Lucide.Menu, recommended = MenuShortcut.SELECT_START)
         GroupDivider()
         SwitchRow("Vibrations des jeux", settings.rumble, { v ->
             repo.update { it.copy(rumble = v) }
-        }, stringResource(Res.string.setting_rumble_description), Lucide.Vibrate)
+        }, null, Lucide.Vibrate)
         GroupDivider()
         SwitchRow("Plusieurs joueurs", settings.multiplayer, { v ->
             repo.update { it.copy(multiplayer = v) }
-        }, stringResource(Res.string.setting_multiplayer_description), Lucide.Swords)
+        }, null, Lucide.Swords)
         GroupDivider()
         SliderRow(
             "Zone morte des sticks",
@@ -199,7 +199,7 @@ internal fun ControlsPage(controller: UiController) {
             0f..0.4f,
             { v -> repo.update { it.copy(stickDeadzone = v) } },
             "${(settings.stickDeadzone * 100).toInt()} %",
-            stringResource(Res.string.setting_deadzone_description),
+            null,
             Lucide.Joystick,
         )
         GroupDivider()
@@ -209,31 +209,31 @@ internal fun ControlsPage(controller: UiController) {
             0.5f..1.5f,
             { v -> repo.update { it.copy(stickSensitivity = v) } },
             "${(settings.stickSensitivity * 100).toInt()} %",
-            stringResource(Res.string.setting_sensitivity_description),
+            null,
             Lucide.Gauge,
         )
         GroupDivider()
         SwitchRow("Masquer les commandes tactiles", settings.hideTouchWithGamepad, { v ->
             repo.update { it.copy(hideTouchWithGamepad = v) }
-        }, stringResource(Res.string.setting_hide_touch_description), Lucide.EyeOff)
+        }, null, Lucide.EyeOff)
         GroupDivider()
         ChoiceRow("Aides de boutons", HintsMode.entries, settings.hints, {
             it.label
-        }, { v -> repo.update { it.copy(hints = v) } }, stringResource(Res.string.setting_hints_description), Lucide.Keyboard)
+        }, { v -> repo.update { it.copy(hints = v) } }, null, Lucide.Keyboard)
     }
     SectionLabel("Commandes tactiles")
     SettingsGroup {
         SliderRow("Opacité", settings.touchOpacity, 0.2f..1f, { v ->
             repo.update { it.copy(touchOpacity = v) }
-        }, "${(settings.touchOpacity * 100).toInt()} %", subtitle = stringResource(Res.string.setting_touch_opacity_description), icon = Lucide.Eye)
+        }, "${(settings.touchOpacity * 100).toInt()} %", subtitle = null, icon = Lucide.Eye)
         GroupDivider()
         SliderRow("Taille", settings.touchScale, 0.75f..1.35f, { v ->
             repo.update { it.copy(touchScale = v) }
-        }, "${(settings.touchScale * 100).toInt()} %", subtitle = stringResource(Res.string.setting_touch_size_description), icon = Lucide.Hand)
+        }, "${(settings.touchScale * 100).toInt()} %", subtitle = null, icon = Lucide.Hand)
         GroupDivider()
         SwitchRow("Retour au toucher", settings.haptics, { v ->
             repo.update { it.copy(haptics = v) }
-        }, stringResource(Res.string.setup_haptics_description), Lucide.Vibrate)
+        }, null, Lucide.Vibrate)
     }
 }
 
@@ -244,15 +244,15 @@ internal fun AudioPage(controller: UiController) {
     SettingsGroup {
         SwitchRow("Son des jeux", settings.audio, { v ->
             repo.update { it.copy(audio = v) }
-        }, stringResource(Res.string.setting_audio_description), if (settings.audio) Lucide.Volume2 else Lucide.VolumeX)
+        }, null, if (settings.audio) Lucide.Volume2 else Lucide.VolumeX)
         GroupDivider()
         SwitchRow("Couper le son en avance rapide", settings.muteFastForward, { v ->
             repo.update { it.copy(muteFastForward = v) }
-        }, stringResource(Res.string.setting_mute_fast_forward_description), Lucide.FastForward)
+        }, null, Lucide.FastForward)
         GroupDivider()
         SwitchRow("Son à faible latence", settings.lowLatencyAudio, { v ->
             repo.update { it.copy(lowLatencyAudio = v) }
-        }, stringResource(Res.string.setting_latency_description), Lucide.Zap)
+        }, null, Lucide.Zap)
     }
 }
 
@@ -267,24 +267,24 @@ internal fun PerformancePage(controller: UiController) {
             settings.performance,
             { it.label },
             { v -> repo.update { it.copy(performance = v) } },
-            stringResource(Res.string.setting_performance_description),
+            null,
             Lucide.Gauge,
             recommended = PerformanceProfile.BALANCED,
         )
         GroupDivider()
         SwitchRow("Économie de batterie", settings.batterySaver, { v ->
             repo.update { it.copy(batterySaver = v) }
-        }, stringResource(Res.string.setting_battery_description), Lucide.Battery)
+        }, null, Lucide.Battery)
     }
     SectionLabel("Parties")
     SettingsGroup {
         SwitchRow("Reprendre là où j’en étais", settings.resumeLastState, { v ->
             repo.update { it.copy(resumeLastState = v) }
-        }, stringResource(Res.string.setup_resume_description), Lucide.History)
+        }, null, Lucide.History)
         GroupDivider()
         SwitchRow("Confirmer avant de remplacer", settings.confirmOverwrite, { v ->
             repo.update { it.copy(confirmOverwrite = v) }
-        }, stringResource(Res.string.setting_overwrite_description), Lucide.Save)
+        }, null, Lucide.Save)
     }
 }
 
@@ -305,11 +305,11 @@ internal fun StoragePage(controller: UiController) {
     SettingsGroup {
         SwitchRow("Télécharger en données mobiles", settings.cellularDownloads, { v ->
             repo.update { it.copy(cellularDownloads = v) }
-        }, stringResource(Res.string.setup_cellular_description), Lucide.Globe)
+        }, null, Lucide.Globe)
         GroupDivider()
         SwitchRow("Télécharger les favoris", settings.autoDownloadFavorites, { v ->
             repo.update { it.copy(autoDownloadFavorites = v) }
-        }, stringResource(Res.string.setting_favorites_description), Lucide.Heart)
+        }, null, Lucide.Heart)
         GroupDivider()
         ChoiceRow(
             "Libérer de la place",
@@ -317,7 +317,7 @@ internal fun StoragePage(controller: UiController) {
             settings.cleanupDays,
             { if (it == 0) "Jamais" else "Après $it jours" },
             { v -> repo.update { it.copy(cleanupDays = v) } },
-            stringResource(Res.string.setting_cleanup_description),
+            null,
             Lucide.Trash2,
             recommended = 0,
         )
@@ -354,7 +354,7 @@ internal fun StoragePage(controller: UiController) {
             SettingRow("Mémoire du téléphone", subtitle = "Aucune carte SD détectée.", icon = Lucide.MemoryStick)
         }
         GroupDivider()
-        SettingRow("Vider le cache des jaquettes", subtitle = stringResource(Res.string.setting_cache_description), icon = Lucide.Image, onClick = {
+        SettingRow("Vider le cache des jaquettes", subtitle = null, icon = Lucide.Image, onClick = {
             confirmCovers = true
         })
     }
@@ -385,7 +385,7 @@ internal fun ParentalPage(controller: UiController) {
             GroupDivider()
             SwitchRow("Protéger les réglages", settings.lockSettings, { v ->
                 repo.update { it.copy(lockSettings = v) }
-            }, stringResource(Res.string.setting_parental_description), Lucide.Settings)
+            }, null, Lucide.Settings)
             GroupDivider()
             SettingRow("Retirer le code", icon = Lucide.X, onClick = { removing = true })
         }

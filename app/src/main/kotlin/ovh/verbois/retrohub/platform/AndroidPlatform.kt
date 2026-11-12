@@ -22,8 +22,11 @@ import okio.Path
 import okio.Path.Companion.toOkioPath
 import ovh.verbois.retrohub.BuildConfig
 import ovh.verbois.retrohub.api.ApiJson
+import ovh.verbois.retrohub.core.BatteryLevel
+import ovh.verbois.retrohub.core.ControllerBattery
 import ovh.verbois.retrohub.core.DeviceClass
 import ovh.verbois.retrohub.core.Platform
+import ovh.verbois.retrohub.core.PowerStatus
 import ovh.verbois.retrohub.core.TokenVault
 import ovh.verbois.retrohub.game.GameActivity
 import ovh.verbois.retrohub.game.LaunchPlan
@@ -211,6 +214,35 @@ class AndroidPlatform(private val context: Context) : Platform {
         val battery = context.getSystemService(android.os.BatteryManager::class.java)
         val level = battery.getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY)
         return level in 0..20 && !battery.isCharging
+    }
+
+    override fun powerStatus(): PowerStatus {
+        val battery = context.getSystemService(android.os.BatteryManager::class.java)
+        val phone = battery.getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY)
+            .takeIf { it in 0..100 }?.let { BatteryLevel(it, battery.isCharging) }
+        val controllers = if (Build.VERSION.SDK_INT >= 31) {
+            InputDevice.getDeviceIds().toList().mapNotNull { id ->
+                val device = InputDevice.getDevice(id) ?: return@mapNotNull null
+                if (device.isVirtual || !device.isExternal ||
+                    (!device.supportsSource(InputDevice.SOURCE_GAMEPAD) && !device.supportsSource(InputDevice.SOURCE_JOYSTICK))
+                ) {
+                    return@mapNotNull null
+                }
+                val state = runCatching { device.batteryState }.getOrNull() ?: return@mapNotNull null
+                val capacity = state.capacity
+                if (!state.isPresent || !capacity.isFinite() || capacity !in 0f..1f) return@mapNotNull null
+                ControllerBattery(
+                    device.name,
+                    BatteryLevel(
+                        kotlin.math.round(capacity * 100).toInt(),
+                        state.status == android.hardware.BatteryState.STATUS_CHARGING,
+                    ),
+                )
+            }
+        } else {
+            emptyList()
+        }
+        return PowerStatus(phone, controllers)
     }
 
     override fun shareLogs(summary: String) {

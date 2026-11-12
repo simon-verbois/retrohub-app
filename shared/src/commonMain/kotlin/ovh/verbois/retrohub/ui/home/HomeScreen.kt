@@ -20,7 +20,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -38,10 +37,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.layout.SubcomposeLayout
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
@@ -116,50 +117,63 @@ fun HomeScreen(controller: UiController) {
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val actionWidth = (maxWidth - HomeEdge * 2).coerceAtLeast(148.dp)
         val tile = if (controller.portrait) (maxWidth * 0.3f).coerceIn(96.dp, 144.dp) else (maxHeight * 0.36f).coerceIn(88.dp, 148.dp)
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            GameRow(controller, ordered, selected, tile, requesters, actionFocus)
-            Column(Modifier.fillMaxWidth().padding(horizontal = HomeEdge), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(
-                    selected.title,
-                    Modifier.semantics {
-                        heading()
-                    },
-                    style = MaterialTheme.typography.displaySmall,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Kicker(selected)
-                if (!selected.supported) Text("Pas encore jouable dans l’application", style = MaterialTheme.typography.bodyMedium, color = Palette.Warning)
-                Row(
-                    Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).focusProperties {
-                        up = selectedFocus
-                        down = FocusRequester.Cancel
-                    }.focusGroup(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    GamePlayButton(
-                        controller,
-                        selected,
-                        Modifier.widthIn(max = actionWidth)
-                            .focusRequester(playFocus).focusProperties { left = FocusRequester.Cancel },
+        val short = maxHeight < 360.dp
+        SubcomposeLayout(Modifier.fillMaxSize().testTag("home-content")) { constraints ->
+            val details = subcompose("details") {
+                Column(Modifier.fillMaxWidth().padding(horizontal = HomeEdge), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(
+                        selected.title,
+                        Modifier.semantics {
+                            heading()
+                        },
+                        style = if (short) MaterialTheme.typography.headlineSmall else MaterialTheme.typography.displaySmall,
+                        color = Palette.Text,
+                        maxLines = if (short) 1 else 2,
+                        overflow = TextOverflow.Ellipsis,
                     )
-                    RoundButton(
-                        Lucide.Heart,
-                        if (selected.favorite) "Retirer des favoris" else "Ajouter aux favoris",
-                        { controller.toggleFavorite(selected) },
-                        tint = if (selected.favorite) Palette.Accent else Palette.Text,
-                    )
-                    Box {
-                        RoundButton(
-                            Lucide.SlidersHorizontal,
-                            "Options du jeu",
-                            { controller.gameMenu = true },
-                            Modifier.focusRequester(optionsFocus).focusProperties { right = FocusRequester.Cancel },
+                    Kicker(selected, compact = short)
+                    if (!selected.supported) Text("Pas encore jouable dans l’application", style = MaterialTheme.typography.bodyMedium, color = Palette.Warning)
+                    Row(
+                        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).focusProperties {
+                            up = selectedFocus
+                            down = FocusRequester.Cancel
+                        }.focusGroup(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        GamePlayButton(
+                            controller,
+                            selected,
+                            Modifier.widthIn(max = actionWidth)
+                                .focusRequester(playFocus).focusProperties { left = FocusRequester.Cancel },
                         )
-                        GameMenu(controller, selected)
+                        RoundButton(
+                            Lucide.Heart,
+                            if (selected.favorite) "Retirer des favoris" else "Ajouter aux favoris",
+                            { controller.toggleFavorite(selected) },
+                            tint = if (selected.favorite) Palette.Accent else Palette.Text,
+                        )
+                        Box {
+                            RoundButton(
+                                Lucide.SlidersHorizontal,
+                                "Options du jeu",
+                                { controller.gameMenu = true },
+                                Modifier.focusRequester(optionsFocus).focusProperties { right = FocusRequester.Cancel },
+                            )
+                            GameMenu(controller, selected)
+                        }
                     }
                 }
+            }.single().measure(Constraints(maxWidth = constraints.maxWidth, maxHeight = constraints.maxHeight))
+            val gap = 12.dp.roundToPx()
+            val available = (constraints.maxHeight - details.height - gap - 8.dp.roundToPx()).coerceAtLeast(0)
+            val fittedTile = minOf(tile, ((available - 16.dp.roundToPx()).coerceAtLeast(1) / 1.2f).toDp())
+            val covers = subcompose("covers") {
+                GameRow(controller, ordered, selected, fittedTile, requesters, actionFocus)
+            }.single().measure(Constraints(maxWidth = constraints.maxWidth, maxHeight = available))
+            layout(constraints.maxWidth, constraints.maxHeight) {
+                covers.placeRelative(0, 0)
+                details.placeRelative(0, covers.height + gap)
             }
         }
     }
@@ -232,7 +246,15 @@ private fun GameRow(
 
 /** Game information lives below the title, including play time, without a decorative dot. */
 @Composable
-fun Kicker(game: Game) {
+fun Kicker(game: Game, compact: Boolean = false) {
+    if (compact) {
+        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            Text(Consoles.name(game.console), style = MaterialTheme.typography.bodySmall, color = Palette.TextDim, maxLines = 1)
+            game.remote.genre?.takeIf { it.isNotBlank() }?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = Palette.TextDim, maxLines = 1) }
+            Text("${formatPlayTime(game.remote.playedSeconds)} de jeu", style = MaterialTheme.typography.bodySmall, color = Palette.TextDim, maxLines = 1)
+        }
+        return
+    }
     androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         val information = listOfNotNull(
             Consoles.name(game.console),

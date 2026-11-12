@@ -90,11 +90,26 @@ class UiLogicTest {
     }
 
     @Test
+    fun profileRetainsItsBackgroundRouteAndReturnsToIt() {
+        val nav = Navigator()
+        nav.go(Route.Library("nds"))
+        nav.section(Section.USER)
+        assertEquals(Route.User, nav.current)
+        assertEquals(Route.Library("nds"), nav.contentRoute)
+        nav.go(Route.Settings())
+        assertEquals(Route.Settings(), nav.contentRoute)
+        nav.back()
+        assertEquals(Route.Library("nds"), nav.contentRoute)
+        nav.back()
+        assertEquals(Route.Library("nds"), nav.current)
+    }
+
+    @Test
     fun shoulderNavigationFollowsVisibleSectionsWithoutWrapping() {
         val nav = Navigator()
         nav.cycleSection(-1)
         assertEquals(Route.Home, nav.current)
-        for (route in listOf(Route.Favorites, Route.Downloads, Route.Search, Route.User)) {
+        for (route in listOf(Route.Favorites, Route.Downloads, Route.Catalogue, Route.Search, Route.User)) {
             nav.cycleSection(1)
             assertEquals(route, nav.current)
         }
@@ -103,6 +118,8 @@ class UiLogicTest {
         nav.go(Route.Settings())
         nav.cycleSection(-1)
         assertEquals(Route.Search, nav.current)
+        nav.cycleSection(-1)
+        assertEquals(Route.Catalogue, nav.current)
         nav.cycleSection(-1)
         assertEquals(Route.Downloads, nav.current)
         assertTrue(nav.back())

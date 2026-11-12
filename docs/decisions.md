@@ -32,14 +32,28 @@ nothing required otherwise.
   in large, activity cards. No game detail page: tapping the selected tile runs the main action, a
   long press or □ opens the game menu under its title; the rest (cheats, history, removal) lives in
   the game options.
-- Tabs reduced to Home and Downloaded: the library opens from the tile at the end of the row,
-  favourites from the heart in the top bar.
+- Tabs are Home, Favorites, Downloaded and Catalogue; the local library opens from the tile at
+  the end of the home row. Home has no vertical scrolling: covers adapt to the height left by
+  game information and actions.
+- Android system bars stay hidden throughout the app. An edge swipe reveals them temporarily.
+  The header groups local time and the phone battery; a controller battery appears only when
+  Android reports a real capacity for an external game controller (API 31+), without Bluetooth
+  scanning or a new permission.
 - Little text: no explanatory sentence under settings or in cards; only values, states, errors and
   what a confirmation is about to change.
 - Animated background optimised like the web: 24 frames per second at most, ribbons drawn once then
   moved, precomputed particles, no animated blur.
 
 ## Settings
+
+- Game options use two columns on wide screens and one with narrow screens or large text.
+  The header keeps the game artwork and title compact; rotation is a direct choice and destructive
+  actions stay in a separate group with their existing confirmation.
+- Settings place short selected values beside their labels on wide screens, retain stacked values
+  for large text, and omit static explanatory paragraphs in device and console controls.
+- The profile menu is a focusable popup over the current route. Opening it preserves the page,
+  selection and scroll; Back, Start and outside clicks close it. Its background page continues
+  receiving library updates while visible.
 
 - Settings form a tree: **RetroHub account** (shared with the web), **This device**, **Consoles**
   (and each game's options), **About**.
@@ -54,8 +68,8 @@ nothing required otherwise.
 - Advanced options: the list comes from the running core (`retro_get_variable`); a choice is kept
   for the whole console and takes precedence over every other setting.
 - Cheat codes are stored on the device, per game; the server has no field for them.
-- "What's new" reads the repository's `CHANGELOG.md`, bundled as is in the app; the dialog opens
-  once per version (not on the very first launch).
+- "What's new" reads the repository's `CHANGELOG.md`, bundled as is in the app, and is available
+  from About settings. It does not open automatically at startup.
 
 ## Test emulator
 
@@ -75,6 +89,15 @@ nothing required otherwise.
   the app believes it is offline, as on a real phone.
 
 ## Emulation
+
+- Game rotation is stored per play-game ID on this device. Layout proportions and stylus input
+  follow the chosen quarter turn. Touch controls keep their orientation.
+- LibretroDroid 0.14.0 does not expose rotation in Kotlin. A small NDK adapter uses its exported
+  libretro environment callback and preserves core geometry while changing the displayed aspect.
+  This adapter is tied to that pinned host version; real melonDS tests check all four rotations,
+  rendered proportions and maximum image size in debug and optimized builds.
+- The adapter builds from source with NDK 27.2.12479018 and CMake 3.22.1, installed by
+  `scripts/setup-sdk.sh`; no prebuilt application-specific native binary is kept in Git.
 
 - Cores chosen to **share save states with the web** when the core exists on Android: fceumm,
   snes9x, gambatte, mgba, genesis_plus_gx, pcsx_rearmed, melonds, stella2014. They are the server's

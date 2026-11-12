@@ -12,6 +12,10 @@ sealed interface Route {
 
     data object Downloads : Route
 
+    data object Catalogue : Route
+
+    data class CatalogueGame(val id: String) : Route
+
     data object Search : Route
 
     data object User : Route
@@ -55,6 +59,7 @@ enum class Section(val title: String, val route: Route, val tab: Boolean = true)
     HOME("Accueil", Route.Home),
     FAVORITES("Favoris", Route.Favorites),
     DOWNLOADS("Téléchargés", Route.Downloads),
+    CATALOGUE("Catalogue", Route.Catalogue),
     SEARCH("Rechercher", Route.Search, tab = false),
     USER("Profil", Route.User, tab = false),
     ;
@@ -64,6 +69,7 @@ enum class Section(val title: String, val route: Route, val tab: Boolean = true)
             Route.Home, is Route.Library -> HOME
             Route.Favorites -> FAVORITES
             Route.Downloads -> DOWNLOADS
+            Route.Catalogue, is Route.CatalogueGame -> CATALOGUE
             Route.Search -> SEARCH
             Route.User -> USER
             else -> null
@@ -75,6 +81,7 @@ enum class Section(val title: String, val route: Route, val tab: Boolean = true)
 class Navigator(start: Route = Route.Home) {
     val stack = mutableStateListOf(start)
     val current: Route get() = stack.last()
+    val contentRoute: Route get() = stack.lastOrNull { it != Route.User } ?: Route.Home
 
     /** Sens de la dernière transition, pour l’animation. */
     val forward = mutableStateOf(true)
@@ -86,6 +93,10 @@ class Navigator(start: Route = Route.Home) {
     }
 
     fun section(section: Section) {
+        if (section == Section.USER) {
+            go(Route.User)
+            return
+        }
         val from = Section.of(stack.first())
         forward.value = (from?.ordinal ?: 0) <= section.ordinal
         stack.clear()

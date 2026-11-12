@@ -10,6 +10,29 @@ change, in plain text. Never rewrite the notes of a published version.
 
 ## [Unreleased]
 
+## [2026.46.8] - 2026-11-12
+
+### Added
+
+- Browse the full server catalogue from a tab after Downloaded, with search, console, language, source and installation filters, version and file selection, server download progress, and a separate download to the phone.
+- Rotate the game image by 0°, 90°, 180° or 270° from the pause menu or game options, remember the choice per game, and keep the DS stylus aligned with the rotated image.
+- Group the clock, phone battery and system-reported controller battery in a compact status pill.
+
+### Changed
+
+- Reorganize game options into adaptive columns, keep the game header compact, expose all four rotations directly, and distinguish game removal from other actions.
+- Make settings rows and headers more compact, align selected values on wide screens, and remove explanatory text from device and console settings.
+- Open a smaller profile menu over the current page, preserve its content and focus, and dismiss it with Back, Start or an outside click without a heading or close button.
+
+- Hide Android system bars throughout the app, with temporary access by swiping from an edge.
+- Keep the home screen within the available height, resize covers to fit the game information and actions, and retain horizontal game browsing.
+- Maximize the game image using the space needed by the actual touch controls, without an extra top margin, and choose the larger usable layout in landscape.
+
+### Removed
+
+- Stop showing the changelog automatically at startup; keep it available in About settings.
+- Remove offline badges and downloaded-game dots from covers; keep undownloaded games gray.
+
 ## [2026.46.7] - 2026-11-12
 
 ### Added

@@ -1,5 +1,14 @@
 package ovh.verbois.retrohub.ui.settings
 
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -11,16 +20,25 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import ovh.verbois.retrohub.api.ApiException
 import ovh.verbois.retrohub.api.RemoteSave
 import ovh.verbois.retrohub.core.formatDate
 import ovh.verbois.retrohub.core.parseInstant
 import ovh.verbois.retrohub.data.LocalSave
+import ovh.verbois.retrohub.emulation.GameRotation
 import ovh.verbois.retrohub.game.Cheat
 import ovh.verbois.retrohub.ui.UiController
+import ovh.verbois.retrohub.ui.components.ChoiceRow
 import ovh.verbois.retrohub.ui.components.ConfirmDialog
 import ovh.verbois.retrohub.ui.components.DialogField
+import ovh.verbois.retrohub.ui.components.FilterChip
 import ovh.verbois.retrohub.ui.components.FormDialog
 import ovh.verbois.retrohub.ui.components.GlassButton
 import ovh.verbois.retrohub.ui.components.GroupDivider
@@ -33,6 +51,7 @@ import ovh.verbois.retrohub.ui.theme.Palette
 
 /** Codes de triche, historique des sauvegardes et protection d’un jeu. */
 @Composable
+@OptIn(ExperimentalLayoutApi::class)
 internal fun GameOptionsPage(controller: UiController, gameId: String) {
     val container = controller.container
     val games by container.library.games.collectAsState()
@@ -46,9 +65,33 @@ internal fun GameOptionsPage(controller: UiController, gameId: String) {
         cheats = list
         scope.launch { container.cheats.put(game.playGameId, list) }
     }
-    GamePhoneActions(controller, game)
-    SectionLabel("Codes de triche")
-    if (cheats.isNotEmpty()) {
+    SettingsColumns(primary = {
+        SectionLabel("Image")
+        SettingsGroup {
+            Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Icon(Lucide.RotateCw, null, Modifier.size(20.dp), tint = Palette.Text)
+                    Text("Rotation de l’image", style = MaterialTheme.typography.titleMedium)
+                }
+                val current = settings.gameRotations[game.playGameId] ?: GameRotation.NORMAL
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    GameRotation.entries.forEach { rotation ->
+                        FilterChip(
+                            rotation.label,
+                            rotation == current,
+                            {
+                                container.settings.update { it.copy(gameRotations = it.gameRotations + (game.playGameId to rotation)) }
+                            },
+                            Modifier.semantics {
+                                selected = rotation == current
+                                contentDescription = "Rotation de l’image : ${rotation.label}"
+                            },
+                        )
+                    }
+                }
+            }
+        }
+        SectionLabel("Codes de triche")
         SettingsGroup {
             cheats.forEachIndexed { index, cheat ->
                 if (index > 0) GroupDivider()
@@ -57,21 +100,22 @@ internal fun GameOptionsPage(controller: UiController, gameId: String) {
                 }, cheat.code.lines().first() + if (cheat.code.lines().size > 1) " …" else "")
                 SettingRow("Modifier ou supprimer", icon = Lucide.Pencil, onClick = { editing = index })
             }
+            if (cheats.isNotEmpty()) GroupDivider()
+            SettingRow("Ajouter un code", icon = Lucide.Plus, onClick = { editing = -1 })
         }
-    }
-    GlassButton("Ajouter un code", { editing = -1 }, icon = Lucide.Plus)
-
-    SectionLabel("Historique des sauvegardes")
-    SaveHistory(controller, game.playGameId, game.console)
-
-    if (settings.pinHash.isNotEmpty()) {
-        SectionLabel("Contrôle parental")
-        SettingsGroup {
-            SwitchRow("Protéger ce jeu", game.playGameId in settings.lockedGames, { v ->
-                container.settings.update { it.copy(lockedGames = if (v) it.lockedGames + game.playGameId else it.lockedGames - game.playGameId) }
-            }, null, Lucide.Lock)
+        if (settings.pinHash.isNotEmpty()) {
+            SectionLabel("Contrôle parental")
+            SettingsGroup {
+                SwitchRow("Protéger ce jeu", game.playGameId in settings.lockedGames, { v ->
+                    container.settings.update { it.copy(lockedGames = if (v) it.lockedGames + game.playGameId else it.lockedGames - game.playGameId) }
+                }, null, Lucide.Lock)
+            }
         }
-    }
+    }, secondary = {
+        SectionLabel("Sauvegardes")
+        SaveHistory(controller, game.playGameId, game.console)
+        GamePhoneActions(controller, game)
+    })
 
     editing?.let { index ->
         val current = cheats.getOrNull(index)
@@ -124,7 +168,7 @@ private fun SaveHistory(controller: UiController, playGameId: String, console: S
     var refresh by remember { mutableStateOf(0) }
     LaunchedEffect(playGameId, refresh) { saves = container.saveStore.forGame(playGameId).sortedWith(compareBy({ it.kind }, { it.slot })) }
     if (saves.isEmpty()) {
-        Text("Pas encore de sauvegarde pour ce jeu.", style = MaterialTheme.typography.bodyMedium, color = Palette.TextDim)
+        SettingsGroup { SettingRow("Aucune sauvegarde", icon = Lucide.History) }
         return
     }
     SettingsGroup {
@@ -209,6 +253,7 @@ private fun GamePhoneActions(controller: UiController, game: ovh.verbois.retrohu
     var confirmFresh by remember { mutableStateOf(false) }
     LaunchedEffect(game.playGameId) { conflict = container.saveStore.forGame(game.playGameId).any { it.inConflict } }
     if (!game.downloaded && !running && !conflict) return
+    SectionLabel("Partie et stockage")
     SettingsGroup {
         var first = true
         val divider = @Composable {
@@ -232,7 +277,7 @@ private fun GamePhoneActions(controller: UiController, game: ovh.verbois.retrohu
             divider()
             SettingRow("Nouvelle partie", icon = Lucide.RotateCcw, onClick = { confirmFresh = true })
             divider()
-            SettingRow("Supprimer du téléphone", icon = Lucide.Trash2, onClick = { confirmDelete = true })
+            SettingRow("Supprimer du téléphone", icon = Lucide.Trash2, tint = Palette.Danger, onClick = { confirmDelete = true })
         }
     }
     if (confirmFresh) {

@@ -17,11 +17,13 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
@@ -52,12 +54,18 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.delay
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import org.jetbrains.compose.resources.stringResource
 import ovh.verbois.retrohub.account.Account
+import ovh.verbois.retrohub.core.Platform
+import ovh.verbois.retrohub.core.PowerStatus
 import ovh.verbois.retrohub.core.formatBytes
 import ovh.verbois.retrohub.emulation.HintsMode
 import ovh.verbois.retrohub.resources.Res
@@ -88,6 +96,7 @@ fun ConsoleShell(controller: UiController, account: Account, content: @Composabl
     val gamepad by container.platform.gamepadConnected.collectAsState()
     val settings by container.settings.settings.collectAsState()
     val route = controller.nav.current
+    val contentRoute = controller.nav.contentRoute
     val screenStates = rememberSaveableStateHolder()
     val navigationFocus = remember { ovh.verbois.retrohub.ui.components.NavigationFocus() }
     controller.downloadRequest?.let { game ->
@@ -140,26 +149,26 @@ fun ConsoleShell(controller: UiController, account: Account, content: @Composabl
         ) {
             // Only controls are inset: the shared background continues behind the camera and system bars.
             Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
-                if (Section.of(route) != null) {
-                    TopBar(controller, account, sync, online, compact = controller.portrait)
+                if (Section.of(contentRoute) != null) {
+                    TopBar(controller, account, sync, online, compact = controller.portrait, section = Section.of(contentRoute))
                     if (controller.portrait) {
-                        SectionTabs(controller, Section.of(route), Modifier.fillMaxWidth().padding(horizontal = 10.dp))
+                        SectionTabs(controller, Section.of(contentRoute), Modifier.fillMaxWidth().padding(horizontal = 10.dp))
                     }
                 }
                 Box(Modifier.weight(1f).fillMaxWidth().padding(bottom = if (showHints) 32.dp else 0.dp)) {
                     AnimatedContent(
-                        targetState = route,
+                        targetState = contentRoute,
                         transitionSpec = { fadeIn(tween(160)) togetherWith fadeOut(tween(100)) },
                         label = "screen",
                     ) { target ->
                         screenStates.SaveableStateProvider(target.toString()) {
                             when (target) {
                                 Route.Search -> SearchOverlay(controller)
-                                Route.User -> AccountMenu(controller, account, onClose = { controller.back() })
                                 else -> content(target)
                             }
                         }
                     }
+                    if (route == Route.User) AccountMenu(controller, onClose = { controller.back() })
                 }
             }
             if (showHints) {
@@ -180,8 +189,7 @@ fun ConsoleShell(controller: UiController, account: Account, content: @Composabl
 }
 
 @Composable
-private fun TopBar(controller: UiController, account: Account, sync: SyncStatus, online: Boolean, compact: Boolean) {
-    val section = Section.of(controller.nav.current)
+private fun TopBar(controller: UiController, account: Account, sync: SyncStatus, online: Boolean, compact: Boolean, section: Section?) {
     val tree = ovh.verbois.retrohub.ui.components.LocalNavigationFocus.current
     Row(
         Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(horizontal = if (compact) 16.dp else 20.dp)
@@ -193,7 +201,7 @@ private fun TopBar(controller: UiController, account: Account, sync: SyncStatus,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         if (compact) {
-            Text("RetroHub", Modifier.weight(1f), style = MaterialTheme.typography.headlineMedium)
+            Text("RetroHub", Modifier.weight(1f), style = MaterialTheme.typography.titleLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
         } else {
             SectionTabs(controller, section, Modifier.weight(1f))
         }
@@ -232,7 +240,7 @@ private fun TopBar(controller: UiController, account: Account, sync: SyncStatus,
                 }
             }
         }
-        if (!compact) ClockText()
+        StatusPill(controller.container.platform)
     }
 }
 
@@ -297,15 +305,69 @@ private fun BarIcon(icon: ImageVector, label: String, modifier: Modifier = Modif
 }
 
 @Composable
-private fun ClockText() {
-    val now by produceState(Clock.System.now()) {
-        while (true) {
-            value = Clock.System.now()
-            delay(15_000)
+internal fun StatusPill(platform: Platform) {
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    val power by produceState(PowerStatus(), platform, lifecycle) {
+        lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            while (true) {
+                value = platform.powerStatus()
+                delay(15_000)
+            }
+        }
+    }
+    val now by produceState(Clock.System.now(), lifecycle) {
+        lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            while (true) {
+                value = Clock.System.now()
+                delay(15_000)
+            }
         }
     }
     val local = now.toLocalDateTime(TimeZone.currentSystemDefault())
-    Text("${local.hour.toString().padStart(2, '0')}:${local.minute.toString().padStart(2, '0')}", style = MaterialTheme.typography.titleMedium)
+    Row(
+        Modifier.clip(Pill).background(Palette.Glass).border(1.dp, Palette.Line, Pill).padding(horizontal = 10.dp, vertical = 8.dp)
+            .semantics(mergeDescendants = true) {},
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Text("${local.hour.toString().padStart(2, '0')}:${local.minute.toString().padStart(2, '0')}", style = MaterialTheme.typography.labelLarge, maxLines = 1)
+        power.phone?.let { level ->
+            Box(Modifier.width(1.dp).height(16.dp).background(Palette.Line))
+            Icon(
+                if (level.charging) Lucide.Zap else Lucide.Battery,
+                null,
+                Modifier.size(16.dp),
+                tint = if (level.percent <=
+                    20
+                ) {
+                    Palette.Warning
+                } else {
+                    Palette.Text
+                },
+            )
+            Text(
+                "${level.percent} %",
+                Modifier.semantics {
+                    contentDescription =
+                        "Batterie du téléphone : ${level.percent} %" + if (level.charging) ", en charge" else ""
+                },
+                style = MaterialTheme.typography.labelMedium,
+                maxLines = 1,
+            )
+        }
+        power.controllers.take(1).forEach { controller ->
+            Box(Modifier.width(1.dp).height(16.dp).background(Palette.Line))
+            Icon(Lucide.Gamepad2, null, Modifier.size(16.dp), tint = Palette.Text)
+            Text(
+                "${controller.level.percent} %",
+                Modifier.semantics {
+                    contentDescription = "Batterie de ${controller.name} : ${controller.level.percent} %"
+                },
+                style = MaterialTheme.typography.labelMedium,
+                maxLines = 1,
+            )
+        }
+    }
 }
 
 /** Small transparent overlay: each controller symbol is paired with a familiar action icon. */

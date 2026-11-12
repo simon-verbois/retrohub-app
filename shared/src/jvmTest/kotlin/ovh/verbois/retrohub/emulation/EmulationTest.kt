@@ -13,7 +13,7 @@ class GameLayoutsTest {
         assertEquals(0f, layout.game.left)
         assertEquals(1f, layout.game.width, 0.001f)
         assertEquals(100f / 2400f, layout.game.top, 0.001f)
-        assertTrue(layout.game.bottom <= 1 - GameLayouts.PORTRAIT_CONTROLS)
+        assertTrue(layout.game.bottom * 2400 <= 2400 - 135f * 5.5f)
     }
 
     @Test
@@ -31,7 +31,7 @@ class GameLayoutsTest {
         assertEquals(ControlsPlacement.BOTTOM_CORNERS, layout.controls)
         assertEquals(0f, layout.game.top)
         assertTrue(layout.game.bottom <= 0.661f)
-        assertTrue(layout.game.width > 0.75f)
+        assertTrue(layout.game.width > 0.6f)
     }
 
     @Test
@@ -47,6 +47,40 @@ class GameLayoutsTest {
         assertEquals(DsLayout.SIDE_BY_SIDE, GameLayouts.defaultDsLayout(portrait = false))
         assertEquals(256f / 384f, GameLayouts.dsAspect(DsLayout.STACKED))
         assertEquals(2f, GameLayouts.dsAspect(DsLayout.MAIN_LARGE))
+    }
+
+    @Test
+    fun tallPhonesUseTheFullWidthForStackedDsScreens() {
+        val layout = GameLayouts.compute(411f, 891f, 2f / 3f, true, controlsUnit = 48f)
+        assertEquals(1f, layout.game.width, 0.001f)
+        assertEquals(0f, layout.game.top)
+        assertTrue(layout.game.bottom * 891f <= 891f - 48f * 5.5f)
+    }
+
+    @Test
+    fun everyDsLayoutAndRotationFitsAndPreservesProportions() {
+        for ((width, height) in listOf(411f to 891f, 891f to 411f, 800f to 1280f)) {
+            for (ds in DsLayout.entries) {
+                for (rotation in GameRotation.entries) {
+                    for (touch in listOf(true, false)) {
+                        val aspect = rotation.aspect(GameLayouts.dsAspect(ds))
+                        val layout = GameLayouts.compute(width, height, aspect, touch, controlsUnit = 48f)
+                        assertTrue(layout.game.left >= 0 && layout.game.top >= 0)
+                        assertTrue(layout.game.right <= 1.001f && layout.game.bottom <= 1.001f)
+                        assertEquals(aspect, layout.game.width * width / (layout.game.height * height), 0.001f)
+                        if (!touch) assertTrue(layout.game.width > 0.999f || layout.game.height > 0.999f)
+                    }
+                }
+            }
+        }
+    }
+
+    @Test
+    fun rotatedStylusCoordinatesReturnToTheOriginalScreen() {
+        assertEquals(0.3f to 0.8f, GameRotation.RIGHT.unrotate(0.2f, 0.3f))
+        assertEquals(0.8f to 0.7f, GameRotation.INVERTED.unrotate(0.2f, 0.3f))
+        assertEquals(0.7f to 0.2f, GameRotation.LEFT.unrotate(0.2f, 0.3f))
+        assertEquals(0.2f to 0.3f, GameRotation.NORMAL.unrotate(0.2f, 0.3f))
     }
 }
 

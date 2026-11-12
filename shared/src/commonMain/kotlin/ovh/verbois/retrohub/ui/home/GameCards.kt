@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -68,13 +67,6 @@ fun GameTile(
             .border(if (selected) 3.dp else 1.dp, if (selected) Color.White else Palette.Line, shape),
     ) {
         GameArt(game.remote.coverUrl, game.console, game.title, Modifier.fillMaxSize(), muted = !game.downloaded)
-        if (game.downloaded) {
-            Box(
-                Modifier.align(
-                    Alignment.TopEnd,
-                ).padding(8.dp).size(10.dp).clip(CircleShape).background(Palette.Success).border(2.dp, Palette.SkyLow, CircleShape),
-            )
-        }
         if (download is DownloadState.Running) {
             DownloadOverlay(download.fraction, Modifier.align(Alignment.BottomCenter))
         }
@@ -91,18 +83,6 @@ fun GameCard(game: Game, onClick: () -> Unit, modifier: Modifier = Modifier, dow
     ) {
         Box(Modifier.fillMaxWidth().aspectRatio(1f).shadow(12.dp, shape).clip(shape).border(1.dp, Palette.Line, shape)) {
             GameArt(game.remote.coverUrl, game.console, game.title, Modifier.fillMaxSize(), showTitleOnFallback = false, muted = !game.downloaded)
-            if (game.downloaded) {
-                Row(
-                    Modifier.align(
-                        Alignment.TopEnd,
-                    ).padding(8.dp).clip(RoundedCornerShape(50)).background(Palette.Scrim).padding(horizontal = 8.dp, vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    Icon(Lucide.HardDriveDownload, null, Modifier.size(12.dp), tint = Palette.Success)
-                    Text("Hors ligne", style = MaterialTheme.typography.labelSmall, color = Palette.Success)
-                }
-            }
             if (game.favorite) {
                 Icon(Lucide.Heart, "Favori", Modifier.align(Alignment.TopStart).padding(10.dp).size(16.dp), tint = Palette.Accent)
             }

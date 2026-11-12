@@ -119,7 +119,7 @@ class GameActivity : ComponentActivity() {
             }
         retroView = GLRetroView(this, data)
         lifecycle.addObserver(retroView)
-        engine = LibretroEngine(retroView, restoreOnReset = plan.core == "melonds").also { it.bind(this) }
+        engine = LibretroEngine(retroView, app.platform.corePath(plan.core), restoreOnReset = plan.core == "melonds").also { it.bind(this) }
         current = java.lang.ref.WeakReference(this)
         engine.setAudio(plan.audio)
         router =
@@ -159,6 +159,7 @@ class GameActivity : ComponentActivity() {
                         onConsoleSettings = { change -> container.settings.update { it.withConsole(plan.console, change) } },
                         onCheats = { cheats -> container.scope.launch { container.cheats.put(plan.playGameId, cheats) } },
                         onRumble = { app.platform.rumble(it) },
+                        onRotation = { value -> container.settings.update { it.copy(gameRotations = it.gameRotations + (plan.playGameId to value)) } },
                     ) { AndroidView({ retroView }) }
                 }
             }

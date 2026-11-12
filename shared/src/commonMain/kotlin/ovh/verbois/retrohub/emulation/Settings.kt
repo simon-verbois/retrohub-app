@@ -21,6 +21,28 @@ enum class DsLayout(val label: String, val description: String) {
     TOP_ONLY("Écran du haut seul", "L’écran tactile reste accessible avec le bouton d’échange."),
 }
 
+@Serializable
+enum class GameRotation(val degrees: Int) {
+    NORMAL(0),
+    RIGHT(90),
+    INVERTED(180),
+    LEFT(270),
+    ;
+
+    val label: String get() = "$degrees°"
+    val sideways: Boolean get() = degrees % 180 != 0
+    fun aspect(original: Float): Float = if (sideways) 1f / original else original
+    fun native(size: Pair<Int, Int>): Pair<Int, Int> = if (sideways) size.second to size.first else size
+
+    /** Map a point in the displayed image back to the core's unrotated touch screen. */
+    fun unrotate(x: Float, y: Float): Pair<Float, Float> = when (this) {
+        NORMAL -> x to y
+        RIGHT -> y to (1f - x)
+        INVERTED -> (1f - x) to (1f - y)
+        LEFT -> (1f - y) to x
+    }
+}
+
 /** Profil de performance choisi à l’installation : il fixe les réglages par défaut. */
 @Serializable
 enum class PerformanceProfile(val label: String, val description: String) {
@@ -207,8 +229,7 @@ data class AppSettings(
     val pinHash: String = "",
     val lockSettings: Boolean = true,
     val lockedGames: Set<String> = emptySet(),
-    // Nouveautés : dernière version dont les notes ont été vues.
-    val seenVersion: String = "",
+    val gameRotations: Map<String, GameRotation> = emptyMap(),
     val consoles: Map<String, ConsoleSettings> = emptyMap(),
 ) {
     fun console(id: String): ConsoleSettings = consoles[id] ?: ConsoleSettings()

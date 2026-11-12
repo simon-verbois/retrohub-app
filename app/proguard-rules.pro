@@ -6,4 +6,5 @@
 -keep class com.swordfish.libretrodroid.GLRetroView { *; }
 -keep class com.swordfish.libretrodroid.GLRetroShader { *; }
 -keep class com.swordfish.libretrodroid.DetachedVirtualFile { *; }
+-keep class ovh.verbois.retrohub.game.NativeDisplay { *; }
 -keep class com.swordfish.libretrodroid.RetroException { *; }

@@ -76,6 +76,7 @@ import ovh.verbois.retrohub.emulation.CoreOptions
 import ovh.verbois.retrohub.emulation.DsLayout
 import ovh.verbois.retrohub.emulation.EmulatorEngine
 import ovh.verbois.retrohub.emulation.GameLayouts
+import ovh.verbois.retrohub.emulation.GameRotation
 import ovh.verbois.retrohub.emulation.PadKey
 import ovh.verbois.retrohub.emulation.PortraitPosition
 import ovh.verbois.retrohub.game.Cheat
@@ -110,6 +111,7 @@ fun GameScreen(
     onConsoleSettings: ((ConsoleSettings) -> ConsoleSettings) -> Unit = {},
     onCheats: (List<Cheat>) -> Unit = {},
     onRumble: (Float) -> Unit = {},
+    onRotation: (GameRotation) -> Unit = {},
     surface: @Composable () -> Unit,
 ) {
     val plan = session.plan
@@ -120,6 +122,7 @@ fun GameScreen(
     var page by remember { mutableStateOf(MenuPage.MAIN) }
     var dsPortrait by remember { mutableStateOf(plan.dsLayoutPortrait) }
     var dsLandscape by remember { mutableStateOf(plan.dsLayoutLandscape) }
+    var rotation by remember { mutableStateOf(plan.rotation) }
     var confirmReset by remember { mutableStateOf(false) }
     var confirmQuit by remember { mutableStateOf(false) }
     var overwrite by remember { mutableStateOf<Int?>(null) }
@@ -167,7 +170,8 @@ fun GameScreen(
         val density = LocalDensity.current
         val portrait = maxHeight > maxWidth
         val dsLayout = if (portrait) dsPortrait else dsLandscape
-        val aspect = if (spec.dualScreen) GameLayouts.dsAspect(dsLayout) else spec.aspect
+        val aspect = rotation.aspect(if (spec.dualScreen) GameLayouts.dsAspect(dsLayout) else plan.displayAspect ?: spec.aspect)
+        val pad = padSpec(spec.pad).let { if (plan.analog) it.copy(leftStick = true) else it }
         val layout =
             with(density) {
                 GameLayouts.compute(
@@ -175,9 +179,10 @@ fun GameScreen(
                     maxHeight.toPx(),
                     aspect,
                     showTouch || editing,
-                    topInset = if (portrait && !plan.useDisplayCutout) 36.dp.toPx() else 0f,
-                    native = if (plan.integerScale) Consoles.nativeSize(plan.console, if (spec.dualScreen) dsLayout else null) else null,
+                    native = if (plan.integerScale) Consoles.nativeSize(plan.console, if (spec.dualScreen) dsLayout else null)?.let(rotation::native) else null,
                     portraitCentered = plan.portraitPosition == PortraitPosition.CENTER,
+                    controlsUnit = (48.dp * plan.touchScale).toPx(),
+                    portraitControlRows = if (pad.leftStick && pad.dpad) 6.6f else 5.5f,
                 )
             }
         val cutout = WindowInsets.displayCutout
@@ -198,8 +203,12 @@ fun GameScreen(
         val suffix = if (portrait) "@p" else "@l"
         val groupLayout = touchLayout.filterKeys { it.endsWith(suffix) }.mapKeys { it.key.removeSuffix(suffix) }
         LaunchedEffect(layout.game) { engine.setViewport(layout.game) }
-        if (spec.dualScreen) {
-            LaunchedEffect(dsLayout) { engine.setOptions(mapOf("melonds_screen_layout" to CoreOptions.dsLayoutValue(dsLayout, false))) }
+        LaunchedEffect(rotation, dsLayout) {
+            if (spec.dualScreen) engine.setOptions(mapOf("melonds_screen_layout" to CoreOptions.dsLayoutValue(dsLayout, plan.dsSwapScreens)))
+            // Let the core publish its new geometry before applying the rotated aspect.
+            val frame = engine.frames.value
+            engine.frames.first { it > frame }
+            engine.setRotation(rotation, aspect)
         }
         surface()
         if (showTouch || editing) {
@@ -266,7 +275,19 @@ fun GameScreen(
                 plan.touchScale,
                 onKey = { key, down -> router.key(key, down) },
                 onStick = { stick, x, y -> router.stick(stick, x, y) },
-                onScreenTouch = { point -> engine.touch(point?.x?.plus(controlsLeft), point?.y?.plus(controlsTop)) },
+                onScreenTouch = { point ->
+                    val x = point?.x?.plus(controlsLeft)
+                    val y = point?.y?.plus(controlsTop)
+                    val game = layout.game
+                    if (x == null || y == null || x < game.left * screenWidth || x > game.right * screenWidth || y < game.top * screenHeight ||
+                        y > game.bottom * screenHeight
+                    ) {
+                        engine.touch(null, null)
+                    } else {
+                        val (u, v) = rotation.unrotate((x / screenWidth - game.left) / game.width, (y / screenHeight - game.top) / game.height)
+                        engine.touch((game.left + u * game.width) * screenWidth, (game.top + v * game.height) * screenHeight)
+                    }
+                },
                 onHaptic = { if (plan.haptics) haptic() },
                 modifier = controlsModifier,
                 gameBottom = safeGameBottom,
@@ -326,6 +347,11 @@ fun GameScreen(
                 dualScreen = spec.dualScreen,
                 dsLayout = dsLayout,
                 onDsLayout = { if (portrait) dsPortrait = it else dsLandscape = it },
+                rotation = rotation,
+                onRotation = { value ->
+                    rotation = value
+                    onRotation(value)
+                },
                 onReset = { confirmReset = true },
                 onSaveSlot = { slot ->
                     if (plan.confirmOverwrite && !slot.empty) {
@@ -467,6 +493,8 @@ private fun PauseMenu(
     dualScreen: Boolean,
     dsLayout: DsLayout,
     onDsLayout: (DsLayout) -> Unit,
+    rotation: GameRotation,
+    onRotation: (GameRotation) -> Unit,
     onReset: () -> Unit,
     onSaveSlot: (SlotInfo) -> Unit,
     onEditControls: (() -> Unit)?,
@@ -504,7 +532,7 @@ private fun PauseMenu(
                     MenuEntry(Lucide.FastForward, if (fastForward) "Avance rapide : activée" else "Avance rapide") {
                         session.toggleFastForward()
                     }
-                    if (dualScreen) MenuEntry(Lucide.Columns2, "Disposition des écrans") { onPage(MenuPage.SCREENS) }
+                    MenuEntry(Lucide.Monitor, "Image et écrans") { onPage(MenuPage.SCREENS) }
                     if (onEditControls != null) MenuEntry(Lucide.Gamepad2, "Déplacer les commandes", onClick = onEditControls)
                     MenuEntry(Lucide.Sparkles, "Codes de triche", subtitle = cheatSummary(cheats)) { onPage(MenuPage.CHEATS) }
                     MenuEntry(Lucide.SlidersHorizontal, "Options de l’émulateur") { onPage(MenuPage.OPTIONS) }
@@ -574,20 +602,28 @@ private fun PauseMenu(
 
                 MenuPage.SCREENS -> {
                     BackEntry(Modifier.focusRequester(first)) { onPage(MenuPage.MAIN) }
-                    DsLayout.entries.forEach { option ->
-                        MenuEntry(
-                            if (option ==
-                                dsLayout
+                    Text("Rotation de l’image", style = MaterialTheme.typography.titleMedium)
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        GameRotation.entries.forEach { option ->
+                            ovh.verbois.retrohub.ui.components.FilterChip(option.label, option == rotation, { onRotation(option) })
+                        }
+                    }
+                    if (dualScreen) {
+                        DsLayout.entries.forEach { option ->
+                            MenuEntry(
+                                if (option ==
+                                    dsLayout
+                                ) {
+                                    Lucide.CircleCheck
+                                } else {
+                                    Lucide.Columns2
+                                },
+                                option.label,
+                                subtitle = option.description,
                             ) {
-                                Lucide.CircleCheck
-                            } else {
-                                Lucide.Columns2
-                            },
-                            option.label,
-                            subtitle = option.description,
-                        ) {
-                            onDsLayout(option)
-                            session.resume()
+                                onDsLayout(option)
+                                session.resume()
+                            }
                         }
                     }
                 }

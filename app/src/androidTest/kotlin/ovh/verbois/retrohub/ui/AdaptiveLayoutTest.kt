@@ -1,7 +1,9 @@
 package ovh.verbois.retrohub.ui
 
 import androidx.activity.ComponentActivity
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
@@ -26,7 +28,10 @@ import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -38,6 +43,7 @@ import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.UiDevice
+import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -46,7 +52,11 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import ovh.verbois.retrohub.RetroHubApp
+import ovh.verbois.retrohub.api.ApiJson
 import ovh.verbois.retrohub.api.LibraryGame
+import ovh.verbois.retrohub.data.GameEntity
+import ovh.verbois.retrohub.data.LocalRomEntity
+import ovh.verbois.retrohub.emulation.GameRotation
 import ovh.verbois.retrohub.emulation.ThemeMode
 import ovh.verbois.retrohub.library.DownloadState
 import ovh.verbois.retrohub.library.Game
@@ -59,6 +69,7 @@ import ovh.verbois.retrohub.ui.nav.SettingsPage
 import ovh.verbois.retrohub.ui.onboarding.SetupWizard
 import ovh.verbois.retrohub.ui.onboarding.WelcomeScreen
 import ovh.verbois.retrohub.ui.settings.SettingsScreen
+import ovh.verbois.retrohub.ui.theme.Palette
 import ovh.verbois.retrohub.ui.theme.RetroHubTheme
 import java.io.File
 import kotlin.math.abs
@@ -72,6 +83,12 @@ class AdaptiveLayoutTest {
 
     @After
     fun restoreRotation() {
+        runBlocking {
+            container.database.roms().find("options-layout")?.let { container.database.roms().delete(it) }
+            val keep = container.database.games().all().filter { it.id != "options-layout" }.map { it.id }
+            container.database.games().deleteOthers(keep)
+            container.settings.updateNow { it.copy(gameRotations = it.gameRotations - "options-layout") }
+        }
         device.setOrientationLandscape()
         instrumentation.waitForIdleSync()
     }
@@ -105,7 +122,7 @@ class AdaptiveLayoutTest {
     }
 
     @Test
-    fun dsSettingsPreserveLabelsValuesAndDescriptionsOnSmallPhone() {
+    fun dsSettingsPreserveLabelsAndValuesOnSmallPhone() {
         device.setOrientationNatural()
         show(320f, fontScale = 1.3f) {
             val scope = rememberCoroutineScope()
@@ -118,6 +135,50 @@ class AdaptiveLayoutTest {
         assertNoClippedText()
         rule.onNodeWithText("Langue de la console").performScrollTo().assertIsDisplayed()
         assertNoClippedText()
+    }
+
+    @Test
+    fun gameOptionsUseColumnsAndExposeRotationWithoutHidingGameActions() {
+        device.setOrientationLandscape()
+        gameOptions(840f)
+        val image = rule.onNodeWithText("Rotation de l’image").fetchSemanticsNode().boundsInRoot
+        val saves = rule.onNodeWithText("Sauvegardes").fetchSemanticsNode().boundsInRoot
+        assertTrue("Save settings should use the right column", saves.left > image.right)
+        rule.onNodeWithText("Supprimer du téléphone").assertIsDisplayed()
+        rule.onNodeWithContentDescription("Rotation de l’image : 90°").performClick().assertIsSelected()
+        assertEquals(GameRotation.RIGHT, container.settings.settings.value.gameRotations["options-layout"])
+        assertNoClippedText()
+        screenshot("game-options-landscape")
+    }
+
+    @Test
+    fun gameOptionsStackOnSmallDarkPhonesAndKeepLongTitlesReadable() {
+        device.setOrientationNatural()
+        gameOptions(320f, fontScale = 1.5f, dark = true)
+        rule.onNodeWithContentDescription("Rotation de l’image : 270°").performScrollTo().performClick().assertIsSelected()
+        assertNoClippedText()
+        screenshot("game-options-small-portrait-dark")
+        rule.onNodeWithText("Supprimer du téléphone").performScrollTo().assertIsDisplayed()
+        assertNoClippedText()
+    }
+
+    private fun gameOptions(width: Float, fontScale: Float = 1f, dark: Boolean = false) {
+        val title = "Programme d’entraînement cérébral du Dr Kawashima : Quel âge a votre cerveau ?"
+        runBlocking {
+            val game = LibraryGame("options-layout", "options-layout", title = title, console = "nds")
+            container.database.games().upsert(
+                listOf(GameEntity(game.id, game.playGameId, title, game.console, false, null, 0, 0, ApiJson.encodeToString(LibraryGame.serializer(), game))),
+            )
+            container.database.roms().upsert(
+                LocalRomEntity(game.id, game.id, game.console, title, "unused-layout-fixture", "fixture", 1, "2026-11-12T00:00:00Z"),
+            )
+        }
+        show(width, fontScale = fontScale, dark = dark) {
+            val scope = rememberCoroutineScope()
+            val controller = remember { UiController(container, scope) }
+            SettingsScreen(controller, SettingsPage.GAME, "options-layout")
+        }
+        rule.waitUntil(5000) { rule.onAllNodesWithText("Supprimer du téléphone").fetchSemanticsNodes().isNotEmpty() }
     }
 
     @Test
@@ -182,7 +243,9 @@ class AdaptiveLayoutTest {
                     LocalDensity provides Density(pixels / width, fontScale),
                     LocalLayoutDirection provides if (rtl) LayoutDirection.Rtl else LayoutDirection.Ltr,
                 ) {
-                    RetroHubTheme(if (dark) ThemeMode.DARK else ThemeMode.LIGHT, content)
+                    RetroHubTheme(if (dark) ThemeMode.DARK else ThemeMode.LIGHT) {
+                        Box(Modifier.fillMaxSize().background(Palette.Background)) { content() }
+                    }
                 }
             }
         }

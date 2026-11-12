@@ -20,9 +20,6 @@ enum class ControlsPlacement {
 }
 
 object GameLayouts {
-    /** Part minimale de l’écran réservée aux commandes en portrait. */
-    const val PORTRAIT_CONTROLS = 0.38f
-
     /**
      * [aspect] est le rapport largeur/hauteur de l’image produite par le cœur (pour la DS, celui de
      * la disposition choisie). Les tailles sont en pixels, le résultat en coordonnées normalisées.
@@ -36,8 +33,11 @@ object GameLayouts {
         /** Taille native (pixels carrés) : l’image est agrandie d’un nombre entier de fois. */
         native: Pair<Int, Int>? = null,
         portraitCentered: Boolean = false,
+        /** Real button size in pixels, including the player's control scale. */
+        controlsUnit: Float = min(width, height) / 8f,
+        portraitControlRows: Float = 5.5f,
     ): GameLayout {
-        val layout = place(width, height, aspect, touchControls, topInset, portraitCentered)
+        val layout = place(width, height, aspect, touchControls, topInset, portraitCentered, controlsUnit, portraitControlRows)
         if (native == null) return layout
         val (nw, nh) = native
         val gw = layout.game.width * width
@@ -57,21 +57,32 @@ object GameLayouts {
         return layout.copy(game = NormRect(left, top, w, h))
     }
 
-    private fun place(width: Float, height: Float, aspect: Float, touchControls: Boolean, topInset: Float, portraitCentered: Boolean): GameLayout {
+    private fun place(
+        width: Float,
+        height: Float,
+        aspect: Float,
+        touchControls: Boolean,
+        topInset: Float,
+        portraitCentered: Boolean,
+        unit: Float,
+        portraitControlRows: Float,
+    ): GameLayout {
         val portrait = height > width
         if (!touchControls) return GameLayout(fit(width, height, 0f, 0f, width, height, aspect, center = true), ControlsPlacement.NONE)
         if (portrait) {
-            val areaHeight = height * (1 - PORTRAIT_CONTROLS) - topInset
+            val areaHeight = (height - unit * portraitControlRows - topInset).coerceAtLeast(1f)
             return GameLayout(fit(width, height, 0f, topInset, width, areaHeight, aspect, center = portraitCentered), ControlsPlacement.BELOW)
         }
         // Paysage : on garde des colonnes latérales pour les pouces si l’image reste assez grande.
-        val side = min(width * 0.21f, height * 0.5f)
+        val side = (unit * 3.6f).coerceAtMost(width * 0.4f)
         val sides = fit(width, height, side, 0f, width - 2 * side, height, aspect, center = true)
-        if (sides.height >= 0.78f) return GameLayout(sides, ControlsPlacement.SIDES)
-        // Image très large (DS côte à côte) : les écrans prennent le haut, presque toute la largeur,
-        // et les commandes la bande du bas ; rien ne recouvre les écrans.
-        val corners = fit(width, height, width * 0.07f, 0f, width * 0.86f, height * 0.66f, aspect, center = false)
-        return GameLayout(corners, ControlsPlacement.BOTTOM_CORNERS)
+        val shoulder = (unit * 2.1f).coerceAtMost(width * 0.4f)
+        val corners = fit(width, height, shoulder, 0f, width - 2 * shoulder, (height - unit * 3.6f).coerceAtLeast(1f), aspect, center = false)
+        return if (sides.width * sides.height >= corners.width * corners.height) {
+            GameLayout(sides, ControlsPlacement.SIDES)
+        } else {
+            GameLayout(corners, ControlsPlacement.BOTTOM_CORNERS)
+        }
     }
 
     /** Le plus grand rectangle de rapport [aspect] dans la zone donnée, centré horizontalement. */

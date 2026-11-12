@@ -1,12 +1,18 @@
 package ovh.verbois.retrohub.ui.settings
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -14,8 +20,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import ovh.verbois.retrohub.core.UpdateLevel
 import ovh.verbois.retrohub.core.updateLevel
@@ -23,9 +33,11 @@ import ovh.verbois.retrohub.emulation.Consoles
 import ovh.verbois.retrohub.ui.Backdrop
 import ovh.verbois.retrohub.ui.UiController
 import ovh.verbois.retrohub.ui.components.AutoFocus
+import ovh.verbois.retrohub.ui.components.GameArt
 import ovh.verbois.retrohub.ui.components.GroupDivider
 import ovh.verbois.retrohub.ui.components.NavigationRow
 import ovh.verbois.retrohub.ui.components.PageHeader
+import ovh.verbois.retrohub.ui.components.RoundButton
 import ovh.verbois.retrohub.ui.components.SectionLabel
 import ovh.verbois.retrohub.ui.components.SettingsGroup
 import ovh.verbois.retrohub.ui.components.controllerVerticalScroll
@@ -63,17 +75,28 @@ fun SettingsScreen(controller: UiController, page: SettingsPage, console: String
         when {
             page == SettingsPage.CONSOLE && console != null -> Consoles.name(console)
             page == SettingsPage.REMAP && console != null -> "Manette · ${Consoles[console]?.shortName ?: ""}"
-            page == SettingsPage.GAME && console != null -> controller.container.library.games.value.firstOrNull { it.id == console }?.title ?: page.title
             else -> page.title
         }
     Column(Modifier.fillMaxSize()) {
-        PageHeader(title, { controller.nav.back() }, backModifier = Modifier.focusRequester(first))
+        if (page == SettingsPage.GAME) {
+            GameOptionsHeader(controller, console.orEmpty(), Modifier.focusRequester(first))
+        } else {
+            PageHeader(title, { controller.nav.back() }, backModifier = Modifier.focusRequester(first))
+        }
         Column(
             Modifier.weight(
                 1f,
             ).align(
                 Alignment.CenterHorizontally,
-            ).widthIn(max = 860.dp).fillMaxWidth().controllerVerticalScroll(rememberScrollState()).padding(start = 24.dp, end = 24.dp, bottom = 24.dp),
+            ).widthIn(
+                max = if (page ==
+                    SettingsPage.GAME
+                ) {
+                    1040.dp
+                } else {
+                    860.dp
+                },
+            ).fillMaxWidth().controllerVerticalScroll(rememberScrollState()).padding(start = 24.dp, end = 24.dp, bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             when (page) {
@@ -98,6 +121,48 @@ fun SettingsScreen(controller: UiController, page: SettingsPage, console: String
         }
     }
     AutoFocus(first)
+}
+
+@Composable
+private fun GameOptionsHeader(controller: UiController, id: String, backModifier: Modifier) {
+    val games by controller.container.library.games.collectAsState()
+    val game = games.firstOrNull { it.id == id }
+    val fontScale = LocalDensity.current.fontScale
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val stacked = maxWidth < 360.dp || fontScale > 1.3f
+        Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                RoundButton(Lucide.ArrowLeft, "Retour", { controller.nav.back() }, backModifier, size = 48.dp)
+                if (game !=
+                    null
+                ) {
+                    GameArt(
+                        game.remote.coverUrl,
+                        game.console,
+                        game.title,
+                        Modifier.size(48.dp).clip(RoundedCornerShape(10.dp)),
+                        showTitleOnFallback = false,
+                        muted = !game.downloaded,
+                    )
+                }
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        if (stacked) "Options du jeu" else game?.title ?: "Options du jeu",
+                        Modifier.semantics {
+                            heading()
+                        },
+                        style = MaterialTheme.typography.titleMedium,
+                    )
+                    game?.let { Text(Consoles.name(it.console), style = MaterialTheme.typography.bodySmall, color = Palette.TextDim) }
+                }
+            }
+            if (stacked && game != null) Text(game.title, style = MaterialTheme.typography.bodyMedium)
+        }
+    }
 }
 
 @Composable

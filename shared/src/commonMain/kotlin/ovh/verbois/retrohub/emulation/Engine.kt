@@ -74,6 +74,8 @@ interface EmulatorEngine {
 
     fun setViewport(rect: NormRect)
 
+    fun setRotation(rotation: GameRotation, aspect: Float) = Unit
+
     fun setOptions(options: Map<String, String>)
 
     /** Options déclarées par le cœur en cours (clé, valeur, libellé et valeurs possibles). */

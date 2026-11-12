@@ -1,0 +1,7 @@
+cmake_minimum_required(VERSION 3.22.1)
+project(retrohub_display LANGUAGES CXX)
+add_library(retrohub_display SHARED display.cpp)
+target_compile_features(retrohub_display PRIVATE cxx_std_17)
+target_compile_options(retrohub_display PRIVATE -Wall -Wextra -Werror)
+target_link_libraries(retrohub_display PRIVATE dl)
+target_link_options(retrohub_display PRIVATE "-Wl,-z,max-page-size=16384")

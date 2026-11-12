@@ -145,6 +145,7 @@ class GameLauncher(
                     shader = CoreOptions.shader(spec, settings),
                     dsLayoutPortrait = consoleSettings.dsLayoutPortrait ?: GameLayouts.defaultDsLayout(portrait = true),
                     dsLayoutLandscape = consoleSettings.dsLayoutLandscape ?: GameLayouts.defaultDsLayout(portrait = false),
+                    dsSwapScreens = consoleSettings.dsSwapScreens == true,
                     fastForwardSpeed = consoleSettings.fastForwardSpeed ?: 3,
                     autoSaveSeconds = settings.autoSaveSeconds,
                     audio = settings.audio,
@@ -169,6 +170,15 @@ class GameLauncher(
                         else -> null
                     },
                     integerScale = consoleSettings.integerScale == true && Consoles.nativeSize(spec.id) != null,
+                    rotation = settings.gameRotations[game.playGameId] ?: ovh.verbois.retrohub.emulation.GameRotation.NORMAL,
+                    displayAspect = when {
+                        consoleSettings.widescreen == true && CoreOptions.supportsWidescreen(spec.id, core) -> 16f / 9f
+
+                        consoleSettings.aspect == ovh.verbois.retrohub.emulation.AspectChoice.PIXELS || consoleSettings.integerScale == true ->
+                            Consoles.nativeSize(spec.id)?.let { it.first.toFloat() / it.second } ?: spec.aspect
+
+                        else -> spec.aspect
+                    },
                     portraitPosition = settings.portraitPosition,
                     useDisplayCutout = settings.useDisplayCutout,
                     orientation = settings.orientation(spec.id),

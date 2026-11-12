@@ -25,6 +25,8 @@ import androidx.test.platform.app.InstrumentationRegistry
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -90,7 +92,7 @@ class NavigationTreeTest {
                 }
             }
         }
-        rule.waitUntil(5_000) { rule.activity.hasWindowFocus() }
+        if (section != Section.USER) rule.waitUntil(5_000) { rule.activity.hasWindowFocus() }
         rule.waitUntil(5_000) {
             val node = if (section ==
                 Section.HOME
@@ -108,6 +110,17 @@ class NavigationTreeTest {
             instrumentation.sendKeySync(KeyEvent(0, 0, action, code, 0, 0, 0, 0, 0, InputDevice.SOURCE_GAMEPAD))
         }
         rule.waitForIdle()
+    }
+
+    @Test
+    fun homeFitsTheViewportWithoutVerticalScrollingEvenWithLargerText() {
+        show(largeText = true)
+        val home = rule.onNodeWithTag("home-content", useUnmergedTree = true).fetchSemanticsNode()
+        assertFalse(home.config.contains(SemanticsProperties.VerticalScrollAxisRange))
+        val action = rule.onNodeWithTag("game-primary-action").fetchSemanticsNode().boundsInRoot
+        assertTrue(action.top >= home.boundsInRoot.top)
+        assertTrue(action.bottom <= home.boundsInRoot.bottom)
+        rule.onNodeWithTag("game-primary-action").assertIsDisplayed()
     }
 
     @Test
@@ -141,6 +154,31 @@ class NavigationTreeTest {
     }
 
     @Test
+    fun profileKeepsTheHomeVisibleAndClosesWithBackStartOrOutsideClick() {
+        show()
+        val cover = rule.onNodeWithTag("home-game-tree-2", useUnmergedTree = true)
+        cover.performSemanticsAction(SemanticsActions.RequestFocus) { it() }
+        pad(KeyEvent.KEYCODE_BUTTON_START)
+        rule.onNodeWithTag("profile-menu").assertIsDisplayed()
+        rule.onNodeWithTag("home-content", useUnmergedTree = true).assertIsDisplayed()
+        rule.onNodeWithText("Profil").assertDoesNotExist()
+        rule.onNodeWithContentDescription("Fermer le profil").assertDoesNotExist()
+        pad(KeyEvent.KEYCODE_BUTTON_B)
+        rule.onNodeWithTag("profile-menu").assertDoesNotExist()
+        cover.assertIsFocused()
+        pad(KeyEvent.KEYCODE_BUTTON_START)
+        pad(KeyEvent.KEYCODE_BUTTON_START)
+        rule.onNodeWithTag("profile-menu").assertDoesNotExist()
+        pad(KeyEvent.KEYCODE_BUTTON_START)
+        val device = androidx.test.uiautomator.UiDevice.getInstance(instrumentation)
+        device.click(device.displayWidth / 10, device.displayHeight / 2)
+        rule.waitForIdle()
+        rule.onNodeWithTag("profile-menu").assertDoesNotExist()
+        assertEquals("tree-2", controller.homeGame)
+        assertEquals(Route.Home, controller.nav.current)
+    }
+
+    @Test
     fun profileScrollsToStorageWithAControllerAndLargeText() {
         show(Section.USER, largeText = true)
         rule.onNodeWithText("Paramètres de l’application").performSemanticsAction(SemanticsActions.RequestFocus) { it() }
@@ -148,8 +186,13 @@ class NavigationTreeTest {
         rule.onNodeWithText("Stockage").assertIsDisplayed().assertIsFocused()
         pad(KeyEvent.KEYCODE_BUTTON_A)
         rule.onNodeWithText("Téléchargements et stockage").assertIsDisplayed()
-        repeat(5) { pad(KeyEvent.KEYCODE_DPAD_DOWN) }
-        rule.onNodeWithText("Vider le cache des jaquettes").assertIsDisplayed()
+        rule.onNodeWithContentDescription("Retour").performSemanticsAction(SemanticsActions.RequestFocus) { it() }
+        val cache = rule.onNodeWithText("Vider le cache des jaquettes")
+        repeat(12) {
+            val focused = runCatching { cache.fetchSemanticsNode().config[SemanticsProperties.Focused] }.getOrDefault(false)
+            if (!focused) pad(KeyEvent.KEYCODE_DPAD_DOWN)
+        }
+        cache.assertIsDisplayed().assertIsFocused()
     }
 
     @Test

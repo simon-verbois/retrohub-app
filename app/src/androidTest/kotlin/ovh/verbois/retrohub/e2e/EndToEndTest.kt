@@ -10,6 +10,7 @@ import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
@@ -81,6 +82,23 @@ class EndToEndTest {
         waitUntil(30_000, "jeu dans le catalogue") { container.library.games.value.any { it.title == title } }
         waitText("Téléchargés")
         screenshot("home-landscape")
+        click("Catalogue")
+        waitText("Chercher dans le catalogue")
+        rule.onNode(hasSetTextAction()).performTextInput(title)
+        rule.onNode(hasSetTextAction()).performImeAction()
+        rule.waitUntil(15_000) { rule.onAllNodesWithTag("catalogue-game-$gameId").fetchSemanticsNodes().isNotEmpty() }
+        screenshot("catalogue-landscape")
+        rule.onNodeWithTag("catalogue-game-$gameId").performClick()
+        waitText("Télécharger sur le téléphone")
+        screenshot("catalogue-game-landscape")
+        click("Télécharger sur le téléphone")
+        waitText("Télécharger cette version ?")
+        click("Annuler")
+        assertTrue(container.downloads.states.value[gameId] == null)
+        device.pressBack()
+        waitText("Chercher dans le catalogue")
+        device.pressBack()
+        waitText("Téléchargés")
 
         // Changes imported while the app stays active arrive without a lifecycle restart.
         val liveEvents = container.serverStatus.value?.features?.contains(FEATURE_LIBRARY_EVENTS) == true
@@ -128,6 +146,19 @@ class EndToEndTest {
         assertEquals(expected, Backend.sha256(File(local.path).readBytes()))
         assertEquals(Backend.sha256(rom), expected)
         screenshot("selected-landscape")
+        pad(KeyEvent.KEYCODE_BUTTON_START)
+        waitText("Paramètres de l’application")
+        screenshot("profile-menu-landscape")
+        pad(KeyEvent.KEYCODE_BUTTON_B)
+        waitGone("Paramètres de l’application")
+        clickDescription("Options du jeu")
+        click("Options du jeu")
+        waitText("Rotation de l’image")
+        screenshot("game-options-landscape")
+        device.setOrientationNatural()
+        screenshot("game-options-portrait")
+        device.pressBack()
+        waitText("Jouer")
 
         // Selecting the cover never starts a game; the explicit action does.
         device.setOrientationNatural()
@@ -308,10 +339,8 @@ class EndToEndTest {
         screenshot("settings-ds-portrait")
         shell("cmd overlay enable-exclusive --category com.android.internal.systemui.navbar.gestural")
         Thread.sleep(500)
-        device.swipe(1, device.displayHeight / 2, device.displayWidth / 3, device.displayHeight / 2, 25)
-        waitText("Consoles")
-        device.swipe(1, device.displayHeight / 2, device.displayWidth / 3, device.displayHeight / 2, 25)
-        waitText("Paramètres")
+        immersiveBackGesture("Consoles")
+        immersiveBackGesture("Paramètres")
         click("Apparence")
         click("Thème")
         waitText("Conseillé")
@@ -397,6 +426,18 @@ class EndToEndTest {
             screenshot("echec-attente")
             throw AssertionError("Texte absent : « $text »", error)
         }
+    }
+
+    private fun immersiveBackGesture(expected: String) {
+        // Android can consume the first edge swipe to reveal transient system bars.
+        repeat(3) {
+            device.swipe(1, device.displayHeight / 2, device.displayWidth / 3, device.displayHeight / 2, 25)
+            try {
+                rule.waitUntil(1500) { rule.onAllNodesWithText(expected).fetchSemanticsNodes().isNotEmpty() }
+                return
+            } catch (_: androidx.compose.ui.test.ComposeTimeoutException) { }
+        }
+        waitText(expected)
     }
 
     private fun waitGone(text: String, substring: Boolean = false) = rule.waitUntil(15_000) {

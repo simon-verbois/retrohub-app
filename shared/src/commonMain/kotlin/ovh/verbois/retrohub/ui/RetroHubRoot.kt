@@ -1,13 +1,8 @@
 package ovh.verbois.retrohub.ui
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -18,7 +13,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
-import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
@@ -67,8 +61,8 @@ fun RetroHubRoot(container: AppContainer, onExit: () -> Unit = {}, onController:
     val settings by container.settings.settings.collectAsState()
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val activeAccount = (auth as? AuthState.SignedIn)?.account
-    val libraryVisible = settings.setupDone && when (controller.nav.current) {
-        Route.Home, is Route.Library, Route.Favorites, Route.Downloads, Route.Search -> true
+    val libraryVisible = settings.setupDone && when (controller.nav.contentRoute) {
+        Route.Home, is Route.Library, Route.Favorites, Route.Downloads, Route.Catalogue, is Route.CatalogueGame, Route.Search -> true
         else -> false
     }
     LaunchedEffect(activeAccount?.server, activeAccount?.userId, activeAccount?.deviceId, libraryVisible, lifecycle) {
@@ -128,7 +122,6 @@ fun RetroHubRoot(container: AppContainer, onExit: () -> Unit = {}, onController:
                                     controller.autoStart()
                                 }
                                 ConsoleShell(controller, state.account) { route -> Screen(controller, route) }
-                                WhatsNew(container, settings.seenVersion)
                                 controller.pinRequest?.let { (reason, action) ->
                                     PinDialog(settings.pinHash, reason, onUnlocked = {
                                         controller.pinRequest = null
@@ -153,6 +146,10 @@ private fun Screen(controller: UiController, route: Route) {
         Route.Favorites -> LibraryScreen(controller, null, favoritesOnly = true)
 
         Route.Downloads -> DownloadsScreen(controller)
+
+        Route.Catalogue -> ovh.verbois.retrohub.ui.catalogue.CatalogueScreen(controller)
+
+        is Route.CatalogueGame -> WithBack(controller) { ovh.verbois.retrohub.ui.catalogue.CatalogueGameScreen(controller, route.id) }
 
         Route.Search, Route.User -> Unit
 
@@ -194,39 +191,5 @@ private fun WithBack(controller: UiController, content: @Composable () -> Unit) 
     androidx.compose.foundation.layout.Column(Modifier.fillMaxSize()) {
         ovh.verbois.retrohub.ui.components.PageHeader(null, { controller.nav.back() })
         Box(Modifier.weight(1f).fillMaxSize()) { content() }
-    }
-}
-
-/** Une fois par version : les nouveautés, tirées du CHANGELOG embarqué. */
-@Composable
-private fun WhatsNew(container: AppContainer, seen: String) {
-    val version = container.platform.appVersion
-    if (seen == version) return
-    if (seen.isEmpty()) {
-        // Première installation : rien de « nouveau » à montrer.
-        LaunchedEffect(Unit) { container.settings.update { it.copy(seenVersion = version) } }
-        return
-    }
-    val entries by androidx.compose.runtime.produceState<List<ovh.verbois.retrohub.ui.settings.ChangelogEntry>?>(null) {
-        value = ovh.verbois.retrohub.ui.settings.loadChangelog()
-    }
-    val list = entries ?: return
-    val dismiss = { container.settings.update { it.copy(seenVersion = version) } }
-    if (list.isEmpty()) {
-        LaunchedEffect(Unit) { dismiss() }
-        return
-    }
-    androidx.compose.ui.window.Dialog(onDismissRequest = dismiss) {
-        ovh.verbois.retrohub.ui.components.GlassPanel(Modifier.padding(8.dp)) {
-            androidx.compose.foundation.layout.Column(
-                Modifier.background(ovh.verbois.retrohub.ui.theme.Palette.BackgroundHigh).heightIn(max = 520.dp)
-                    .verticalScroll(rememberScrollState()).padding(24.dp),
-                verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp),
-            ) {
-                androidx.compose.material3.Text("Quoi de neuf ?", style = androidx.compose.material3.MaterialTheme.typography.headlineMedium)
-                ovh.verbois.retrohub.ui.settings.ChangelogContent(list, limit = 1)
-                ovh.verbois.retrohub.ui.components.PrimaryButton("C’est parti", dismiss, height = 48.dp)
-            }
-        }
     }
 }

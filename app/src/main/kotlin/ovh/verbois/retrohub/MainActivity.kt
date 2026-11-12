@@ -57,7 +57,7 @@ class MainActivity : ComponentActivity() {
             navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
         )
         super.onCreate(savedInstanceState)
-        showSystemBars()
+        immersive()
         val container = (application as RetroHubApp).container
         (application as RetroHubApp).platform.qrScanner = { scanQrCode() }
         onBackPressedDispatcher.addCallback(
@@ -119,7 +119,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        showSystemBars()
+        immersive()
         // Retour au premier plan : un 304 coûte peu, la bibliothèque reste à jour.
         val container = (application as RetroHubApp).container
         lifecycleScope.launch {
@@ -130,7 +130,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
-        if (hasFocus) showSystemBars()
+        if (hasFocus) immersive()
     }
 
     override fun onDestroy() {
@@ -139,11 +139,11 @@ class MainActivity : ComponentActivity() {
         super.onDestroy()
     }
 
-    /** Keep navigation gestures available; immersive mode is reserved for the running game. */
-    private fun showSystemBars() {
+    private fun immersive() {
         WindowCompat.setDecorFitsSystemWindows(window, false)
         WindowInsetsControllerCompat(window, window.decorView).apply {
-            show(WindowInsetsCompat.Type.systemBars())
+            hide(WindowInsetsCompat.Type.systemBars())
+            systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         }
     }
 }

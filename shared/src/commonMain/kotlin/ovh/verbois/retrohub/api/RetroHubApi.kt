@@ -14,6 +14,7 @@ import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpMethod
 import io.ktor.http.content.OutgoingContent
 import io.ktor.http.contentType
+import io.ktor.http.encodeURLParameter
 import io.ktor.utils.io.ByteReadChannel
 import io.ktor.utils.io.ByteWriteChannel
 import io.ktor.utils.io.readAvailable
@@ -187,6 +188,45 @@ class RetroHubApi(
         }
 
     suspend fun consoles(): List<ConsoleCapabilities> = get("/native/consoles", kotlinx.serialization.builtins.ListSerializer(ConsoleCapabilities.serializer()))
+
+    suspend fun catalogue(query: CatalogueQuery): CataloguePage {
+        val parameters = listOfNotNull(
+            "q" to query.search.take(250), "page" to query.page.coerceAtLeast(1).toString(), "limit" to "24",
+            "sort" to query.sort, "prefer_french" to query.preferFrench.toString(),
+            query.console.takeIf { it.isNotBlank() }?.let { "console" to it },
+            query.language.takeIf { it.isNotBlank() }?.let { "language" to it },
+            query.installed?.let { "installed" to it.toString() },
+            query.source.takeIf { it.isNotBlank() }?.let { "source" to it },
+            query.genre.takeIf { it.isNotBlank() }?.let { "genre" to it },
+            query.year?.let { "year" to it.toString() },
+        ).joinToString("&") { (key, value) -> "$key=${value.encodeURLParameter()}" }
+        return get("/games?$parameters", CataloguePage.serializer())
+    }
+
+    suspend fun catalogueGame(id: String): CatalogueGame = get("/games/$id", CatalogueGame.serializer())
+    suspend fun catalogueSources(): List<CatalogueSource> = get("/sources", kotlinx.serialization.builtins.ListSerializer(CatalogueSource.serializer()))
+    suspend fun sourceFiles(gameId: String, versionId: String): List<SourceFile> =
+        get("/games/$gameId/versions/$versionId/files", kotlinx.serialization.builtins.ListSerializer(SourceFile.serializer()))
+    suspend fun serverJob(id: String): ServerJob = get("/jobs/$id", ServerJob.serializer())
+    suspend fun activeServerDownloads(): List<ServerJob> =
+        get("/jobs?kind=download&status=active", kotlinx.serialization.builtins.ListSerializer(ServerJob.serializer()))
+    suspend fun serverJobFiles(id: String): List<SourceFile> = get("/jobs/$id/files", kotlinx.serialization.builtins.ListSerializer(SourceFile.serializer()))
+
+    suspend fun downloadToServer(gameId: String, versionId: String, fileId: String? = null): ServerJob = request(
+        HttpMethod.Post,
+        api("/games/$gameId/download"),
+        json = encode(ServerDownloadRequest.serializer(), ServerDownloadRequest(versionId, fileId)),
+    ) { decode(it.bodyAsText(), ServerJob.serializer()) }
+
+    suspend fun retryServerDownload(id: String, fileId: String? = null): ServerJob = request(
+        HttpMethod.Post,
+        api("/jobs/$id/retry"),
+        json = encode(ServerRetryRequest.serializer(), ServerRetryRequest(fileId)),
+    ) { decode(it.bodyAsText(), ServerJob.serializer()) }
+
+    suspend fun cancelServerDownload(id: String) {
+        request(HttpMethod.Post, api("/jobs/$id/cancel")) {}
+    }
 
     suspend fun updateLibrary(id: String, update: LibraryUpdate) {
         request(HttpMethod.Put, api("/library/$id"), json = encode(LibraryUpdate.serializer(), update)) { }

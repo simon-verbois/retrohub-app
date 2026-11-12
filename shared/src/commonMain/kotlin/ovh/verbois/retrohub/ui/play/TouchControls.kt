@@ -115,10 +115,11 @@ fun TouchControls(
     menuButtons: @Composable () -> Unit,
 ) {
     val currentLayout by rememberUpdatedState(layout)
+    val currentScreenTouch by rememberUpdatedState(onScreenTouch)
     val regions = remember { Regions() }
     val pressed = remember { Pressed() }
     var origin by remember { mutableStateOf(Offset.Zero) }
-    val baseUnit = 54.dp * scale
+    val baseUnit = 48.dp * scale
     BoxWithConstraints(
         modifier
             .fillMaxSize()
@@ -198,7 +199,7 @@ fun TouchControls(
                             pressed.stick = newStick
                             onStick(Stick.LEFT, newStick.x, newStick.y)
                         }
-                        onScreenTouch(screen)
+                        currentScreenTouch(screen)
                     }
                 }
             }.graphicsLayer { alpha = opacity },
@@ -232,8 +233,8 @@ fun TouchControls(
                 }
         }
         val landscape = placement != ControlsPlacement.BELOW
-        val side = if (landscape) minOf(maxWidth * 0.21f, maxHeight * 0.5f) else maxWidth
-        val controlsHeight = if (landscape) maxHeight else maxHeight * (1f - gameBottom).coerceIn(0.3f, 0.7f)
+        val side = if (landscape) maxWidth * gameLeft else maxWidth
+        val controlsHeight = if (landscape) maxHeight else maxHeight * (1f - gameBottom)
         val band = maxHeight * (1f - gameBottom)
         // DS côte à côte : les commandes tiennent dans la bande sous les écrans.
         val unit = if (placement == ControlsPlacement.BOTTOM_CORNERS) minOf(baseUnit, (band - 16.dp) / 3.3f) else baseUnit

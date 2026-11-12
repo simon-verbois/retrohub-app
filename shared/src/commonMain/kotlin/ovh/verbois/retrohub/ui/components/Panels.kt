@@ -8,6 +8,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
@@ -46,12 +47,14 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.toggleableState
 import androidx.compose.ui.state.ToggleableState
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -84,7 +87,7 @@ fun SettingsGroup(modifier: Modifier = Modifier, content: @Composable ColumnScop
 }
 
 @Composable
-fun GroupDivider() = HorizontalDivider(Modifier.padding(horizontal = 20.dp), color = Palette.Line)
+fun GroupDivider() = HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = Palette.Line)
 
 /** Une ligne de réglage : icône, titre, explication et élément à droite. */
 @Composable
@@ -96,23 +99,38 @@ fun SettingRow(
     onClick: (() -> Unit)? = null,
     role: Role = Role.Button,
     value: String? = null,
+    tint: Color = Palette.Text,
     trailing: @Composable (() -> Unit)? = null,
 ) {
-    Column(
-        modifier.fillMaxWidth().heightIn(min = 64.dp)
-            .then(if (onClick != null) Modifier.consoleFocus(CardShape, onClick, focusScale = 1.01f, role = role) else Modifier)
-            .padding(horizontal = 20.dp, vertical = 14.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            if (icon != null) Icon(icon, null, Modifier.size(24.dp), tint = Palette.Select)
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                Text(title, style = MaterialTheme.typography.titleMedium)
-                if (value != null) Text(value, style = MaterialTheme.typography.bodyMedium, color = Palette.Accent)
+    val fontScale = LocalDensity.current.fontScale
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val inlineValue = value != null && maxWidth >= 520.dp && fontScale <= 1.3f
+        val valueWidth = maxWidth * 0.42f
+        Column(
+            modifier.fillMaxWidth().heightIn(min = 56.dp)
+                .then(if (onClick != null) Modifier.consoleFocus(CardShape, onClick, focusScale = 1.01f, role = role) else Modifier)
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                if (icon != null) Icon(icon, null, Modifier.size(20.dp), tint = tint)
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Text(title, style = MaterialTheme.typography.titleMedium, color = tint)
+                    if (value != null && !inlineValue) Text(value, style = MaterialTheme.typography.bodyMedium, color = Palette.Accent)
+                }
+                if (inlineValue) {
+                    Text(
+                        value.orEmpty(),
+                        Modifier.widthIn(max = valueWidth),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Palette.TextDim,
+                        textAlign = TextAlign.End,
+                    )
+                }
+                trailing?.invoke()
             }
-            trailing?.invoke()
+            if (subtitle != null) Text(subtitle, Modifier.fillMaxWidth(), style = MaterialTheme.typography.bodyMedium, color = Palette.TextDim)
         }
-        if (subtitle != null) Text(subtitle, Modifier.fillMaxWidth(), style = MaterialTheme.typography.bodyMedium, color = Palette.TextDim)
     }
 }
 
@@ -352,16 +370,16 @@ fun CenteredMessage(title: String, text: String, icon: ImageVector, modifier: Mo
 @Composable
 fun PageHeader(title: String?, onBack: () -> Unit, modifier: Modifier = Modifier, backModifier: Modifier = Modifier) {
     Row(
-        modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 12.dp),
+        modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        RoundButton(Lucide.ArrowLeft, "Retour", onBack, backModifier, size = 46.dp)
+        RoundButton(Lucide.ArrowLeft, "Retour", onBack, backModifier, size = 48.dp)
         if (title != null) {
             Text(
                 title,
                 Modifier.weight(1f).semantics { heading() },
-                style = MaterialTheme.typography.displaySmall,
+                style = MaterialTheme.typography.headlineMedium,
             )
         }
     }
