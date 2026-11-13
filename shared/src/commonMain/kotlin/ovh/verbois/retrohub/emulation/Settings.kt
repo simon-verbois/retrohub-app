@@ -178,7 +178,15 @@ data class ConsoleSettings(
     val touchPreset: TouchPreset? = null,
     /** Options libretro avancées, prioritaires sur tout le reste. */
     val options: Map<String, String> = emptyMap(),
+    val optionsByCore: Map<String, Map<String, String>> = emptyMap(),
 )
+
+/** Manual collections and their order belong to this device's library. */
+@Serializable
+data class HomeFolder(val id: String, val name: String, val gameIds: List<String> = emptyList(), val favorite: Boolean = false, val onHome: Boolean = true) {
+    val key: String get() = "folder:$id"
+    val consoleId: String? get() = id.removePrefix("console:").takeIf { id.startsWith("console:") }
+}
 
 @Serializable
 data class AppSettings(
@@ -209,6 +217,10 @@ data class AppSettings(
     // Apparence
     val startOnLastGame: Boolean = false,
     val homeOrder: HomeOrder = HomeOrder.RECENT,
+    val homePins: List<String> = emptyList(),
+    val homeConsoleFavorites: List<String> = emptyList(),
+    val homeFolders: List<HomeFolder> = emptyList(),
+    val homeActivity: Map<String, String> = emptyMap(),
     val hiddenConsoles: Set<String> = emptySet(),
     val offlineOnly: Boolean = false,
     val navigationSounds: Boolean = false,
@@ -241,6 +253,19 @@ data class AppSettings(
     val gameRotations: Map<String, GameRotation> = emptyMap(),
     val consoles: Map<String, ConsoleSettings> = emptyMap(),
 ) {
+    fun toggleHomePin(key: String): AppSettings = copy(homePins = if (key in homePins) homePins - key else homePins + key)
+
+    fun moveHomePin(key: String, step: Int): AppSettings {
+        val from = homePins.indexOf(key)
+        if (from < 0) return this
+        val to = (from + step).coerceIn(0, homePins.lastIndex)
+        val pins = homePins.toMutableList().apply {
+            removeAt(from)
+            add(to, key)
+        }
+        return copy(homePins = pins)
+    }
+
     fun console(id: String): ConsoleSettings = consoles[id] ?: ConsoleSettings()
 
     fun withConsole(id: String, update: (ConsoleSettings) -> ConsoleSettings): AppSettings = copy(consoles = consoles + (id to update(console(id))))

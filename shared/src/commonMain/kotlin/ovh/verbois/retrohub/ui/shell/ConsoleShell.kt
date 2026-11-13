@@ -5,6 +5,8 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -48,6 +50,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.FocusRequester
@@ -70,8 +73,10 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -142,19 +147,13 @@ fun ConsoleShell(controller: UiController, account: Account, content: @Composabl
             restoreHeaderFocus = false
         }
     }
-    LaunchedEffect(controller.searching, searchState.fieldFocused, searchState.resultsFocused) {
+    LaunchedEffect(controller.searching) {
         if (!controller.searching) {
             searchState.query = ""
             searchState.hasResults = false
-            if (searchState.hadFocus) keyboard?.hide()
-            searchState.hadFocus = false
-        } else if (searchState.fieldFocused || searchState.resultsFocused) {
-            searchState.hadFocus = true
-        } else if (searchState.hadFocus) {
-            delay(60)
-            if (!searchState.fieldFocused && !searchState.resultsFocused) controller.searching = false
         }
     }
+    controller.folderEditor?.let { ovh.verbois.retrohub.ui.home.FolderEditor(controller, it) }
     controller.downloadRequest?.let { game ->
         ConfirmDialog(
             stringResource(Res.string.download_confirm_title),
@@ -183,7 +182,10 @@ fun ConsoleShell(controller: UiController, account: Account, content: @Composabl
         HintsMode.NEVER -> false
         HintsMode.AUTO -> gamepad
     }
-    androidx.compose.runtime.CompositionLocalProvider(ovh.verbois.retrohub.ui.components.LocalNavigationFocus provides navigationFocus) {
+    androidx.compose.runtime.CompositionLocalProvider(
+        ovh.verbois.retrohub.ui.components.LocalNavigationFocus provides navigationFocus,
+        ovh.verbois.retrohub.ui.components.LocalReturnHome provides { controller.returnHome() },
+    ) {
         BoxWithConstraints(
             Modifier.fillMaxSize().onKeyEvent { event ->
                 val button = when (event.key) {
@@ -225,13 +227,28 @@ fun ConsoleShell(controller: UiController, account: Account, content: @Composabl
                 Box(Modifier.weight(1f).fillMaxWidth().padding(bottom = if (showHints) 32.dp else 0.dp)) {
                     AnimatedContent(
                         targetState = contentRoute,
-                        transitionSpec = { fadeIn(tween(160)) togetherWith fadeOut(tween(100)) },
+                        transitionSpec = {
+                            val duration = if (settings.reduceMotion || container.platform.reducedMotion) 0 else 280
+                            when {
+                                targetState == Route.Catalogue -> (fadeIn(tween(duration)) + slideInVertically(tween(duration)) { it / 3 }) togetherWith
+                                    fadeOut(tween(duration / 2))
+
+                                initialState == Route.Catalogue -> fadeIn(tween(duration)) togetherWith
+                                    (fadeOut(tween(duration)) + slideOutVertically(tween(duration)) { it / 3 })
+
+                                else -> fadeIn(tween(if (duration == 0) 0 else 160)) togetherWith fadeOut(tween(if (duration == 0) 0 else 100))
+                            }
+                        },
                         label = "screen",
                     ) { target ->
                         screenStates.SaveableStateProvider(target.toString()) {
                             val insets = if (target == Route.Home && settings.useDisplayCutout) WindowInsets(0) else horizontalInsets
                             Box(Modifier.fillMaxSize().windowInsetsPadding(insets)) {
-                                content(target)
+                                androidx.compose.runtime.CompositionLocalProvider(
+                                    ovh.verbois.retrohub.ui.components.LocalScreenActive provides (target == contentRoute),
+                                ) {
+                                    content(target)
+                                }
                             }
                         }
                     }
@@ -336,7 +353,7 @@ private fun TopBar(
             contentAlignment = Alignment.Center,
         ) {
             Box(Modifier.size(diameter)) {
-                ProfileAvatar(account.username, account.server, account.avatar, Modifier.fillMaxSize().testTag("header-profile-avatar"), showBackground = false)
+                ProfileAvatar(account.username, account.server, account.avatar, Modifier.fillMaxSize().testTag("header-profile-avatar"), showBackground = true)
                 Box(
                     Modifier.align(Alignment.TopEnd).offset(x = 2.dp, y = (-2).dp).size(9.dp)
                         .clip(CircleShape).background(tint).border(1.dp, Palette.SkyLow, CircleShape),
@@ -377,7 +394,7 @@ fun SectionTabs(controller: UiController, section: Section?, modifier: Modifier 
             SectionTab(
                 item.title,
                 item == section,
-                Modifier.then(if (item == section) Modifier.focusRequester(tree.header) else Modifier)
+                Modifier.testTag("section-tab-${item.name.lowercase()}").then(if (item == section) Modifier.focusRequester(tree.header) else Modifier)
                     .focusProperties { if (item == Section.HOME) left = FocusRequester.Cancel },
             ) {
                 controller.searching = false
@@ -387,7 +404,7 @@ fun SectionTabs(controller: UiController, section: Section?, modifier: Modifier 
     }
 }
 
-/** Portrait keeps the four destinations in one compact header control. */
+/** Portrait keeps the three destinations in one compact header control. */
 @Composable
 private fun CompactSectionMenu(controller: UiController, section: Section?, modifier: Modifier = Modifier) {
     var open by remember { mutableStateOf(false) }
@@ -457,24 +474,29 @@ private fun CompactSectionMenu(controller: UiController, section: Section?, modi
 @Composable
 private fun SectionTab(title: String, active: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
     Box(
-        modifier.consoleFocus(Pill, onClick).padding(horizontal = 12.dp, vertical = 12.dp),
+        modifier.consoleFocus(Pill, onClick, focusScale = 1f).padding(horizontal = 12.dp, vertical = 12.dp),
     ) {
-        Text(
-            title,
-            style = MaterialTheme.typography.labelLarge,
-            fontWeight = if (active) androidx.compose.ui.text.font.FontWeight.Bold else androidx.compose.ui.text.font.FontWeight.Normal,
-            color = Palette.Text,
-            maxLines = 1,
-        )
+        // Reserve the bold label's bounds so changing section cannot move its neighbours.
+        Box(contentAlignment = Alignment.CenterStart) {
+            Text(title, Modifier.alpha(0f).clearAndSetSemantics { }, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, maxLines = 1)
+            Text(
+                title,
+                Modifier.matchParentSize(),
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = if (active) FontWeight.Bold else FontWeight.Normal,
+                color = Palette.Text,
+                maxLines = 1,
+            )
+        }
     }
 }
 
 @Composable
-private fun statusBubbleSize() = with(LocalDensity.current) { 18.sp.toDp() }.plus(12.dp).coerceAtLeast(40.dp)
+private fun statusBubbleSize() = with(LocalDensity.current) { 16.sp.toDp() }.plus(10.dp).coerceAtLeast(30.dp)
 
 @Composable
 internal fun StatusPill(platform: Platform) {
-    val textStyle = MaterialTheme.typography.labelLarge.copy(fontSize = 14.sp, lineHeight = 18.sp)
+    val textStyle = MaterialTheme.typography.labelLarge.copy(fontSize = 12.sp, lineHeight = 16.sp, fontFeatureSettings = "tnum")
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val power by produceState(PowerStatus(), platform, lifecycle) {
         lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
@@ -497,7 +519,7 @@ internal fun StatusPill(platform: Platform) {
         Modifier.heightIn(
             min = statusBubbleSize(),
         ).testTag("header-status").semantics(mergeDescendants = true) {}
-            .consoleButtonSurface(Pill).padding(horizontal = 8.dp, vertical = 6.dp),
+            .consoleButtonSurface(Pill).padding(horizontal = 7.dp, vertical = 3.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(5.dp),
     ) {

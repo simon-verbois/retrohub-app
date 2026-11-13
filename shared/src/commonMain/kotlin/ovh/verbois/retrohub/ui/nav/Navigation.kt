@@ -8,6 +8,10 @@ sealed interface Route {
 
     data class Library(val console: String? = null) : Route
 
+    data class Game(val id: String) : Route
+
+    data class Folder(val id: String) : Route
+
     data object Favorites : Route
 
     data object Downloads : Route
@@ -59,17 +63,16 @@ enum class Section(val title: String, val route: Route, val tab: Boolean = true)
     HOME("Accueil", Route.Home),
     FAVORITES("Favoris", Route.Favorites),
     DOWNLOADS("Téléchargés", Route.Downloads),
-    CATALOGUE("Catalogue", Route.Catalogue),
+    CATALOGUE("Catalogue", Route.Catalogue, tab = false),
     SEARCH("Rechercher", Route.Search, tab = false),
     USER("Profil", Route.User, tab = false),
     ;
 
     companion object {
         fun of(route: Route): Section? = when (route) {
-            Route.Home, is Route.Library -> HOME
+            Route.Home, is Route.Game, is Route.Library, is Route.Folder, Route.Catalogue, is Route.CatalogueGame -> HOME
             Route.Favorites -> FAVORITES
             Route.Downloads -> DOWNLOADS
-            Route.Catalogue, is Route.CatalogueGame -> CATALOGUE
             Route.Search -> SEARCH
             Route.User -> USER
             else -> null

@@ -142,6 +142,8 @@ class DownloadManager(
                 fs.atomicMove(temporary, target)
                 db.roms().upsert(rom.copy(path = target.toString()))
                 fs.delete(from)
+                val extracted = from.parent!! / "content"
+                if (fs.exists(extracted)) fs.deleteRecursively(extracted)
             }
         }
     }
@@ -172,7 +174,7 @@ class DownloadManager(
                 }
                 onProgress(1f)
                 // Une ancienne version du fichier, sous un autre nom, ne sert plus.
-                fs.list(dir).filter { it != target && !it.name.endsWith(".part") }.forEach { fs.delete(it) }
+                fs.list(dir).filter { it != target && !it.name.endsWith(".part") }.forEach { fs.deleteRecursively(it) }
                 db.roms().upsert(
                     LocalRomEntity(
                         playGameId = current.playGameId,
@@ -183,6 +185,7 @@ class DownloadManager(
                         sha256 = rom.sha256,
                         size = rom.size,
                         downloadedAt = clock.now().toString(),
+                        nativeTitleId = rom.nativeTitleId,
                     ),
                 )
                 current.remote.bios?.let { ensureBios(current.console, it) }
@@ -228,7 +231,7 @@ class DownloadManager(
     suspend fun usage(): StorageUsage = withContext(Dispatchers.IO) {
         StorageUsage(
             size(paths.internalRoms) + (if (paths.roms != paths.internalRoms) size(paths.roms) else 0),
-            size(paths.saves) + size(paths.coreSaves),
+            size(paths.saves) + size(paths.coreSaves) + size(paths.root / "native-saves"),
             size(paths.system) + size(paths.covers),
             freeBytes(),
         )

@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -14,6 +15,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
@@ -163,6 +165,7 @@ fun CatalogueScreen(controller: UiController) {
     }
     Column(Modifier.fillMaxSize().testTag("catalogue").padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            ovh.verbois.retrohub.ui.components.RoundButton(Lucide.ArrowLeft, "Retour à l’accueil", { controller.nav.back() }, size = 48.dp)
             OutlinedTextField(
                 search,
                 {
@@ -184,17 +187,32 @@ fun CatalogueScreen(controller: UiController) {
                 enabled = online,
                 shape = RoundedCornerShape(20.dp),
             )
-            GlassButton(
-                "Filtres",
-                { filters = true },
-                Modifier.focusRequester(filtersFocus).focusProperties {
-                    up = tree.header
-                    left = field
-                    down = if (result?.items?.isNotEmpty() == true) first else FocusRequester.Cancel
-                },
-                icon = Lucide.SlidersHorizontal,
-                enabled = online,
-            )
+            if (!controller.portrait) {
+                ovh.verbois.retrohub.ui.components.FilterChip("Sur le serveur", installed == true, {
+                    installed = if (installed == true) null else true
+                    page = 1
+                }, Modifier.testTag("catalogue-installed"))
+                GlassButton(
+                    "Filtres",
+                    { filters = true },
+                    Modifier.focusRequester(filtersFocus).focusProperties {
+                        up = tree.header
+                        left = field
+                        down = if (result?.items?.isNotEmpty() == true) first else FocusRequester.Cancel
+                    },
+                    icon = Lucide.SlidersHorizontal,
+                    enabled = online,
+                )
+            }
+        }
+        if (controller.portrait) {
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                ovh.verbois.retrohub.ui.components.FilterChip("Sur le serveur", installed == true, {
+                    installed = if (installed == true) null else true
+                    page = 1
+                }, Modifier.testTag("catalogue-installed"))
+                GlassButton("Filtres", { filters = true }, Modifier.focusRequester(filtersFocus), icon = Lucide.SlidersHorizontal, enabled = online)
+            }
         }
         if (!online) Text("Connectez le téléphone pour actualiser le catalogue.", style = MaterialTheme.typography.bodySmall, color = Palette.TextDim)
         jobs.take(2).forEach { job ->
@@ -216,41 +234,47 @@ fun CatalogueScreen(controller: UiController) {
                 Text(if (online) "Aucun jeu dans cette sélection." else "Le catalogue s’affiche avec une connexion au serveur.", color = Palette.TextDim)
             }
         } else {
-            LazyVerticalGrid(
-                GridCells.Adaptive(144.dp),
-                Modifier.weight(1f).fillMaxWidth(),
-                contentPadding = PaddingValues(6.dp),
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
-                verticalArrangement = Arrangement.spacedBy(20.dp),
-            ) {
-                itemsIndexed(result!!.items, key = { _, game -> game.id }) { index, entry ->
-                    val known = library.firstOrNull { it.id == entry.id }
-                    val game =
-                        Game(
-                            LibraryGame(
-                                entry.id,
-                                entry.id,
-                                title = entry.title,
-                                console = entry.console,
-                                coverUrl = entry.coverUrl,
-                                genre = entry.genre,
-                                year = entry.year,
-                            ),
-                            known?.local,
+            BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
+                val columns = ((maxWidth + 16.dp) / 160.dp).toInt().coerceAtLeast(1)
+                val grid = rememberLazyGridState()
+                val navigation = ovh.verbois.retrohub.ui.components.gridNavigation(grid, result!!.items.size, columns)
+                LazyVerticalGrid(
+                    GridCells.Fixed(columns),
+                    Modifier.fillMaxSize(),
+                    state = grid,
+                    contentPadding = PaddingValues(6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(20.dp),
+                ) {
+                    itemsIndexed(result!!.items, key = { _, game -> game.id }) { index, entry ->
+                        val known = library.firstOrNull { it.id == entry.id }
+                        val game =
+                            Game(
+                                LibraryGame(
+                                    entry.id,
+                                    entry.id,
+                                    title = entry.title,
+                                    console = entry.console,
+                                    coverUrl = entry.coverUrl,
+                                    genre = entry.genre,
+                                    year = entry.year,
+                                ),
+                                known?.local,
+                            )
+                        GameCard(
+                            game,
+                            { controller.nav.go(Route.CatalogueGame(entry.id)) },
+                            navigation(index).testTag("catalogue-game-${entry.id}").then(
+                                if (index ==
+                                    0
+                                ) {
+                                    Modifier.focusRequester(first)
+                                } else {
+                                    Modifier
+                                },
+                            ).focusProperties { if (index < columns) up = field },
                         )
-                    GameCard(
-                        game,
-                        { controller.nav.go(Route.CatalogueGame(entry.id)) },
-                        Modifier.testTag("catalogue-game-${entry.id}").then(
-                            if (index ==
-                                0
-                            ) {
-                                Modifier.focusRequester(first)
-                            } else {
-                                Modifier
-                            },
-                        ).focusProperties { if (index == 0) up = field },
-                    )
+                    }
                 }
             }
         }

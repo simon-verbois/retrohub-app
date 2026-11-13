@@ -9,6 +9,8 @@ enum class PadLayout {
     MASTER_SYSTEM,
     MEGA_DRIVE,
     PLAYSTATION,
+    PLAYSTATION_2,
+    NINTENDO_3DS,
     NINTENDO_64,
     NINTENDO_DS,
     ATARI_2600,
@@ -40,7 +42,18 @@ data class ConsoleSpec(
     /** Console 3D exigeante : rendu interne réglable et appareil récent conseillé. */
     val demanding: Boolean = false,
     val needsBios: Boolean = false,
-)
+    val supportedAbis: Set<String> = setOf("arm64-v8a", "x86_64"),
+) {
+    val generation: Int get() = when (id) {
+        "atari2600" -> 2
+        "nes", "mastersystem" -> 3
+        "snes", "megadrive", "gb", "gbc" -> 4
+        "psx", "n64" -> 5
+        "dreamcast", "gamecube", "gba", "ps2" -> 6
+        "nds" -> 7
+        else -> 8
+    }
+}
 
 object Consoles {
     val all: List<ConsoleSpec> =
@@ -109,6 +122,14 @@ object Consoles {
                 256f / 384f, handheld = true, dualScreen = true, demanding = true,
             ),
             ConsoleSpec(
+                "3ds", "Nintendo 3DS", "3DS", "Nintendo", 2011, 0xFFB8D5E8, Artwork.DEEP_BLUE, listOf("azahar"), PadLayout.NINTENDO_3DS,
+                400f / 480f, handheld = true, dualScreen = true, analog = true, demanding = true, supportedAbis = setOf("arm64-v8a"),
+            ),
+            ConsoleSpec(
+                "ps2", "PlayStation 2", "PS2", "Sony", 2000, 0xFF9BA7E8, Artwork.ORBITAL_LOUNGE, listOf("armsx2"), PadLayout.PLAYSTATION_2,
+                4f / 3f, analog = true, demanding = true, needsBios = true, supportedAbis = setOf("arm64-v8a"),
+            ),
+            ConsoleSpec(
                 "atari2600", "Atari 2600", "Atari 2600", "Atari", 1977, 0xFFE8B98A, Artwork.STAR_CANYON,
                 listOf(
                     "stella2014",
@@ -170,5 +191,7 @@ object Consoles {
     }
 
     /** Tous les cœurs à embarquer dans l’application. */
+    fun coresForAbi(abi: String): Set<String> = all.filter { abi in it.supportedAbis }.flatMap { it.cores }.toSet()
+
     val allCores: Set<String> get() = all.flatMap { it.cores }.toSet()
 }

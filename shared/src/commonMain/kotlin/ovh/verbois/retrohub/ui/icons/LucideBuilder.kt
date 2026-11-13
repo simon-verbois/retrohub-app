@@ -29,3 +29,11 @@ internal fun lucide(name: String, vararg paths: String): ImageVector {
     }
     return builder.build()
 }
+
+internal fun filledIcon(name: String, path: String): ImageVector = ImageVector.Builder(
+    name,
+    24.dp,
+    24.dp,
+    24f,
+    24f,
+).addPath(pathData = PathParser().parsePathString(path).toNodes(), fill = SolidColor(Color.Black)).build()

@@ -1,5 +1,6 @@
 package ovh.verbois.retrohub.data
 
+import androidx.room.AutoMigration
 import androidx.room.ConstructedBy
 import androidx.room.Database
 import androidx.room.RoomDatabase
@@ -10,7 +11,8 @@ import kotlinx.coroutines.IO
 
 @Database(
     entities = [GameEntity::class, LocalRomEntity::class, LocalSave::class, PlaySessionEntity::class, KeyValueEntity::class],
-    version = 1,
+    version = 2,
+    autoMigrations = [AutoMigration(from = 1, to = 2)],
     exportSchema = true,
 )
 @ConstructedBy(AppDatabaseConstructor::class)

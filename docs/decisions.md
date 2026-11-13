@@ -79,7 +79,22 @@ nothing required otherwise.
   - QEMU crashes (SIGSEGV) as soon as KVM is active, with emulators 37.2.12, 37.2.13 and 37.3.8,
     outside the container as well.
   - The trace points to the host's SwiftShader renderer. With `-gpu host` (the host's Intel GPU),
-    the SDK emulator boots in 30 s: that is what `scripts/emulator.sh` does.
+    the SDK emulator boots in 30 s.
+  - Disabling unused guest Vulkan initially allowed multiple complete host-rendered runs, but
+    a later run still crashed in gfxstream `TextureResize` (`strlen` on a missing GL context)
+    after 32 tests. Guest Vulkan alone does not fix the host-driver failure.
+  - The script now defaults to `-gpu swangle -feature -Vulkan`: ANGLE presents GLES through its
+    software Vulkan backend. This differs from the legacy direct SwiftShader GLES path above.
+    The exploratory `lavapipe` mode also selected `swangle` for GLES on emulator 37.2.13; the
+    default names the GLES renderer explicitly. KVM remains enabled for CPU emulation.
+  - `RETROHUB_EMULATOR_GPU=host` opts into hardware rendering; `lavapipe` is also available for
+    diagnosis. `RETROHUB_EMULATOR_VULKAN=1` explicitly enables guest Vulkan for other workloads.
+    See [Android's supported renderer modes](https://developer.android.com/studio/run/emulator-acceleration#accel-graphics)
+    and [Vulkan troubleshooting](https://developer.android.com/studio/run/emulator-troubleshooting#vulkan).
+  - UI test fixtures wait for the requested display configuration and stable resumed activity
+    before installing Compose content. A rotation must not recreate an empty test activity after
+    its composition was installed. All visibility, clipping and controller assertions remain.
+  - Full suites run together; only the build-variant boundary restarts an owned CI emulator.
 - Test device: API 35 x86_64 (Google APIs), Pixel 6 screen. The last free docker-android image
   stopped at API 34.
 - CI (`scripts/ci.sh`) wipes the app's data: on a workstation whose play emulator is linked to a
@@ -112,15 +127,24 @@ nothing required otherwise.
   landscape. The touch screen receives fingers placed outside the controls.
 - GameCube: Dolphin libretro, with its bundled `Sys` folder (`dolphin-sys.zip`, extracted on first
   launch). Saves follow the contract's `gci_zip` format.
-- Dreamcast: Flycast is bundled. The console does not exist on the server yet
-  (`docs/server-requests.md`): its games will appear once it is added. Without a BIOS, Flycast
-  boots with its HLE BIOS.
+- Dreamcast: Flycast is bundled and supported by the native server contract. Without a BIOS,
+  Flycast boots with its HLE BIOS.
 - **Cores pinned by `cores.lock`** (SHA-256 of each `.so`). The buildbot only keeps the "latest"
   nightlies: verified files are kept in a content-addressed cache
   (`~/.cache/retrohub-android/cores`). A changed nightly is refused until `--update` is run, then
   tested and the lock committed.
 - Default rendering: sharp for 2D home consoles (high definition in the Quality profile), LCD for
   handhelds, smooth for 3D.
+
+## Local home collections
+
+- Manual folders, their membership, favorites and ordered home pins are device preferences. They
+  work offline and do not change server game favorites. They are cleared when switching accounts.
+- Recent Home activity combines the server's last-played time, verified download completion and
+  the first rendered frame of a local session. Offline sessions therefore remain recent before
+  their eventual upload.
+- The catalogue occupies the first home tile. Directional browsing anchors the enlarged selection
+  in the second visual slot, scrolling the strip while preserving its actions and focus links.
 
 ## Sync and data
 

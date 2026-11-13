@@ -5,6 +5,10 @@ package ovh.verbois.retrohub.ui.icons
 import androidx.compose.ui.graphics.vector.ImageVector
 
 object Lucide {
+    val HeartFilled: ImageVector by lazy { filledIcon("heart-filled", "M2 9.5a5.5 5.5 0 0 1 9.591-3.676.56.56 0 0 0 .818 0A5.49 5.49 0 0 1 22 9.5c0 2.29-1.5 4-3 5.5l-5.492 5.313a2 2 0 0 1-3 .019L5 15c-1.5-1.5-3-3.2-3-5.5Z") }
+    val ShoppingBag: ImageVector by lazy { lucide("shopping-bag", "M16 10V6a4 4 0 0 0-8 0v4", "M3 6h18l-1 14H4L3 6Z") }
+    val FolderPlus: ImageVector by lazy { lucide("folder-plus", "M20 20H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h5l2 4h9a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2Z", "M12 10v6", "M9 13h6") }
+    val Pin: ImageVector by lazy { lucide("pin", "M16 3l5 5-4 1-3 5v4l-8-8h4l5-3 1-4Z", "M8 16l-5 5") }
     val Gamepad2: ImageVector by lazy { lucide("gamepad-2", "M6 11L10 11", "M8 9L8 13", "M15 12L15.01 12", "M18 10L18.01 10", "M17.32 5H6.68a4 4 0 0 0-3.978 3.59c-.006.052-.01.101-.017.152C2.604 9.416 2 14.456 2 16a3 3 0 0 0 3 3c1 0 1.5-.5 2-1l1.414-1.414A2 2 0 0 1 9.828 16h4.344a2 2 0 0 1 1.414.586L17 18c.5.5 1 1 2 1a3 3 0 0 0 3-3c0-1.545-.604-6.584-.685-7.258-.007-.05-.011-.1-.017-.151A4 4 0 0 0 17.32 5z") }
     val House: ImageVector by lazy { lucide("house", "M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8", "M3 10a2 2 0 0 1 .709-1.528l7-6a2 2 0 0 1 2.582 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z") }
     val LibraryBig: ImageVector by lazy { lucide("library-big", "M4 3h6a1 1 0 0 1 1 1v16a1 1 0 0 1 -1 1h-6a1 1 0 0 1 -1 -1v-16a1 1 0 0 1 1 -1Z", "M7 3v18", "M20.4 18.9c.2.5-.1 1.1-.6 1.3l-1.9.7c-.5.2-1.1-.1-1.3-.6L11.1 5.1c-.2-.5.1-1.1.6-1.3l1.9-.7c.5-.2 1.1.1 1.3.6Z") }

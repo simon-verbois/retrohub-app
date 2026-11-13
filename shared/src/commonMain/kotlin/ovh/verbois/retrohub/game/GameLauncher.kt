@@ -10,7 +10,6 @@ import ovh.verbois.retrohub.core.DeviceClass
 import ovh.verbois.retrohub.core.parseInstant
 import ovh.verbois.retrohub.data.AppPaths
 import ovh.verbois.retrohub.data.LocalSave
-import ovh.verbois.retrohub.data.RoomSaveStore
 import ovh.verbois.retrohub.emulation.AppSettings
 import ovh.verbois.retrohub.emulation.Consoles
 import ovh.verbois.retrohub.emulation.CoreOptions
@@ -18,6 +17,7 @@ import ovh.verbois.retrohub.emulation.GameLayouts
 import ovh.verbois.retrohub.library.DownloadManager
 import ovh.verbois.retrohub.library.Game
 import ovh.verbois.retrohub.library.LibraryRepository
+import ovh.verbois.retrohub.sync.SaveStore
 import ovh.verbois.retrohub.sync.SaveSync
 import ovh.verbois.retrohub.sync.file
 
@@ -42,13 +42,16 @@ class GameLauncher(
     private val library: LibraryRepository,
     private val downloads: DownloadManager,
     private val saveSync: SaveSync,
-    private val saves: RoomSaveStore,
+    private val saves: SaveStore,
     private val fs: FileSystem,
     private val paths: AppPaths,
     private val availableCores: () -> Set<String>,
     private val deviceClass: DeviceClass,
     private val cheats: suspend (String) -> List<Cheat> = { emptyList() },
     private val batteryLow: () -> Boolean = { false },
+    private val coreBuild: (String) -> String? = { null },
+    private val saveOwner: () -> String = { "local" },
+    private val resources: SystemResources? = null,
 ) {
     suspend fun prepare(start: Game, chosen: AppSettings, online: Boolean, portrait: Boolean, fresh: Boolean = false): LaunchCheck =
         withContext(Dispatchers.IO) {
@@ -56,6 +59,7 @@ class GameLauncher(
             val saver = chosen.batterySaver && chosen.performance != ovh.verbois.retrohub.emulation.PerformanceProfile.BATTERY && batteryLow()
             val settings = if (saver) chosen.copy(performance = ovh.verbois.retrohub.emulation.PerformanceProfile.BATTERY) else chosen
             val spec = start.spec ?: return@withContext LaunchCheck.Blocked("Cette console ne se joue pas encore dans l’application.")
+            saves.prepareGame(start.playGameId, start.console)
             var game = start
             if (online) {
                 try {
@@ -104,6 +108,15 @@ class GameLauncher(
                 }
             }
 
+            val native = spec.id in setOf("3ds", "ps2")
+            val titleId = rom.nativeTitleId ?: game.remote.rom?.takeIf { it.sha256.equals(rom.sha256, true) }?.nativeTitleId
+            val build = if (native) coreBuild(core) else null
+            if (native &&
+                build == null
+            ) {
+                return@withContext LaunchCheck.Blocked("L’émulateur n’est pas complet. Installez la dernière version de l’application.")
+            }
+            val owner = if (native) saveOwner() else null
             val local = saves.forGame(game.playGameId)
             val sram = local.firstOrNull { it.kind == "sram" && it.slot == 0 && fs.exists(saves.file(it)) }
             val sramCompatible = sram == null || sram.romSha.isEmpty() || sram.romSha.equals(rom.sha256, ignoreCase = true)
@@ -113,18 +126,53 @@ class GameLauncher(
                 } else {
                     local
                         .filter {
-                            it.kind == "state" && it.core == core && (it.romSha.isEmpty() || it.romSha.equals(rom.sha256, true)) &&
+                            it.kind == "state" && it.core == core &&
+                                (!native || (it.coreBuild == build && it.console == spec.id && it.romSha.equals(rom.sha256, true))) &&
+                                (it.romSha.isEmpty() || it.romSha.equals(rom.sha256, true)) &&
                                 fs.exists(saves.file(it))
                         }
                         .maxByOrNull { parseInstant(it.localPlayedAt)?.toEpochMilliseconds() ?: 0L }
                 }
             val consoleSettings = settings.console(spec.id)
-            val coreSaves = paths.coreSaves / spec.id
+            val coreSaves = if (native) {
+                paths.coreSaves / owner!! / spec.id / ovh.verbois.retrohub.core.sha256(game.playGameId.encodeToByteArray()) / rom.sha256
+            } else {
+                paths.coreSaves /
+                    spec.id
+            }
+            if (native) {
+                try {
+                    NativeGameSaves.recover(fs, coreSaves)
+                    resources?.install(spec.id, game.remote.systemResources, coreSaves, online)
+                    if (sram != null &&
+                        sramCompatible
+                    ) {
+                        NativeGameSaves.install(fs, saves.file(sram), coreSaves, spec.id, game.playGameId, rom.sha256, titleId)
+                    }
+                } catch (error: Exception) {
+                    if (error is kotlinx.coroutines.CancellationException) throw error
+                    return@withContext LaunchCheck.Blocked(
+                        if (error is IllegalArgumentException && error.message?.startsWith("Importez") == true) {
+                            error.message!!
+                        } else {
+                            "Les fichiers ou la sauvegarde de cette console ne se préparent pas. Synchronisez la bibliothèque et vérifiez ses ressources dans les réglages du serveur."
+                        },
+                    )
+                }
+            }
             // GameCube : les fichiers .gci de ce jeu sont remis dans le dossier de cartes de Dolphin.
             val gameCode = if (spec.id == "gamecube") runCatching { GameCubeSaves.gameCode(fs, rom.path.toPath()) }.getOrNull() else null
             val dolphinUser = coreSaves / "User"
             if (gameCode != null && sram != null && sramCompatible) {
                 runCatching { GameCubeSaves.install(fs, saves.file(sram), dolphinUser, gameCode) }
+            }
+            val content = try {
+                GameContent.prepare(fs, rom.path.toPath(), rom.sha256, spec.id)
+            } catch (error: Exception) {
+                if (error is kotlinx.coroutines.CancellationException) throw error
+                return@withContext LaunchCheck.Blocked(
+                    "Le disque du jeu ne se prépare pas. Choisissez une autre version dans le catalogue ou téléchargez-le de nouveau.",
+                )
             }
             val plan =
                 LaunchPlan(
@@ -133,13 +181,16 @@ class GameLauncher(
                     title = game.title,
                     console = spec.id,
                     core = core,
-                    romPath = rom.path,
+                    coreBuild = build,
+                    saveOwner = owner,
+                    nativeTitleId = titleId,
+                    romPath = content.toString(),
                     romSha = rom.sha256,
-                    systemDir = paths.system.toString(),
+                    systemDir = (if (native) coreSaves else paths.system).toString(),
                     savesDir = coreSaves.toString(),
                     sramPath = saves.file(game.playGameId, "sram", 0).toString(),
                     // La SRAM GameCube n’est pas chargée par le cœur : ce sont les fichiers GCI ci-dessus.
-                    loadSram = sram != null && sramCompatible && spec.id != "gamecube",
+                    loadSram = sram != null && sramCompatible && spec.id != "gamecube" && !native,
                     statePath = state?.let { saves.file(it).toString() },
                     options = CoreOptions.build(spec, core, settings, deviceClass, portrait),
                     shader = CoreOptions.shader(spec, settings),
@@ -191,12 +242,13 @@ class GameLauncher(
                     menuShortcut = settings.menuShortcut,
                     multiplayer = settings.multiplayer,
                     muteFastForward = settings.muteFastForward,
-                    lowLatencyAudio = settings.lowLatencyAudio,
+                    lowLatencyAudio = settings.lowLatencyAudio && spec.id != "n64",
                     analog = CoreOptions.supportsAnalog(spec.id) && consoleSettings.analog == true,
                     confirmOverwrite = settings.confirmOverwrite,
                     touchLayout = consoleSettings.touchLayout,
                     cheats = cheats(game.playGameId),
                 )
+            saves.registerNativeRuntime(game.playGameId, spec.id, core, coreSaves.toString(), rom.sha256, titleId)
             return@withContext LaunchCheck.Ready(plan)
         }
 }

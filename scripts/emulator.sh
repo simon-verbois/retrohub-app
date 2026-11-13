@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Android test emulator: the SDK emulator (AVD "retrohub-test", API 35, x86_64, KVM),
-# rendered by the host GPU. See docs/decisions.md: docker-android and SwiftShader rendering
-# crash on this machine (kernel 7.1); "host" rendering works.
+# rendered through ANGLE's software GLES path by default. See docs/decisions.md for host
+# GPU context crashes and the distinction from legacy direct SwiftShader rendering.
 #   scripts/emulator.sh up      starts the emulator (headless; RETROHUB_EMULATOR_WINDOW=1 to show it)
 #   scripts/emulator.sh wait    waits for full boot and configures the device for tests
 #   scripts/emulator.sh down    stops the emulator
@@ -54,15 +54,27 @@ up() {
   [[ -w /dev/kvm ]] || { echo "/dev/kvm is not accessible: the emulator would be far too slow." >&2; exit 1; }
   ensure_avd
   mkdir -p "$STATE"
-  local window=(-no-window) wipe=(-wipe-data)
+  local window=(-no-window) wipe=(-wipe-data) graphics=(-feature -Vulkan)
+  local gpu="${RETROHUB_EMULATOR_GPU:-swangle}"
+  case "$gpu" in
+    host|swangle|lavapipe) ;;
+    *) echo "RETROHUB_EMULATOR_GPU must be host, swangle or lavapipe." >&2; exit 2 ;;
+  esac
+  # ANGLE's software GLES path avoids the host driver's lost-context crashes after rotations.
+  # The app uses GLES; guest Vulkan stays off unless explicitly requested for another workload.
+  case "${RETROHUB_EMULATOR_VULKAN:-0}" in
+    0) ;;
+    1) graphics=() ;;
+    *) echo "RETROHUB_EMULATOR_VULKAN must be 0 or 1." >&2; exit 2 ;;
+  esac
   [[ "${RETROHUB_EMULATOR_WINDOW:-0}" == 1 ]] && window=()
   # Tests start from a clean device; RETROHUB_EMULATOR_WIPE=0 keeps the data (manual use).
   [[ "${RETROHUB_EMULATOR_WIPE:-1}" == 0 ]] && wipe=()
-  nohup "$ANDROID_HOME/emulator/emulator" "@$AVD" -port "$PORT" -accel on -gpu host -no-snapshot -no-boot-anim \
-    -no-audio "${wipe[@]}" "${window[@]}" >"$LOG" 2>&1 &
+  nohup "$ANDROID_HOME/emulator/emulator" "@$AVD" -port "$PORT" -accel on -gpu "$gpu" -no-snapshot -no-boot-anim \
+    -no-audio "${graphics[@]}" "${wipe[@]}" "${window[@]}" >"$LOG" 2>&1 &
   echo $! >"$PIDFILE"
   echo "${RETROHUB_EMULATOR_WINDOW:-0}" >"$WINDOWFILE"
-  echo "Emulator started ($SERIAL). Log: $LOG"
+  echo "Emulator started ($SERIAL, GPU $gpu). Log: $LOG"
 }
 
 wait_ready() {

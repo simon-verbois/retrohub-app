@@ -79,7 +79,6 @@ class AdaptiveLayoutTest {
     @get:Rule val rule = createAndroidComposeRule<ComponentActivity>()
     private val instrumentation = InstrumentationRegistry.getInstrumentation()
     private val container get() = (instrumentation.targetContext.applicationContext as RetroHubApp).container
-    private val device = UiDevice.getInstance(instrumentation)
 
     @After
     fun restoreRotation() {
@@ -89,13 +88,13 @@ class AdaptiveLayoutTest {
             container.database.games().deleteOthers(keep)
             container.settings.updateNow { it.copy(gameRotations = it.gameRotations - "options-layout") }
         }
-        device.setOrientationLandscape()
+        rule.settleOrientation(portrait = false)
         instrumentation.waitForIdleSync()
     }
 
     @Test
     fun welcomeIsCenteredOnSmallPortraitPhone() {
-        device.setOrientationNatural()
+        rule.settleOrientation(portrait = true)
         show(320f) { WelcomeScreen {} }
         rule.onNodeWithText("Bienvenue sur RetroHub").assertIsDisplayed()
         val title = rule.onNodeWithText("Bienvenue sur RetroHub").fetchSemanticsNode().boundsInRoot
@@ -107,7 +106,7 @@ class AdaptiveLayoutTest {
 
     @Test
     fun setupKeepsActionsAndLongUsernameReadableAtDoubleTextSize() {
-        device.setOrientationNatural()
+        rule.settleOrientation(portrait = true)
         show(320f, fontScale = 2f) { SetupWizard(container, "Camille avec un nom de compte particulièrement long") }
         assertNoClippedText()
         rule.onNodeWithText("Continuer").assertIsDisplayed().performClick()
@@ -123,7 +122,7 @@ class AdaptiveLayoutTest {
 
     @Test
     fun dsSettingsPreserveLabelsAndValuesOnSmallPhone() {
-        device.setOrientationNatural()
+        rule.settleOrientation(portrait = true)
         show(320f, fontScale = 1.3f) {
             val scope = rememberCoroutineScope()
             val controller = remember { UiController(container, scope) }
@@ -139,7 +138,7 @@ class AdaptiveLayoutTest {
 
     @Test
     fun gameOptionsUseColumnsAndExposeRotationWithoutHidingGameActions() {
-        device.setOrientationLandscape()
+        rule.settleOrientation(portrait = false)
         gameOptions(840f)
         val image = rule.onNodeWithText("Rotation de l’image").fetchSemanticsNode().boundsInRoot
         val saves = rule.onNodeWithText("Sauvegardes").fetchSemanticsNode().boundsInRoot
@@ -153,7 +152,7 @@ class AdaptiveLayoutTest {
 
     @Test
     fun gameOptionsStackOnSmallDarkPhonesAndKeepLongTitlesReadable() {
-        device.setOrientationNatural()
+        rule.settleOrientation(portrait = true)
         gameOptions(320f, fontScale = 1.5f, dark = true)
         rule.onNodeWithContentDescription("Rotation de l’image : 270°").performScrollTo().performClick().assertIsSelected()
         assertNoClippedText()
@@ -183,7 +182,7 @@ class AdaptiveLayoutTest {
 
     @Test
     fun recommendedBadgeAndLongTranslatedActionsReflowInRtlDarkTheme() {
-        device.setOrientationNatural()
+        rule.settleOrientation(portrait = true)
         val option = "Dieselben Anzeigeeinstellungen wie auf diesem Telefon verwenden"
         val action = "Meine heruntergeladene Spielesammlung entdecken"
         show(320f, fontScale = 1.5f, rtl = true, dark = true) {
@@ -204,7 +203,7 @@ class AdaptiveLayoutTest {
 
     @Test
     fun downloadProgressStaysOnTheCoverAndUpdates() {
-        device.setOrientationNatural()
+        rule.settleOrientation(portrait = true)
         var progress by mutableStateOf(DownloadState.Running(25, 100))
         val game = Game(LibraryGame("cover", "cover", title = "Jeu", console = "nds"), null)
         show(320f, fontScale = 1.6f) {
@@ -223,7 +222,7 @@ class AdaptiveLayoutTest {
 
     @Test
     fun settingsRemainReadableOnWideLandscapeViewport() {
-        device.setOrientationLandscape()
+        rule.settleOrientation(portrait = false)
         show(840f) {
             val scope = rememberCoroutineScope()
             val controller = remember { UiController(container, scope) }

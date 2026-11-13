@@ -54,6 +54,7 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
@@ -83,7 +84,6 @@ internal class HeaderSearchState {
     var fieldFocused by mutableStateOf(false)
     var resultsFocused by mutableStateOf(false)
     var hasResults by mutableStateOf(false)
-    var hadFocus = false
     val field = FocusRequester()
     val firstResult = FocusRequester()
 }
@@ -95,19 +95,21 @@ internal fun HeaderSearch(controller: UiController, state: HeaderSearchState, di
     val reducedMotion = settings.reduceMotion || controller.container.platform.reducedMotion
     val tree = LocalNavigationFocus.current
     val keyboard = LocalSoftwareKeyboardController.current
-    val games by controller.container.library.games.collectAsState()
-    val scope = rememberCoroutineScope()
     val touchDiameter = diameter.coerceAtLeast(48.dp)
     val inset = (touchDiameter - diameter) / 2
+    val insetPx = with(LocalDensity.current) { inset.toPx() }
     BoxWithConstraints(modifier) {
         val width by animateDpAsState(if (controller.searching) maxWidth else touchDiameter, tween(if (reducedMotion) 0 else 220))
         Box(
             Modifier.align(Alignment.CenterEnd).width(width).height(touchDiameter)
-                .onFocusChanged { state.fieldFocused = it.hasFocus }.focusGroup(),
+                .onGloballyPositioned {
+                    val bounds = it.boundsInRoot()
+                    state.bounds = Rect(bounds.left + insetPx, bounds.top, bounds.right - insetPx, bounds.bottom)
+                }.onFocusChanged { state.fieldFocused = it.hasFocus }.focusGroup(),
         ) {
             Box(
                 Modifier.align(Alignment.Center).fillMaxWidth().padding(horizontal = inset).height(diameter)
-                    .testTag("header-search-bubble").onGloballyPositioned { state.bounds = it.boundsInRoot() }
+                    .testTag("header-search-bubble")
                     .consoleButtonSurface(CircleShape),
             )
             if (controller.searching) {
@@ -116,10 +118,16 @@ internal fun HeaderSearch(controller: UiController, state: HeaderSearchState, di
                     onValueChange = { state.query = it.take(250) },
                     modifier = Modifier.fillMaxSize().padding(horizontal = inset).testTag("header-search-field")
                         .focusRequester(state.field).onPreviewKeyEvent { event ->
-                            if (event.key == Key.DirectionDown && state.hasResults) {
+                            if (event.key in setOf(Key.ButtonA, Key.Enter, Key.NumPadEnter) && state.query.isNotBlank()) {
+                                if (event.type == KeyEventType.KeyUp) {
+                                    keyboard?.hide()
+                                    if (state.hasResults) runCatching { state.firstResult.requestFocus() }
+                                }
+                                true
+                            } else if (event.key == Key.DirectionDown && state.hasResults) {
                                 if (event.type == KeyEventType.KeyDown) {
                                     keyboard?.hide()
-                                    state.firstResult.requestFocus()
+                                    runCatching { state.firstResult.requestFocus() }
                                 }
                                 true
                             } else {
@@ -133,16 +141,8 @@ internal fun HeaderSearch(controller: UiController, state: HeaderSearchState, di
                     cursorBrush = SolidColor(Palette.Accent),
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                     keyboardActions = KeyboardActions(onSearch = {
-                        val submitted = state.query
-                        if (submitted.isNotBlank()) {
-                            scope.launch(Dispatchers.Main.immediate) {
-                                val first = withContext(Dispatchers.Default) { searchGames(games, submitted).firstOrNull() }
-                                if (controller.searching && state.query == submitted && first != null) {
-                                    onClose()
-                                    controller.showGame(first.id)
-                                }
-                            }
-                        }
+                        keyboard?.hide()
+                        if (state.hasResults) runCatching { state.firstResult.requestFocus() }
                     }),
                     decorationBox = { input ->
                         Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
@@ -175,15 +175,10 @@ internal fun HeaderSearch(controller: UiController, state: HeaderSearchState, di
             } else {
                 Box(
                     Modifier.fillMaxSize().testTag("header-search-button")
-                        .consoleFocus(CircleShape, { controller.searching = true }, label = "Rechercher", focusScale = 1f, onFocus = {
-                            if (it) {
-                                controller.searching =
-                                    true
-                            }
-                        }),
+                        .consoleFocus(CircleShape, { controller.searching = true }, label = "Rechercher", focusScale = 1f),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Icon(Lucide.Search, "Rechercher", Modifier.size(22.dp), tint = Palette.Text)
+                    Icon(Lucide.Search, "Rechercher", Modifier.size(18.dp), tint = Palette.Text)
                 }
             }
         }
@@ -216,7 +211,7 @@ internal fun SearchDropdown(controller: UiController, state: HeaderSearchState, 
 
                 results.isEmpty() -> Text("Aucun jeu trouvé", Modifier.padding(16.dp), color = Palette.TextDim, style = MaterialTheme.typography.bodyMedium)
 
-                else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                else -> LazyColumn(Modifier.testTag("search-result-list"), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     itemsIndexed(results, key = { _, game -> game.id }) { index, game ->
                         Row(
                             Modifier.fillMaxWidth().testTag("search-result-${game.id}").then(

@@ -10,6 +10,54 @@ change, in plain text. Never rewrite the notes of a published version.
 
 ## [Unreleased]
 
+## [2026.46.10] - 2026-11-13
+
+### Added
+
+- Integrate Nintendo 3DS (Azahar) and PlayStation 2 (ARMSX2) cores on Android ARM64, private verified system resources, per-game native save archives and exact core-build checks for save states; physical-device validation remains required.
+
+- Pin games and manual folders to Home, reorder pins from left to right, and create, rename, edit or delete local folders without removing their games. Folders can also be favorites.
+- Show the current console’s original controls in the pause menu and highlight their Bluetooth controller equivalents, including remapped buttons, sticks and triggers.
+- Hold the controller’s Home/Guide button for three seconds to return to Home; save and close a running game first. A short press opens the menu.
+- Add a direct catalogue filter for games installed on the server.
+
+### Changed
+
+- Give every console folder its own recognizable console silhouette, using bundled monochrome vector artwork that remains available offline.
+
+- Use a vertically scrolling library and a separate game page in portrait instead of squeezing the console carousel into a phone layout.
+- Put compact scrolling game titles beside their covers in console folders, with a dedicated Light font for metadata aligned at the bottom right, one value per line.
+- Build permanent console folders automatically on Home; keep the horizontal folders visible while browsing their games vertically, and accelerate held directional input progressively.
+- Group console filters by hardware generation.
+- Organize pause options into Image, Audio, System and Advanced categories, with explicit value choices and settings isolated by console and emulator core. Image controls share one page with rotation, touch layout and dual-screen layout.
+- Put Catalogue at the far left of Home instead of in the section tabs; open it with Down and a vertical transition.
+- Slide the home carousel beneath a stationary enlarged selection at the second slot, with controller, keyboard and swipe navigation.
+- Sort recent home games by downloads, local play and server activity so a completed download stays visible before its first play.
+- Reduce the search, clock and battery bubbles, restore the avatar’s circular frame, and reserve bold tab-label dimensions to keep the header steady.
+- Fill only the favorite heart on Home while retaining the button’s normal surface.
+
+### Fixed
+
+- Recover newer native title/card files after an interrupted session before synchronizing remote progress, retaining the usual conflict choice.
+
+- Calculate pause-menu columns inside the safe area and use the theme text color for headings in both orientations.
+
+- Keep search open after submission, show every matching game and allow scrolling through its results; require explicit activation instead of opening it when focus returns from gameplay.
+- Move down to the closest available item in incomplete library, download and catalogue grid rows.
+- Protect Home actions and their focus feedback from the camera cutout and the horizontal scroll viewport.
+- Extract PlayStation and Dreamcast ZIP discs before launch, retain all tracks, build playlists for multi-disc PlayStation sets, and invalidate extracted content when the ROM changes.
+- Use enhanced N64 audio interpolation and a larger audio buffer to reduce harsh sound and underruns.
+- Keep emulator startup errors visible with a way back instead of covering them with the loading screen.
+- Restore controller focus reliably after settings and gameplay without overriding the player’s next input.
+
+### Internal
+
+- Preserve existing saved progress through the Room v1-to-v2 migration and keep new 3DS/PS2 save metadata private to each account.
+
+- Expand the pending server implementation brief to cover all current native UI, console, content, collection and save requirements, with ownership and acceptance criteria.
+
+- Use ANGLE software rendering and disable unused guest Vulkan in the test emulator to avoid host GPU context crashes; wait for rotation and activity recreation before installing test content, and retain complete suite reports for both build variants.
+
 ## [2026.46.9] - 2026-11-12
 
 ### Added

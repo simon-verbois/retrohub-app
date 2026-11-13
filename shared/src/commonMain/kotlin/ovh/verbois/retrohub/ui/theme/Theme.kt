@@ -1,6 +1,7 @@
 package ovh.verbois.retrohub.ui.theme
 
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
@@ -19,6 +20,7 @@ import org.jetbrains.compose.resources.Font
 import ovh.verbois.retrohub.emulation.ThemeMode
 import ovh.verbois.retrohub.resources.Res
 import ovh.verbois.retrohub.resources.manrope_extrabold
+import ovh.verbois.retrohub.resources.manrope_light
 import ovh.verbois.retrohub.resources.manrope_regular
 import ovh.verbois.retrohub.resources.manrope_semibold
 
@@ -180,6 +182,7 @@ fun RetroHubTheme(mode: ThemeMode = ThemeMode.SYSTEM, content: @Composable () ->
     // Manrope partout, comme le site ; les titres en ExtraBold.
     val body =
         FontFamily(
+            Font(Res.font.manrope_light, FontWeight.Light),
             Font(Res.font.manrope_regular, FontWeight.Normal),
             Font(Res.font.manrope_semibold, FontWeight.SemiBold),
             Font(Res.font.manrope_semibold, FontWeight.Medium),
@@ -193,6 +196,7 @@ fun RetroHubTheme(mode: ThemeMode = ThemeMode.SYSTEM, content: @Composable () ->
             displayLarge = title.copy(fontSize = 44.sp, lineHeight = 50.sp, letterSpacing = (-0.8).sp),
             displayMedium = title.copy(fontSize = 34.sp, lineHeight = 40.sp, letterSpacing = (-0.5).sp),
             displaySmall = title.copy(fontSize = 27.sp, lineHeight = 32.sp, letterSpacing = (-0.3).sp),
+            headlineSmall = title.copy(fontSize = 20.sp, lineHeight = 26.sp),
             headlineMedium = title.copy(fontSize = 22.sp, lineHeight = 28.sp),
             titleLarge = base.copy(fontWeight = FontWeight.Bold, fontSize = 20.sp, lineHeight = 26.sp),
             titleMedium = base.copy(fontWeight = FontWeight.Bold, fontSize = 16.sp, lineHeight = 22.sp),
@@ -219,7 +223,7 @@ fun RetroHubTheme(mode: ThemeMode = ThemeMode.SYSTEM, content: @Composable () ->
             outline = scheme.line,
             error = scheme.danger,
         )
-    CompositionLocalProvider(LocalFonts provides RetroHubFonts(body, body)) {
+    CompositionLocalProvider(LocalFonts provides RetroHubFonts(body, body), LocalContentColor provides scheme.text) {
         MaterialTheme(colorScheme = colors, typography = typography, content = content)
     }
 }

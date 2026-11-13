@@ -1,0 +1,65 @@
+{
+  "commit": "8c918e2872482139273374ef4cc6c7aff34d7585",
+  "icons": {
+    "atari2600": {
+      "path": "src/xmb/monochrome/Atari - 2600.svg",
+      "sha256": "71faf87c840e6d7eb11f047b3c75fd2f99844ac5047b7fc6ad5e2509a33b4638"
+    },
+    "nes": {
+      "path": "src/xmb/monochrome/Nintendo - Nintendo Entertainment System.svg",
+      "sha256": "19b062e92a19a47ded39c29313d3c771b496543ddd2c6143099b4fac951f05eb"
+    },
+    "snes": {
+      "path": "src/xmb/monochrome/Nintendo - Super Nintendo Entertainment System.svg",
+      "sha256": "ce183526f75b6e4ef6f07e9b39932597a199c35a2c49ee9d9b84df87c6ec7ff8"
+    },
+    "gb": {
+      "path": "src/xmb/monochrome/Nintendo - Game Boy.svg",
+      "sha256": "39435c861c33defc9dcd59b6f406b2db67bbd9f31cedb0a155a1723f0dc7fa16"
+    },
+    "gbc": {
+      "path": "src/xmb/monochrome/Nintendo - Game Boy Color.svg",
+      "sha256": "d48bf774c8df4346cc8c5c3703f679190406438c9ab2f3d8332ba1c6395e456b"
+    },
+    "gba": {
+      "path": "src/xmb/monochrome/Nintendo - Game Boy Advance.svg",
+      "sha256": "a4a91a1c15a947482dc2311eddb85b0d8356a364a199ecedecd0322152868188"
+    },
+    "mastersystem": {
+      "path": "src/xmb/monochrome/Sega - Master System - Mark III.svg",
+      "sha256": "1b314742fdb2e9cd7318072d8c94d095bd0b0ee0fd9c120d9478d3e894ed81e6"
+    },
+    "megadrive": {
+      "path": "src/xmb/monochrome/Sega - Mega Drive - Genesis.svg",
+      "sha256": "d4a3d9f5ea97f3b543ce63abb4d450d3f0763c0da44a983e10bb34603824e8cf"
+    },
+    "psx": {
+      "path": "src/xmb/monochrome/Sony - PlayStation.svg",
+      "sha256": "b1f964b8f95ab268f52c789f8fb21fb17975afabef0e8bd92336662eb8611e8f"
+    },
+    "ps2": {
+      "path": "src/xmb/monochrome/Sony - PlayStation 2.svg",
+      "sha256": "68510b2580a07183ab4175ab28fc107afa7a5f9e0b8ba82b15a0d79a97cf106a"
+    },
+    "nds": {
+      "path": "src/xmb/monochrome/Nintendo - Nintendo DS.svg",
+      "sha256": "b013699eb1d12960359d69ecd1d98837b0104e03d7f1e63d07fe233d7845e68f"
+    },
+    "3ds": {
+      "path": "src/xmb/monochrome/Nintendo - Nintendo 3DS.svg",
+      "sha256": "57f0e6b759be041da75c0212e9f976a53394f1b1638049f9d37404db8b21de6a"
+    },
+    "n64": {
+      "path": "src/xmb/monochrome/Nintendo - Nintendo 64.svg",
+      "sha256": "21fde90d4c5bd4351b1d391962319f54bcffd57263db3c39b73fe135ec0ccc2e"
+    },
+    "gamecube": {
+      "path": "src/xmb/monochrome/Nintendo - GameCube.svg",
+      "sha256": "bdb92468faea624be0d42477015d4ef51305abf6d70377c747f637642bf8f784"
+    },
+    "dreamcast": {
+      "path": "src/xmb/monochrome/Sega - Dreamcast.svg",
+      "sha256": "284e7f243fa05c1a772f2fea1b173b2ec6c72db5e66138f0dca45c47d1f82a48"
+    }
+  }
+}

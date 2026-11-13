@@ -17,7 +17,7 @@ assets="$root/app/src/main/assets"
 cache="${XDG_CACHE_HOME:-$HOME/.cache}/retrohub-android/cores"
 abis=(${RETROHUB_ABIS:-arm64-v8a x86_64})
 # Same names as the RetroHub server (consoles.py) for X-Emulator-Core.
-cores=(fceumm snes9x gambatte mgba genesis_plus_gx pcsx_rearmed swanstation melonds stella2014 parallel_n64 dolphin flycast)
+cores=(fceumm snes9x gambatte mgba genesis_plus_gx pcsx_rearmed swanstation melonds stella2014 parallel_n64 dolphin flycast azahar armsx2)
 base="https://buildbot.libretro.com/nightly/android/latest"
 dolphin_sys="https://buildbot.libretro.com/assets/system/Dolphin.zip"
 update=false
@@ -66,8 +66,12 @@ fetch() {
 for abi in "${abis[@]}"; do
   mkdir -p "$jni/$abi"
   for core in "${cores[@]}"; do
+    # The new 3DS/PS2 cores are only published for Android ARM64.
+    if [[ "$abi" != "arm64-v8a" && ( "$core" == "azahar" || "$core" == "armsx2" ) ]]; then continue; fi
     so="${core}_libretro_android.so"
-    path="$(fetch "$abi/$core" "$base/$abi/$so.zip" "$so")"
+    member="$so"
+    [[ "$core" == "azahar" ]] && member="azahar_libretro.so"
+    path="$(fetch "$abi/$core" "$base/$abi/$member.zip" "$member")"
     # Android only extracts "lib*.so" libraries.
     install -m 644 "$path" "$jni/$abi/lib$so"
     echo "✓ $abi/$core"

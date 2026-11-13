@@ -51,6 +51,9 @@ val LocalHaptics = staticCompositionLocalOf<() -> Unit> { {} }
 /** Petit son de navigation, quand le focus bouge à la manette (réglage « Sons de navigation »). */
 val LocalNavSound = staticCompositionLocalOf<() -> Unit> { {} }
 
+/** Outgoing animated screens must not reclaim focus from the incoming page. */
+val LocalScreenActive = staticCompositionLocalOf { true }
+
 /** Le bouton A de la manette (et Entrée, OK de télécommande) valide l’élément qui a le focus. */
 internal val ConfirmKeys = setOf(Key.ButtonA, Key.Enter, Key.NumPadEnter, Key.DirectionCenter, Key.Spacebar)
 
@@ -95,12 +98,12 @@ fun Modifier.consoleFocus(
             scaleY = scale
         }.onFocusChanged {
             if (it.isFocused && !focused) {
-                activity.generation++
                 if (keyboard) navSound()
             }
             focused = it.isFocused
             onFocus(it.isFocused)
         }.onPreviewKeyEvent { event ->
+            if (event.type == KeyEventType.KeyDown) activity.generation++
             if (enabled && onClick != null && event.key == Key.ButtonA) {
                 // Consume both edges before combinedClickable can perform its own activation.
                 if (event.type == KeyEventType.KeyUp) {
@@ -126,11 +129,13 @@ fun Modifier.consoleFocus(
             onLongClick =
             onLongClick?.let {
                 {
+                    activity.generation++
                     haptics()
                     it()
                 }
             },
         ) {
+            activity.generation++
             haptics()
             onClick?.invoke()
         }.drawWithContent {
@@ -150,12 +155,14 @@ fun AutoFocus(requester: androidx.compose.ui.focus.FocusRequester) {
     val mode = LocalInputModeManager.current.inputMode
     val windowFocused = LocalWindowInfo.current.isWindowFocused
     val activity = LocalFocusActivity.current
-    androidx.compose.runtime.LaunchedEffect(mode, windowFocused) {
-        if (!windowFocused) return@LaunchedEffect
-        val generation = activity.generation
+    val active = LocalScreenActive.current
+    val target by androidx.compose.runtime.rememberUpdatedState(requester)
+    val generation = activity.generation
+    androidx.compose.runtime.LaunchedEffect(mode, windowFocused, active) {
+        if (mode != InputMode.Keyboard || !windowFocused || !active) return@LaunchedEffect
         kotlinx.coroutines.delay(60)
         // A delayed default must never override a direction the player has already chosen.
-        if (activity.generation == generation) runCatching { requester.requestFocus() }
+        if (activity.generation == generation) runCatching { target.requestFocus() }
     }
 }
 
@@ -176,15 +183,32 @@ class NavigationFocus {
 
 val LocalNavigationFocus = staticCompositionLocalOf { NavigationFocus() }
 
+/** A Guide hold is available inside popup windows as well as the activity window. */
+val LocalReturnHome = staticCompositionLocalOf<() -> Unit> { {} }
+
 /** Dismiss the local overlay first and keep global shortcuts out of the page underneath. */
-fun Modifier.controllerDialog(onDismiss: () -> Unit, dismissOnStart: Boolean = false): Modifier = onKeyEvent { event ->
-    val back = event.key == Key.ButtonB || event.key == Key.Escape ||
-        (dismissOnStart && (event.key == Key.ButtonStart || event.key == Key.Menu))
-    if (back) {
-        if (event.type == KeyEventType.KeyUp) onDismiss()
-        true
-    } else {
-        event.key in setOf(Key.ButtonY, Key.ButtonL1, Key.ButtonR1, Key.ButtonStart, Key.ButtonSelect, Key.Menu)
+@Composable
+fun Modifier.controllerDialog(onDismiss: () -> Unit, dismissOnStart: Boolean = false): Modifier {
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    val returnHome by androidx.compose.runtime.rememberUpdatedState(LocalReturnHome.current)
+    val dismiss by androidx.compose.runtime.rememberUpdatedState(onDismiss)
+    val guide = remember { ovh.verbois.retrohub.game.GuideButton(scope, { dismiss() }, { returnHome() }) }
+    androidx.compose.runtime.DisposableEffect(guide) { onDispose { guide.cancel() } }
+    return onPreviewKeyEvent { event ->
+        if (event.key == Key.ButtonMode || event.key == Key.Menu) {
+            guide.event(event.type == KeyEventType.KeyDown)
+            true
+        } else {
+            false
+        }
+    }.onKeyEvent { event ->
+        val back = event.key == Key.ButtonB || event.key == Key.Escape || (dismissOnStart && event.key == Key.ButtonStart)
+        if (back) {
+            if (event.type == KeyEventType.KeyUp) onDismiss()
+            true
+        } else {
+            event.key in setOf(Key.ButtonY, Key.ButtonL1, Key.ButtonR1, Key.ButtonStart, Key.ButtonSelect)
+        }
     }
 }
 

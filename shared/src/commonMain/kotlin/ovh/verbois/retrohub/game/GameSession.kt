@@ -41,6 +41,7 @@ data class GameUiState(
     val fastForward: Boolean = false,
     val started: Boolean = false,
     val message: String? = null,
+    val startupError: String? = null,
     val slots: List<SlotInfo> = emptyList(),
     val lastSavedAt: Instant? = null,
 )
@@ -60,7 +61,13 @@ class GameSession(
     private val scope: CoroutineScope,
     private val clock: AppClock = AppClock.System,
     private val io: CoroutineDispatcher = Dispatchers.IO,
+    private val onStarted: () -> Unit = {},
 ) {
+    init {
+        saves.prepareGame(plan.playGameId, plan.console)
+        saves.setGameActive(plan.playGameId, true)
+    }
+
     private val state = MutableStateFlow(GameUiState())
     val ui: StateFlow<GameUiState> = state.asStateFlow()
     private val lock = Mutex()
@@ -74,6 +81,7 @@ class GameSession(
     /** À la première image : on recharge la dernière partie, puis la sauvegarde périodique démarre. */
     suspend fun onFirstFrame() = lock.withLock {
         if (state.value.started || finished) return@withLock
+        onStarted()
         startedAt = clock.now()
         resumedAt = startedAt
         engine.prepareReset()
@@ -124,6 +132,10 @@ class GameSession(
         state.update { it.copy(fastForward = enabled) }
     }
 
+    fun reportError(message: String) {
+        state.update { it.copy(message = message, startupError = if (it.started) null else message) }
+    }
+
     fun flash(message: String?) = state.update { it.copy(message = message) }
 
     /** A reset cannot overlap a snapshot or an initial restore, and never blocks the UI caller. */
@@ -171,6 +183,14 @@ class GameSession(
                 flash("Cette sauvegarde vient d’un autre émulateur (${save.core}) et ne peut pas être chargée ici.")
                 return@withLock false
             }
+            if (plan.console in setOf("3ds", "ps2") && (
+                    save?.coreBuild == null || save.coreBuild != plan.coreBuild || save.console != plan.console ||
+                        save.core != plan.core || !save.romSha.equals(plan.romSha, true)
+                    )
+            ) {
+                flash("Cette sauvegarde utilise une autre version de l’émulateur. Votre sauvegarde dans le jeu reste disponible.")
+                return@withLock false
+            }
             if (save != null && save.romSha.isNotEmpty() && !save.romSha.equals(plan.romSha, true)) {
                 flash("Cette sauvegarde vient d’une autre version du jeu. Mettez le jeu à jour pour la retrouver.")
                 return@withLock false
@@ -187,6 +207,27 @@ class GameSession(
             if (!state.value.started || finished) return@withLock
             val code = plan.gameCode
             val userDir = plan.dolphinUserDir
+            if (plan.console in setOf("3ds", "ps2")) {
+                val resumeAfter = !state.value.paused
+                engine.pause()
+                try {
+                    // Snapshot on the emulation thread forms a barrier after the last completed frame.
+                    engine.saveState()?.takeIf { it.isNotEmpty() }?.let { write("state", 0, it) }
+                    val target = saves.file(plan.playGameId, "sram", 0)
+                    preservePrevious("sram", 0)
+                    if (NativeGameSaves.export(fs, plan.savesDir.toPath(), plan.console, plan.playGameId, plan.romSha, plan.nativeTitleId, target)) {
+                        saveSync.recordLocal(plan.playGameId, plan.console, "sram", 0, plan.core, plan.romSha)
+                    }
+                } catch (error: Exception) {
+                    if (error is kotlinx.coroutines.CancellationException) throw error
+                    flash("La sauvegarde n’a pas pu être copiée. Vérifiez l’espace libre puis sauvegardez depuis le menu du jeu.")
+                    return@withLock
+                } finally {
+                    if (resumeAfter) engine.resume()
+                }
+                state.update { it.copy(lastSavedAt = clock.now()) }
+                return@withLock
+            }
             if (code != null && userDir != null) {
                 // GameCube : la « SRAM » échangée est le ZIP des fichiers .gci de ce jeu.
                 val target = saves.file(plan.playGameId, "sram", 0)
@@ -207,11 +248,35 @@ class GameSession(
         val target = saves.file(plan.playGameId, kind, slot)
         target.parent?.let { fs.createDirectories(it) }
         val digest = sha256(data)
-        if (fs.exists(target) && saves.find(plan.playGameId, kind, slot)?.localSha == digest) return
+        val previous = saves.find(plan.playGameId, kind, slot)
+        if (fs.exists(target) && previous?.localSha == digest && previous.core == plan.core && previous.coreBuild == plan.coreBuild &&
+            previous.romSha == plan.romSha
+        ) {
+            return
+        }
+        preservePrevious(kind, slot)
         val temporary = target.parent!! / (target.name + ".tmp")
         fs.write(temporary) { write(data) }
         fs.atomicMove(temporary, target)
-        saveSync.recordLocal(plan.playGameId, plan.console, kind, slot, plan.core, plan.romSha, digest)
+        saveSync.recordLocal(plan.playGameId, plan.console, kind, slot, plan.core, plan.romSha, digest, plan.coreBuild)
+    }
+
+    /** Keep an incompatible local checkpoint before a new core/ROM writes its first snapshot. */
+    private suspend fun preservePrevious(kind: String, slot: Int) {
+        if (plan.console !in setOf("3ds", "ps2")) return
+        val previous = saves.find(plan.playGameId, kind, slot) ?: return
+        if (previous.romSha == plan.romSha && (kind != "state" || previous.coreBuild == plan.coreBuild)) return
+        val source = saves.file(previous)
+        if (!fs.exists(source)) return
+        val identity = sha256("${previous.romSha}/${previous.coreBuild}/${previous.localSha}".encodeToByteArray())
+        val retained = source.parent!! / "retained" / "$identity-${source.name}"
+        if (!fs.exists(retained)) {
+            fs.createDirectories(retained.parent!!)
+            fs.copy(source, retained)
+            fs.write(retained.parent!! / (retained.name + ".metadata")) {
+                writeUtf8(ovh.verbois.retrohub.api.ApiJson.encodeToString(LocalSave.serializer(), previous))
+            }
+        }
     }
 
     private suspend fun refreshSlots() {
@@ -243,6 +308,7 @@ class GameSession(
             }
             scheduleSync()
             lock.withLock { finished = true }
+            saves.setGameActive(plan.playGameId, false)
         }
     }
 

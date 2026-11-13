@@ -90,7 +90,7 @@ fun searchGames(games: List<Game>, query: String): List<Game> {
     return if (words.isEmpty()) {
         games.sortedByDescending { it.lastPlayed }.take(8)
     } else {
-        games.asSequence().filter { game -> words.all { it in game.searchText } }.take(40).toList()
+        games.asSequence().filter { game -> words.all { it in game.searchText } }.toList()
     }
 }
 

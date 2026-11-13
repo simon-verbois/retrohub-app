@@ -38,20 +38,19 @@ if ! adb -s "$(scripts/emulator.sh serial)" get-state >/dev/null 2>&1; then
 fi
 scripts/emulator.sh wait
 
-step "Instrumented tests"
-scripts/test.sh instrumented
+step "Instrumented tests: native cores, interface, navigation and rotations"
+RETROHUB_INSTRUMENTED_GROUP=all scripts/test.sh instrumented
 
 step "End-to-end against the real backend"
 scripts/test.sh e2e
 
 if [[ "$started_emulator" == true ]]; then
   step "Fresh emulator for the optimized build"
-  # Native rendering and rotation tests must not inherit the previous variant's GPU state.
   scripts/emulator.sh down
   scripts/emulator.sh up
   scripts/emulator.sh wait
 fi
 
-step "Optimized build: native cores, instrumented tests and end-to-end"
-RETROHUB_TEST_VARIANT=benchmark scripts/test.sh instrumented
+step "Optimized build: native cores, interface, navigation and end-to-end"
+RETROHUB_TEST_VARIANT=benchmark RETROHUB_INSTRUMENTED_GROUP=all scripts/test.sh instrumented
 RETROHUB_TEST_VARIANT=benchmark scripts/test.sh e2e

@@ -34,6 +34,7 @@ import ovh.verbois.retrohub.ui.theme.Palette
 /** Le menu du jeu choisi, ancré sous son titre : jouer, partie neuve, favori, options. */
 @Composable
 fun GameMenu(controller: UiController, game: Game) {
+    val settings by controller.container.settings.settings.collectAsState()
     val downloads by controller.container.downloads.states.collectAsState()
     val first = remember { FocusRequester() }
     val close = { controller.gameMenu = false }
@@ -60,6 +61,24 @@ fun GameMenu(controller: UiController, game: Game) {
             close()
             controller.toggleFavorite(game)
         }
+        PinMenuItems(controller, game.id)
+        settings.homeFolders.forEach { folder ->
+            Item(Lucide.FolderOpen, if (game.id in folder.gameIds) "Retirer de ${folder.name}" else "Ajouter à ${folder.name}") {
+                controller.container.settings.update { current ->
+                    current.copy(
+                        homeFolders = current.homeFolders.map {
+                            if (it.id == folder.id) it.copy(gameIds = if (game.id in it.gameIds) it.gameIds - game.id else it.gameIds + game.id) else it
+                        },
+                    )
+                }
+                close()
+            }
+        }
+        Item(Lucide.FolderPlus, "Nouveau dossier") {
+            controller.newFolder()
+            controller.folderEditor = controller.folderEditor?.copy(gameIds = listOf(game.id))
+            close()
+        }
         Item(Lucide.Settings2, "Options du jeu") {
             close()
             controller.nav.go(Route.Settings(SettingsPage.GAME, game.id))
@@ -77,5 +96,29 @@ private fun Item(icon: ImageVector, label: String, modifier: Modifier = Modifier
     ) {
         Icon(icon, null, Modifier.size(20.dp), tint = Palette.Text)
         Text(label, style = MaterialTheme.typography.bodyLarge, color = Palette.Text)
+    }
+}
+
+@Composable
+internal fun PinMenuItems(controller: UiController, key: String) {
+    val settings by controller.container.settings.settings.collectAsState()
+    val pins = settings.homePins
+    Item(Lucide.Pin, if (key in pins) "Détacher de l’accueil" else "Épingler à l’accueil") {
+        controller.container.settings.update { it.toggleHomePin(key) }
+        controller.gameMenu = false
+    }
+    if (key in pins) {
+        if (pins.indexOf(key) > 0) {
+            Item(Lucide.ArrowLeft, "Déplacer à gauche") {
+                controller.container.settings.update { it.moveHomePin(key, -1) }
+                controller.gameMenu = false
+            }
+        }
+        if (pins.indexOf(key) < pins.lastIndex) {
+            Item(Lucide.ChevronRight, "Déplacer à droite") {
+                controller.container.settings.update { it.moveHomePin(key, 1) }
+                controller.gameMenu = false
+            }
+        }
     }
 }

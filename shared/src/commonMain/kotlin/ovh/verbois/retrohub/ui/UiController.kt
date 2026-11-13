@@ -62,6 +62,30 @@ class UiController(val container: AppContainer, private val scope: CoroutineScop
 
     /** Menu du jeu choisi, qui descend de son titre (appui long ou bouton □ de la manette). */
     var gameMenu by mutableStateOf(false)
+    var folderEditor by mutableStateOf<ovh.verbois.retrohub.emulation.HomeFolder?>(null)
+
+    fun newFolder() {
+        folderEditor = ovh.verbois.retrohub.emulation.HomeFolder(kotlin.uuid.Uuid.random().toString(), "")
+    }
+
+    fun deleteFolder(folder: ovh.verbois.retrohub.emulation.HomeFolder) {
+        container.settings.update { it.copy(homeFolders = it.homeFolders.filterNot { item -> item.id == folder.id }, homePins = it.homePins - folder.key) }
+        if (homeGame == folder.key) homeGame = null
+        if (nav.current == Route.Folder(folder.id)) nav.back()
+        folderEditor = null
+    }
+
+    fun returnHome() {
+        autoStarted = true
+        gameMenu = false
+        exitRequested = false
+        folderEditor = null
+        downloadRequest = null
+        launchIssue = null
+        pinRequest = null
+        keyCapture = null
+        nav.section(ovh.verbois.retrohub.ui.nav.Section.HOME)
+    }
     var downloadRequest by mutableStateOf<Game?>(null)
         private set
 
@@ -77,13 +101,14 @@ class UiController(val container: AppContainer, private val scope: CoroutineScop
     fun confirmDownload() {
         val game = downloadRequest ?: return
         downloadRequest = null
+        container.settings.update { it.copy(homeActivity = it.homeActivity + (game.id to container.clock.now().toString())) }
         container.downloads.start(game)
     }
 
     fun showGame(id: String) {
         homeGame = id
         searching = false
-        nav.section(ovh.verbois.retrohub.ui.nav.Section.HOME)
+        if (portrait) nav.go(Route.Game(id)) else nav.section(ovh.verbois.retrohub.ui.nav.Section.HOME)
     }
     private var autoStarted = false
     private var toastJob: Job? = null
@@ -102,7 +127,7 @@ class UiController(val container: AppContainer, private val scope: CoroutineScop
     enum class Button { B, Y, LB, RB, START, SELECT }
 
     fun onButton(button: Button): Boolean = when {
-        exitRequested || downloadRequest != null || pinRequest != null || launchIssue != null -> {
+        folderEditor != null || exitRequested || downloadRequest != null || pinRequest != null || launchIssue != null -> {
             if (button == Button.B) back()
             true
         }
@@ -142,6 +167,11 @@ class UiController(val container: AppContainer, private val scope: CoroutineScop
     }
 
     fun back(): Boolean = when {
+        folderEditor != null -> {
+            folderEditor = null
+            true
+        }
+
         exitRequested -> {
             exitRequested = false
             true

@@ -20,6 +20,7 @@ import kotlinx.coroutines.flow.StateFlow
 import okio.FileSystem
 import okio.Path
 import okio.Path.Companion.toOkioPath
+import okio.Path.Companion.toPath
 import ovh.verbois.retrohub.BuildConfig
 import ovh.verbois.retrohub.api.ApiJson
 import ovh.verbois.retrohub.core.BatteryLevel
@@ -28,6 +29,7 @@ import ovh.verbois.retrohub.core.DeviceClass
 import ovh.verbois.retrohub.core.Platform
 import ovh.verbois.retrohub.core.PowerStatus
 import ovh.verbois.retrohub.core.TokenVault
+import ovh.verbois.retrohub.core.sha256
 import ovh.verbois.retrohub.game.GameActivity
 import ovh.verbois.retrohub.game.LaunchPlan
 import ovh.verbois.retrohub.work.DownloadWorker
@@ -152,6 +154,8 @@ class AndroidPlatform(private val context: Context) : Platform {
         val dir = File(context.applicationInfo.nativeLibraryDir)
         return dir.list().orEmpty().mapNotNull { CORE_FILE.matchEntire(it)?.groupValues?.get(1) }.toSet()
     }
+
+    override fun coreBuild(core: String): String? = runCatching { fs.sha256(corePath(core).toPath()) }.getOrNull()
 
     fun corePath(core: String): String = File(context.applicationInfo.nativeLibraryDir, "lib${core}_libretro_android.so").absolutePath
 

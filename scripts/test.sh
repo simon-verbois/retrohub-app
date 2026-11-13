@@ -52,13 +52,28 @@ instrumented() {
   need_device
   ensure_cores
   local reports="app/build/outputs/androidTest-results/connected/$variant"
+  local group="${RETROHUB_INSTRUMENTED_GROUP:-all}"
+  local selection=()
+  case "$group" in
+    all) selection=(-Pandroid.testInstrumentationRunnerArguments.notPackage=ovh.verbois.retrohub.e2e) ;;
+    native) selection=(-Pandroid.testInstrumentationRunnerArguments.package=ovh.verbois.retrohub.game) ;;
+    interface) selection=(-Pandroid.testInstrumentationRunnerArguments.notPackage=ovh.verbois.retrohub.e2e,ovh.verbois.retrohub.game -Pandroid.testInstrumentationRunnerArguments.notClass=ovh.verbois.retrohub.ui.NavigationTreeTest) ;;
+    navigation) selection=(-Pandroid.testInstrumentationRunnerArguments.class=ovh.verbois.retrohub.ui.NavigationTreeTest) ;;
+    *) echo "Invalid instrumented test group: $group" >&2; return 2 ;;
+  esac
   rm -rf "$reports"
   local result=0
   "${gradle[@]}" :app:connected${variant_task}AndroidTest \
     -Pandroid.injected.androidTest.leaveApksInstalledAfterRun=true \
-    -Pandroid.testInstrumentationRunnerArguments.notPackage=ovh.verbois.retrohub.e2e || result=$?
+    "${selection[@]}" || result=$?
   mkdir -p "build/screens-instrumented/$variant"
   adb -s "$ANDROID_SERIAL" pull "/sdcard/Android/data/$app_id/files/test-screens/." "build/screens-instrumented/$variant/" >/dev/null 2>&1 || true
+  if [[ -d "$reports" ]]; then
+    local saved="build/test-results/instrumented/$variant/$group"
+    rm -rf "$saved"
+    mkdir -p "$saved"
+    cp -a "$reports/." "$saved/"
+  fi
   ((result == 0)) || return "$result"
   # Some runner crashes return a successful Gradle exit code: verify the actual reports too.
   if ! grep -q '<testcase ' "$reports"/TEST-*.xml ||

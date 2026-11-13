@@ -22,7 +22,7 @@ class CoresTest {
         val dir = File(InstrumentationRegistry.getInstrumentation().targetContext.applicationInfo.nativeLibraryDir)
         val machine = if (Build.SUPPORTED_ABIS.first() == "x86_64") 0x3E else 0xB7
         val failures = mutableListOf<String>()
-        for (core in Consoles.allCores.sorted()) {
+        for (core in Consoles.coresForAbi(Build.SUPPORTED_ABIS.first()).sorted()) {
             val file = File(dir, "lib${core}_libretro_android.so")
             if (!file.exists()) {
                 failures += "$core absent"

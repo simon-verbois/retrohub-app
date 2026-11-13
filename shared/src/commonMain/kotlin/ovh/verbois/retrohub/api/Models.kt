@@ -87,6 +87,7 @@ data class LibraryGame(
     val installed: Boolean = false,
     val rom: RomInfo? = null,
     val bios: BiosInfo? = null,
+    @SerialName("system_resources") val systemResources: List<SystemResource> = emptyList(),
     val saves: List<RemoteSave> = emptyList(),
 )
 
@@ -107,7 +108,14 @@ data class SaveContext(
 data class LastSave(val kind: String = "sram", val slot: Int = 0, @SerialName("played_at") val playedAt: String? = null, val device: Device? = null)
 
 @Serializable
-data class RomInfo(val sha256: String, val size: Long, val extension: String, val filename: String, val url: String)
+data class RomInfo(
+    val sha256: String,
+    val size: Long,
+    val extension: String,
+    val filename: String,
+    val url: String,
+    @SerialName("native_title_id") val nativeTitleId: String? = null,
+)
 
 @Serializable
 data class BiosInfo(val url: String, val sha256: String)
@@ -122,6 +130,7 @@ data class RemoteSave(
     val sha256: String,
     val size: Long = 0,
     val core: String = "",
+    @SerialName("core_build") val coreBuild: String? = null,
     @SerialName("rom_sha256") val romSha256: String = "",
     @SerialName("created_at") val createdAt: String? = null,
     @SerialName("played_at") val playedAt: String? = null,
@@ -188,3 +197,9 @@ data class PasswordChange(@SerialName("current_password") val currentPassword: S
 
 @Serializable
 data class DeviceRename(val name: String)
+
+@Serializable
+data class SystemResource(val kind: String, val format: String, val sha256: String, val size: Long, val files: List<SystemResourceFile>, val url: String)
+
+@Serializable
+data class SystemResourceFile(val path: String, val size: Long, val sha256: String)

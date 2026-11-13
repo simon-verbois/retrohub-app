@@ -1,5 +1,6 @@
 package ovh.verbois.retrohub
 
+import android.content.Intent
 import android.os.Bundle
 import android.view.KeyEvent
 import androidx.activity.ComponentActivity
@@ -23,6 +24,13 @@ import ovh.verbois.retrohub.ui.RetroHubRoot
 import ovh.verbois.retrohub.ui.UiController
 
 class MainActivity : ComponentActivity() {
+    private val guide by lazy {
+        ovh.verbois.retrohub.game.GuideButton(
+            lifecycleScope,
+            onPress = { controller?.let { it.menuOpen = !it.menuOpen } },
+            onHold = { controller?.returnHome() },
+        )
+    }
     private var controller: UiController? = null
     private var qrResult: CompletableDeferred<String?>? = null
     private val scanLauncher = registerForActivityResult(ScanContract()) { result -> qrResult?.complete(result.contents) }
@@ -68,7 +76,15 @@ class MainActivity : ComponentActivity() {
                 }
             },
         )
-        setContent { RetroHubRoot(container, onExit = { finish() }) { controller = it } }
+        setContent {
+            RetroHubRoot(container, onExit = { finish() }) {
+                controller = it
+                if (intent.getBooleanExtra(EXTRA_RETURN_HOME, false)) {
+                    it.returnHome()
+                    intent.removeExtra(EXTRA_RETURN_HOME)
+                }
+            }
+        }
         // Notifications (téléchargements, conflits) : demandées une fois la configuration faite.
         lifecycleScope.launch {
             container.settings.settings.first { it.setupDone }
@@ -87,6 +103,13 @@ class MainActivity : ComponentActivity() {
     // Faux positif de lint : super.dispatchKeyEvent est l’API publique d’Activity.
     @android.annotation.SuppressLint("RestrictedApi")
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        val active = controller
+        if (event.keyCode in setOf(KeyEvent.KEYCODE_BUTTON_MODE, KeyEvent.KEYCODE_MENU, KeyEvent.KEYCODE_HOME) &&
+            active?.container?.account?.auth?.value is AuthState.SignedIn && active.container.settings.settings.value.setupDone
+        ) {
+            guide.event(event.action == KeyEvent.ACTION_DOWN, event.isCanceled)
+            return true
+        }
         controller?.keyCapture?.let { capture ->
             if (KeyEvent.isGamepadButton(event.keyCode) ||
                 event.keyCode in KeyEvent.KEYCODE_DPAD_UP..KeyEvent.KEYCODE_DPAD_RIGHT
@@ -120,6 +143,19 @@ class MainActivity : ComponentActivity() {
         return super.dispatchKeyEvent(event)
     }
 
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        if (intent.getBooleanExtra(EXTRA_RETURN_HOME, false)) {
+            val ui = controller
+            if (ui != null) ui.returnHome() else this.intent.putExtra(EXTRA_RETURN_HOME, true)
+        }
+    }
+
+    override fun onPause() {
+        guide.cancel()
+        super.onPause()
+    }
+
     override fun onResume() {
         super.onResume()
         immersive()
@@ -140,6 +176,10 @@ class MainActivity : ComponentActivity() {
         (application as RetroHubApp).platform.qrScanner = null
         qrResult?.complete(null)
         super.onDestroy()
+    }
+
+    companion object {
+        const val EXTRA_RETURN_HOME = "return_home"
     }
 
     private fun immersive() {

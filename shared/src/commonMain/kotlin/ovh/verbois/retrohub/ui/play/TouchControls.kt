@@ -46,6 +46,8 @@ import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -65,7 +67,7 @@ private sealed interface Hit {
 
     data object DPad : Hit
 
-    data object LeftStick : Hit
+    data class Analog(val stick: Stick) : Hit
 
     data class StickKey(val button: StickButton) : Hit
 }
@@ -88,6 +90,7 @@ private class Regions {
 private class Pressed {
     var keys by mutableStateOf(emptySet<PadKey>())
     var stick by mutableStateOf(Offset.Zero)
+    var rightStick by mutableStateOf(Offset.Zero)
     var stickButtons by mutableStateOf(emptySet<StickButton>())
 }
 
@@ -116,6 +119,7 @@ fun TouchControls(
     /** Mode édition : on déplace (un doigt) et on redimensionne (deux doigts) les groupes. */
     editing: Boolean = false,
     onLayout: (String, ControlPlacement) -> Unit = { _, _ -> },
+    physicalInput: ovh.verbois.retrohub.game.ControllerInput? = null,
 ) {
     val currentLayout by rememberUpdatedState(layout)
     val currentScreenTouch by rememberUpdatedState(onScreenTouch)
@@ -128,18 +132,18 @@ fun TouchControls(
             .fillMaxSize()
             .onGloballyPositioned { origin = it.positionInRoot() }
             .pointerInput(spec, editing) {
-                if (editing) return@pointerInput
+                if (editing || physicalInput != null) return@pointerInput
                 awaitPointerEventScope {
                     val stickOwner = mutableMapOf<PointerId, Hit>()
                     var screenPointer: PointerId? = null
-                    var stickCenter = Offset.Zero
-                    var stickRadius = 1f
+                    val stickCenters = mutableMapOf<Stick, Pair<Offset, Float>>()
                     val slop = 10.dp.toPx()
                     while (true) {
                         val event = awaitPointerEvent()
                         val keys = mutableSetOf<PadKey>()
                         val cKeys = mutableSetOf<StickButton>()
                         var stick: Offset? = null
+                        var rightStick: Offset? = null
                         var screen: Offset? = null
                         for (change in event.changes) {
                             if (!change.pressed) {
@@ -149,10 +153,13 @@ fun TouchControls(
                             }
                             if (change.isConsumed) continue
                             val point = change.position + origin
-                            if (stickOwner[change.id] == Hit.LeftStick) {
-                                val v = (point - stickCenter) / stickRadius
+                            val heldStick = stickOwner[change.id] as? Hit.Analog
+                            if (heldStick != null) {
+                                val (center, radius) = stickCenters.getValue(heldStick.stick)
+                                val v = (point - center) / radius
                                 val len = hypot(v.x, v.y).coerceAtLeast(1f)
-                                stick = Offset(v.x / len, v.y / len)
+                                val value = Offset(v.x / len, v.y / len)
+                                if (heldStick.stick == Stick.LEFT) stick = value else rightStick = value
                                 change.consume()
                                 continue
                             }
@@ -177,12 +184,12 @@ fun TouchControls(
 
                                 Hit.DPad -> keys += dpadKeys((point - rect.center) / (rect.width / 2))
 
-                                Hit.LeftStick -> {
-                                    if (!change.previousPressed) {
-                                        stickOwner[change.id] = Hit.LeftStick
-                                        stickCenter = rect.center
-                                        stickRadius = rect.width / 2
-                                        stick = (point - stickCenter) / stickRadius
+                                is Hit.Analog -> {
+                                    if (!change.previousPressed && stickOwner.values.none { it == hit }) {
+                                        stickOwner[change.id] = hit
+                                        stickCenters[hit.stick] = rect.center to rect.width / 2
+                                        val value = (point - rect.center) / (rect.width / 2)
+                                        if (hit.stick == Stick.LEFT) stick = value else rightStick = value
                                     }
                                 }
                             }
@@ -197,6 +204,13 @@ fun TouchControls(
                             val y = cKeys.sumOf { it.dy.toDouble() }.toFloat().coerceIn(-1f, 1f)
                             onStick(Stick.RIGHT, x, y)
                             pressed.stickButtons = cKeys
+                        }
+                        if (spec.rightStick) {
+                            val value = rightStick ?: Offset.Zero
+                            if (value != pressed.rightStick) {
+                                pressed.rightStick = value
+                                onStick(Stick.RIGHT, value.x, value.y)
+                            }
                         }
                         val newStick = stick ?: Offset.Zero
                         if (newStick != pressed.stick) {
@@ -247,51 +261,73 @@ fun TouchControls(
             ControlsPlacement.OVERLAY -> minOf(baseUnit, (maxWidth - 40.dp) / 6f, (maxHeight - 84.dp) / 3.7f)
             else -> minOf(baseUnit, (maxWidth - 48.dp) / 6f)
         }.coerceAtLeast(24.dp)
+        val shownKeys = physicalInput?.keys ?: pressed.keys
+        val shownStick = physicalInput?.let { Offset(it.leftX, it.leftY) } ?: pressed.stick
+        val shownStickButtons = physicalInput?.let { input ->
+            spec.stickButtons.filter { button ->
+                (button.dx < 0 && input.rightX < -0.5f) || (button.dx > 0 && input.rightX > 0.5f) ||
+                    (button.dy < 0 && input.rightY < -0.5f) || (button.dy > 0 && input.rightY > 0.5f)
+            }.toSet()
+        } ?: pressed.stickButtons
         val leftCluster: @Composable BoxScope.(Modifier) -> Unit = { m ->
             Box(m.group("left")) {
                 if (spec.leftStick && spec.dpad) {
                     if (landscape) {
                         Box(Modifier.size(unit * 2.8f)) {
-                            DPad(unit * 1.7f, pressed.keys, Modifier.align(Alignment.TopStart).onGloballyPositioned { regions.register("dpad", it, Hit.DPad) })
+                            DPad(unit * 1.7f, shownKeys, Modifier.align(Alignment.TopStart).onGloballyPositioned { regions.register("dpad", it, Hit.DPad) })
                             AnalogStick(
                                 unit * 1.7f,
-                                pressed.stick,
+                                shownStick,
                                 Modifier.align(Alignment.BottomEnd).onGloballyPositioned {
-                                    regions.register("stick", it, Hit.LeftStick)
+                                    regions.register("stick", it, Hit.Analog(Stick.LEFT))
                                 },
                             )
                         }
                     } else {
                         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            DPad(unit * 2f, pressed.keys, Modifier.onGloballyPositioned { regions.register("dpad", it, Hit.DPad) })
-                            AnalogStick(unit * 2f, pressed.stick, Modifier.onGloballyPositioned { regions.register("stick", it, Hit.LeftStick) })
+                            DPad(unit * 2f, shownKeys, Modifier.onGloballyPositioned { regions.register("dpad", it, Hit.DPad) })
+                            AnalogStick(unit * 2f, shownStick, Modifier.onGloballyPositioned { regions.register("stick", it, Hit.Analog(Stick.LEFT)) })
                         }
                     }
                 } else if (spec.leftStick) {
-                    AnalogStick(unit * 2.7f, pressed.stick, Modifier.onGloballyPositioned { regions.register("stick", it, Hit.LeftStick) })
+                    AnalogStick(unit * 2.7f, shownStick, Modifier.onGloballyPositioned { regions.register("stick", it, Hit.Analog(Stick.LEFT)) })
                 } else if (spec.dpad) {
-                    DPad(unit * 2.5f, pressed.keys, Modifier.onGloballyPositioned { regions.register("dpad", it, Hit.DPad) })
+                    DPad(unit * 2.5f, shownKeys, Modifier.onGloballyPositioned { regions.register("dpad", it, Hit.DPad) })
                 }
             }
         }
         val rightCluster: @Composable BoxScope.(Modifier) -> Unit = { m ->
             Box(m.group("right").size(unit * 2.95f)) {
                 spec.face.forEach { button ->
-                    val size = if (button.big) unit * 1.3f else unit
+                    val compact = if (spec.rightStick) 0.7f else 1f
+                    val size = (if (button.big) unit * 1.3f else unit) * compact
                     RoundKey(
                         button.label,
                         button.color,
-                        button.key in pressed.keys,
+                        button.key in shownKeys,
                         size,
-                        Modifier.align(Alignment.Center).offset(unit * 1.08f * button.x, unit * 1.08f * button.y)
+                        Modifier.align(Alignment.Center).offset(
+                            unit * (1.08f * button.x * compact + if (spec.rightStick) 0.45f else 0f),
+                            unit * (1.08f * button.y * compact - if (spec.rightStick) 0.45f else 0f),
+                        )
                             .onGloballyPositioned { regions.register("face-${button.key}", it, Hit.Key(button.key)) },
+                    )
+                }
+                if (spec.rightStick) {
+                    val value = physicalInput?.let { Offset(it.rightX, it.rightY) } ?: pressed.rightStick
+                    AnalogStick(
+                        unit * 1.6f,
+                        value,
+                        Modifier.align(Alignment.BottomStart).onGloballyPositioned {
+                            regions.register("right-stick", it, Hit.Analog(Stick.RIGHT))
+                        },
                     )
                 }
                 spec.stickButtons.forEach { button ->
                     RoundKey(
                         button.label,
                         button.color,
-                        button in pressed.stickButtons,
+                        button in shownStickButtons,
                         unit * 0.72f,
                         Modifier.align(Alignment.Center).offset(unit * 1.08f * button.x, unit * 1.08f * button.y)
                             .onGloballyPositioned { regions.register("c-${button.label}", it, Hit.StickKey(button)) },
@@ -305,7 +341,7 @@ fun TouchControls(
             val key: @Composable (Shoulder, Modifier) -> Unit = { shoulder, modifier ->
                 PillKey(
                     shoulder.label,
-                    shoulder.key in pressed.keys,
+                    shoulder.key in shownKeys,
                     modifier.height(unit * 0.72f).onGloballyPositioned { regions.register("sh-${shoulder.key}", it, Hit.Key(shoulder.key)) },
                 )
             }
@@ -325,7 +361,7 @@ fun TouchControls(
                 spec.select?.let { label ->
                     PillKey(
                         label,
-                        PadKey.SELECT in pressed.keys,
+                        PadKey.SELECT in shownKeys,
                         centerKeySize.onGloballyPositioned {
                             regions.register("select", it, Hit.Key(PadKey.SELECT))
                         },
@@ -335,7 +371,7 @@ fun TouchControls(
                 spec.start?.let { label ->
                     PillKey(
                         label,
-                        PadKey.START in pressed.keys,
+                        PadKey.START in shownKeys,
                         centerKeySize.onGloballyPositioned {
                             regions.register("start", it, Hit.Key(PadKey.START))
                         },
@@ -379,7 +415,7 @@ fun TouchControls(
                 spec.select?.let { label ->
                     PillKey(
                         label,
-                        PadKey.SELECT in pressed.keys,
+                        PadKey.SELECT in shownKeys,
                         Modifier.align(Alignment.BottomCenter).offset(y = (-14).dp).then(pill).group("center").onGloballyPositioned {
                             regions.register("select", it, Hit.Key(PadKey.SELECT))
                         },
@@ -393,7 +429,7 @@ fun TouchControls(
                 spec.start?.let { label ->
                     PillKey(
                         label,
-                        PadKey.START in pressed.keys,
+                        PadKey.START in shownKeys,
                         Modifier.align(Alignment.BottomCenter).offset(y = (-14).dp).then(pill).group("center").onGloballyPositioned {
                             regions.register("start", it, Hit.Key(PadKey.START))
                         },
@@ -440,7 +476,9 @@ private fun RoundKey(label: String, color: Color, down: Boolean, size: Dp, modif
             size,
         ).testTag(
             "touch-key-${label.lowercase()}",
-        ).consoleButtonSurface(CircleShape, primary = down).border(1.dp, if (down) color else color.copy(alpha = 0.6f), CircleShape),
+        ).semantics {
+            selected = down
+        }.consoleButtonSurface(CircleShape, primary = down).border(1.dp, if (down) color else color.copy(alpha = 0.6f), CircleShape),
         contentAlignment = Alignment.Center,
     ) {
         Text(
@@ -454,7 +492,7 @@ private fun RoundKey(label: String, color: Color, down: Boolean, size: Dp, modif
 @Composable
 private fun PillKey(label: String, down: Boolean, modifier: Modifier, small: Boolean = false) {
     Box(
-        modifier.testTag("touch-key-${label.lowercase()}").consoleButtonSurface(RoundedCornerShape(50), primary = down),
+        modifier.testTag("touch-key-${label.lowercase()}").semantics { selected = down }.consoleButtonSurface(RoundedCornerShape(50), primary = down),
         contentAlignment = Alignment.Center,
     ) {
         Text(
@@ -497,8 +535,8 @@ private fun DPad(size: Dp, keys: Set<PadKey>, modifier: Modifier) {
 }
 
 @Composable
-private fun AnalogStick(size: Dp, position: Offset, modifier: Modifier) {
-    Box(modifier.size(size).testTag("touch-left-stick").clip(CircleShape).background(KeyFill).border(2.dp, KeyLine, CircleShape)) {
+internal fun AnalogStick(size: Dp, position: Offset, modifier: Modifier, tag: String = "touch-left-stick") {
+    Box(modifier.size(size).testTag(tag).clip(CircleShape).background(KeyFill).border(2.dp, KeyLine, CircleShape)) {
         val knob = size * 0.42f
         val travel = (size - knob) / 2
         Box(

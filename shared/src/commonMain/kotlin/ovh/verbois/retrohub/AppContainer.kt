@@ -47,7 +47,9 @@ class AppContainer(val platform: Platform, val database: AppDatabase, val clock:
     val account = AccountRepository(platform, keyValues)
     val api = RetroHubApi(apiHttpClient(), account).also { account.api = it }
     val artworkClient = artworkHttpClient(account)
-    val saveStore = RoomSaveStore(database.saves(), fs, paths)
+    val saveStore = ovh.verbois.retrohub.data.NativeSaveStore(RoomSaveStore(database.saves(), fs, paths), fs, paths.root / "native-saves", owner = {
+        nativeOwner()
+    })
     val sessionStore = RoomSessionStore(database.sessions())
     val saveSync = SaveSync(api, saveStore, clock)
     val library = LibraryRepository(api, database, keyValues, saveSync, scope)
@@ -59,7 +61,7 @@ class AppContainer(val platform: Platform, val database: AppDatabase, val clock:
                 null
             }
         }
-    val preferences = AccountPreferences(api, settings, scope) { library.consoles(online = true).associate { it.id to it.cores } }
+    val preferences = AccountPreferences(api, settings, scope) { library.consoles(online = true).associate { it.id to it.acceptedCores } }
 
     /** Dernier état connu du serveur (versions de l’application, fonctions disponibles). */
     val serverStatus = MutableStateFlow<ServerStatus?>(null)
@@ -73,7 +75,11 @@ class AppContainer(val platform: Platform, val database: AppDatabase, val clock:
     ) { sync.refreshLibrary() }
     val cheats = CheatsRepository(keyValues)
     val launcher =
-        GameLauncher(library, downloads, saveSync, saveStore, fs, paths, platform::availableCores, platform.deviceClass, cheats::get, platform::batteryLow)
+        GameLauncher(
+            library, downloads, saveSync, saveStore, fs, paths, platform::availableCores, platform.deviceClass,
+            cheats::get, platform::batteryLow, platform::coreBuild, ::nativeOwner,
+            ovh.verbois.retrohub.game.SystemResources(api, fs),
+        )
 
     private val startLock = Mutex()
     private var started = false
@@ -155,13 +161,22 @@ class AppContainer(val platform: Platform, val database: AppDatabase, val clock:
     suspend fun afterSignIn() {
         if (account.accountChanged) {
             library.clear()
+            settings.updateNow { it.copy(homePins = emptyList(), homeFolders = emptyList(), homeConsoleFavorites = emptyList(), homeActivity = emptyMap()) }
             account.acknowledgeAccountChange()
         }
         platform.scheduleSync()
     }
 
-    fun gameSession(plan: LaunchPlan, engine: EmulatorEngine, scope: CoroutineScope) =
-        GameSession(plan, engine, fs, saveStore, saveSync, sessionStore, { requestSync() }, scope, clock)
+    private fun nativeOwner(): String = ovh.verbois.retrohub.core.sha256(
+        (account.account?.let { "${it.server}\u0000${it.userId}" } ?: "signed-out").encodeToByteArray(),
+    )
+
+    fun gameSession(plan: LaunchPlan, engine: EmulatorEngine, scope: CoroutineScope): GameSession {
+        val store = plan.saveOwner?.let { saveStore.boundTo(it).also { scoped -> scoped.prepareGame(plan.playGameId, plan.console) } } ?: saveStore
+        return GameSession(plan, engine, fs, store, SaveSync(api, store, clock), sessionStore, { requestSync() }, scope, clock, onStarted = {
+            settings.update { it.copy(homeActivity = it.homeActivity + (plan.gameId to clock.now().toString())) }
+        })
+    }
 
     companion object {
         const val NOTIFY_CONFLICT = 1001

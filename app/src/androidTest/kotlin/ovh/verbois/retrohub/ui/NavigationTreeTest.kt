@@ -28,6 +28,8 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performImeAction
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.unit.Density
@@ -68,19 +70,21 @@ class NavigationTreeTest {
 
     @After
     fun clear() {
-        runBlocking { container.database.games().clear() }
-        UiDevice.getInstance(instrumentation).setOrientationLandscape()
+        runBlocking {
+            container.database.games().clear()
+            container.settings.updateNow { it.copy(homeFolders = emptyList(), homePins = emptyList(), homeActivity = emptyMap()) }
+        }
+        rule.settleOrientation(portrait = false)
     }
 
-    private fun show(section: Section = Section.HOME, largeText: Boolean = false, portrait: Boolean = false) {
-        val device = UiDevice.getInstance(instrumentation)
-        if (portrait) device.setOrientationNatural() else device.setOrientationLandscape()
-        instrumentation.waitForIdleSync()
+    private fun show(section: Section = Section.HOME, largeText: Boolean = false, portrait: Boolean = false, twoConsoles: Boolean = false) {
+        rule.settleOrientation(portrait)
         instrumentation.setInTouchMode(false)
         runBlocking {
+            container.settings.updateNow { it.copy(homePins = (0 until 8).map { index -> "tree-$index" }) }
             container.database.games().replaceAll(
                 (0 until 8).map { index ->
-                    val game = LibraryGame("tree-$index", "tree-$index", title = "Jeu $index", console = "nes")
+                    val game = LibraryGame("tree-$index", "tree-$index", title = "Jeu $index", console = if (twoConsoles && index >= 4) "snes" else "nes")
                     GameEntity(
                         game.id, game.playGameId, game.title, game.console, false, null, 0, index,
                         ApiJson.encodeToString(LibraryGame.serializer(), game),
@@ -105,9 +109,23 @@ class NavigationTreeTest {
                     ConsoleShell(ui, Account("https://example.invalid", userId = "test", username = "Test", deviceId = "test", deviceName = "Test")) { route ->
                         when (route) {
                             Route.Home -> HomeScreen(ui)
+
+                            is Route.Game -> ovh.verbois.retrohub.ui.home.GameDetailsScreen(ui, route.id)
+
                             Route.Downloads -> DownloadsScreen(ui)
+
+                            is Route.Library -> if (!portrait && route.console != null) {
+                                ovh.verbois.retrohub.ui.home.ConsoleFolderScreen(ui, route.console!!)
+                            } else {
+                                ovh.verbois.retrohub.ui.library.LibraryScreen(ui, route.console, false)
+                            }
+
+                            is Route.Folder -> ovh.verbois.retrohub.ui.library.FolderScreen(ui, route.id)
+
                             Route.Favorites -> ovh.verbois.retrohub.ui.library.LibraryScreen(ui, null, true)
+
                             is Route.Settings -> SettingsScreen(ui, route.page, route.console)
+
                             else -> Unit
                         }
                     }
@@ -123,7 +141,7 @@ class NavigationTreeTest {
             val node = if (section ==
                 Section.HOME
             ) {
-                rule.onNodeWithTag("home-game-tree-0", useUnmergedTree = true)
+                rule.onNodeWithTag(if (portrait) "library-game-tree-0" else "home-game-tree-0", useUnmergedTree = true)
             } else {
                 rule.onNodeWithTag("profile-shortcut-root")
             }
@@ -147,6 +165,60 @@ class NavigationTreeTest {
     }
 
     @Test
+    fun portraitHomeUsesTheLibraryAndOpensAScrollableGamePage() {
+        show(portrait = true)
+        rule.onNodeWithTag("home-games", useUnmergedTree = true).assertDoesNotExist()
+        rule.onNodeWithTag("library-grid").assertIsDisplayed()
+        rule.onNodeWithTag("library-game-tree-2").performClick()
+        rule.onNodeWithTag("game-details").assertIsDisplayed()
+        rule.onNodeWithTag("game-primary-action").assertIsDisplayed()
+        assertEquals(Route.Game("tree-2"), controller.nav.current)
+        rule.waitUntil(5000) {
+            runCatching {
+                rule.onNodeWithTag("game-primary-action").assertIsFocused()
+                true
+            }.getOrDefault(false)
+        }
+        pad(KeyEvent.KEYCODE_BUTTON_B)
+        rule.onNodeWithTag("library-grid").assertIsDisplayed()
+        screenshot("portrait-library")
+    }
+
+    @Test
+    fun automaticConsoleFoldersOpenAVerticalGameStrip() {
+        show(twoConsoles = true)
+        rule.runOnIdle { controller.homeGame = null }
+        runBlocking { container.settings.updateNow { it.copy(homePins = emptyList()) } }
+        rule.waitUntil(5000) { rule.onAllNodesWithTag("home-folder:console:nes", useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty() }
+        rule.onNodeWithTag("home-folder:console:nes", useUnmergedTree = true).performClick()
+        pad(KeyEvent.KEYCODE_BUTTON_A)
+        rule.onNodeWithTag("console-folder").assertIsDisplayed()
+        rule.onNodeWithTag("home-games").assertIsDisplayed()
+        rule.onNodeWithTag("home-folder:console:nes", useUnmergedTree = true).assertIsDisplayed()
+        rule.onNodeWithTag("console-game-info").assertIsDisplayed()
+        rule.waitUntil(5000) {
+            runCatching {
+                rule.onNodeWithTag("console-game-title-tree-0", useUnmergedTree = true).assertIsDisplayed()
+                true
+            }.getOrDefault(false)
+        }
+        rule.waitUntil(5000) {
+            runCatching {
+                rule.onNodeWithTag("console-game-tree-0").assertIsFocused()
+                true
+            }.getOrDefault(false)
+        }
+        screenshot("console-vertical-strip")
+        pad(KeyEvent.KEYCODE_DPAD_UP)
+        rule.onNodeWithTag("home-folder:console:nes").assertIsFocused()
+        pad(KeyEvent.KEYCODE_DPAD_RIGHT)
+        rule.onNodeWithTag("home-folder:console:snes").assertIsFocused()
+        pad(KeyEvent.KEYCODE_DPAD_DOWN)
+        rule.onNodeWithTag("console-game-tree-4").assertIsFocused()
+        rule.onNodeWithTag("console-game-title-tree-4", useUnmergedTree = true).assertIsDisplayed()
+    }
+
+    @Test
     fun homeFitsTheViewportWithoutVerticalScrollingEvenWithLargerText() {
         show(largeText = true)
         val home = rule.onNodeWithTag("home-content", useUnmergedTree = true).fetchSemanticsNode()
@@ -158,7 +230,19 @@ class NavigationTreeTest {
     }
 
     @Test
-    fun headerSearchKeepsThePageAndSupportsResultsAndFocusDismissal() {
+    fun focusingTheSearchButtonWaitsForExplicitActivation() {
+        show()
+        rule.onNodeWithTag("header-search-button").performSemanticsAction(SemanticsActions.RequestFocus) { it() }
+        rule.onNodeWithTag("header-search-button").assertIsFocused()
+        rule.onNodeWithTag("header-search-field").assertDoesNotExist()
+        pad(KeyEvent.KEYCODE_BUTTON_A)
+        rule.onNodeWithTag("header-search-field").assertIsDisplayed()
+        pad(KeyEvent.KEYCODE_BUTTON_B)
+        rule.onNodeWithTag("header-search-field").assertDoesNotExist()
+    }
+
+    @Test
+    fun headerSearchKeepsThePageAndRemainsOpenUntilExplicitlyClosed() {
         show()
         val homeBefore = rule.onNodeWithTag("home-content", useUnmergedTree = true).fetchSemanticsNode()
         val selectedBefore = controller.homeGame
@@ -187,7 +271,8 @@ class NavigationTreeTest {
         assertEquals(field.width, dropdown.width, 1f)
         assertTrue(dropdown.top >= field.bottom)
         screenshot("header-search-landscape")
-        pad(KeyEvent.KEYCODE_DPAD_DOWN)
+        rule.onNodeWithTag("header-search-field").performImeAction()
+        rule.onNodeWithTag("header-search-field").assertIsDisplayed()
         rule.onNodeWithTag("search-result-tree-3").assertIsFocused()
         pad(KeyEvent.KEYCODE_BUTTON_B)
         rule.onNodeWithTag("header-search-field").assertDoesNotExist()
@@ -195,7 +280,9 @@ class NavigationTreeTest {
         assertEquals(Route.Home, controller.nav.current)
         pad(KeyEvent.KEYCODE_BUTTON_Y)
         rule.onNodeWithTag("home-game-tree-0", useUnmergedTree = true).performSemanticsAction(SemanticsActions.RequestFocus) { it() }
-        rule.waitUntil(5_000) { !controller.searching }
+        rule.onNodeWithTag("header-search-field").assertIsDisplayed()
+        assertTrue(controller.searching)
+        pad(KeyEvent.KEYCODE_BUTTON_B)
         rule.onNodeWithTag("header-search-field").assertDoesNotExist()
     }
 
@@ -206,7 +293,7 @@ class NavigationTreeTest {
         rule.onNodeWithTag("section-menu").assertIsDisplayed().performClick()
         rule.onNodeWithText("Favoris").assertIsDisplayed()
         rule.onNodeWithText("Téléchargés").assertIsDisplayed()
-        rule.onNodeWithText("Catalogue").assertIsDisplayed()
+        rule.onNodeWithTag("section-choice-catalogue").assertDoesNotExist()
         screenshot("section-menu-portrait")
         rule.onNodeWithText("Téléchargés").performClick()
         rule.waitUntil(5_000) { controller.nav.current == Route.Downloads }
@@ -249,19 +336,21 @@ class NavigationTreeTest {
     fun emptyHomeAndFavoritesKeepAValidControllerDestination() {
         show()
         runBlocking { container.database.games().clear() }
-        rule.waitUntil(5_000) { rule.onAllNodesWithText("Actualiser").fetchSemanticsNodes().isNotEmpty() }
+        rule.waitUntil(5_000) { rule.onAllNodesWithTag("home-library", useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty() }
         pad(KeyEvent.KEYCODE_BUTTON_R1)
         rule.waitUntil(5_000) {
             runCatching { rule.onNodeWithText("Favoris").fetchSemanticsNode().config[SemanticsProperties.Focused] }.getOrDefault(false)
         }
         pad(KeyEvent.KEYCODE_BUTTON_L1)
         rule.waitUntil(5_000) {
-            runCatching { rule.onNodeWithText("Actualiser").fetchSemanticsNode().config[SemanticsProperties.Focused] }.getOrDefault(false)
+            runCatching {
+                rule.onNodeWithTag("home-library", useUnmergedTree = true).fetchSemanticsNode().config[SemanticsProperties.Focused]
+            }.getOrDefault(false)
         }
         pad(KeyEvent.KEYCODE_DPAD_UP)
         rule.onNodeWithText("Accueil").assertIsFocused()
         pad(KeyEvent.KEYCODE_DPAD_DOWN)
-        rule.onNodeWithText("Actualiser").assertIsFocused()
+        rule.onNodeWithTag("home-library", useUnmergedTree = true).assertIsFocused()
     }
 
     @Test
@@ -273,10 +362,15 @@ class NavigationTreeTest {
             runCatching { rule.onNodeWithContentDescription("Retour").fetchSemanticsNode().config[SemanticsProperties.Focused] }.getOrDefault(false)
         }
         pad(KeyEvent.KEYCODE_BUTTON_B)
-        rule.waitUntil(5_000) {
-            runCatching {
-                rule.onNodeWithTag("home-game-tree-2", useUnmergedTree = true).fetchSemanticsNode().config[SemanticsProperties.Focused]
-            }.getOrDefault(false)
+        try {
+            rule.waitUntil(5_000) {
+                runCatching {
+                    rule.onNodeWithTag("home-game-tree-2", useUnmergedTree = true).fetchSemanticsNode().config[SemanticsProperties.Focused]
+                }.getOrDefault(false)
+            }
+        } catch (failure: androidx.compose.ui.test.ComposeTimeoutException) {
+            val focused = rule.onAllNodes(SemanticsMatcher.expectValue(SemanticsProperties.Focused, true)).fetchSemanticsNodes().map { it.config.toString() }
+            throw AssertionError("Home ${controller.homeGame}, route ${controller.nav.current}, focused $focused", failure)
         }
         assertEquals("tree-2", controller.homeGame)
     }
@@ -394,12 +488,107 @@ class NavigationTreeTest {
     }
 
     @Test
-    fun leftEdgeOfCoversDoesNotJumpToHomeTab() {
+    fun catalogueIsTheFirstTileAndDownOpensIt() {
         show()
         val first = rule.onNodeWithTag("home-game-tree-0", useUnmergedTree = true)
         first.performSemanticsAction(SemanticsActions.RequestFocus) { it() }
         pad(KeyEvent.KEYCODE_DPAD_LEFT)
-        first.assertIsFocused()
+        rule.onNodeWithTag("home-catalogue", useUnmergedTree = true).assertIsFocused()
+        pad(KeyEvent.KEYCODE_DPAD_DOWN)
+        assertEquals(Route.Catalogue, controller.nav.current)
+    }
+
+    @Test
+    fun selectedCoverKeepsTheSameBoundsWhileTheStripMoves() {
+        show()
+        val initial = rule.onNodeWithTag("home-game-tree-0", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+        repeat(6) { step ->
+            pad(KeyEvent.KEYCODE_DPAD_RIGHT)
+            val cover = rule.onNodeWithTag("home-game-tree-${step + 1}", useUnmergedTree = true).assertIsFocused().fetchSemanticsNode().boundsInRoot
+            assertEquals(initial.left, cover.left, 2f)
+            assertEquals(initial.top, cover.top, 1f)
+            assertEquals(initial.width, cover.width, 1f)
+        }
+        screenshot("home-anchored-carousel")
+    }
+
+    @Test
+    fun submittedSearchScrollsThroughAllResultsWithoutClosing() {
+        show()
+        pad(KeyEvent.KEYCODE_BUTTON_Y)
+        rule.onNodeWithTag("header-search-field").performTextInput("Jeu")
+        rule.waitUntil(5_000) { rule.onAllNodesWithTag("search-result-tree-0").fetchSemanticsNodes().isNotEmpty() }
+        pad(KeyEvent.KEYCODE_BUTTON_A)
+        repeat(7) { pad(KeyEvent.KEYCODE_DPAD_DOWN) }
+        rule.onNodeWithTag("search-result-tree-7").assertIsDisplayed().assertIsFocused()
+        rule.onNodeWithTag("header-search-field").assertIsDisplayed()
+        screenshot("search-scrolled-results")
+    }
+
+    @Test
+    fun libraryMovesDownFromAColumnMissingInTheFinalRow() {
+        show()
+        rule.runOnIdle { controller.nav.go(Route.Library()) }
+        rule.waitUntil(5_000) { rule.onAllNodesWithTag("library-game-tree-0", useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty() }
+        val bounds = (0..7).associateWith { rule.onNodeWithTag("library-game-tree-$it", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot }
+        val center = bounds.getValue(0).center.y
+        // Focus scales a card around its center, so its top is not the row's baseline.
+        val lastColumn = bounds.filterValues { kotlin.math.abs(it.center.y - center) < 4f }.keys.max()
+        assertTrue(lastColumn >= 3 && lastColumn < 7)
+        rule.onNodeWithTag("library-game-tree-$lastColumn", useUnmergedTree = true).performSemanticsAction(SemanticsActions.RequestFocus) { it() }
+        pad(KeyEvent.KEYCODE_DPAD_DOWN)
+        rule.onNodeWithTag("library-game-tree-7", useUnmergedTree = true).assertIsDisplayed().assertIsFocused()
+    }
+
+    @Test
+    fun changingTheActiveTabKeepsEveryHeaderLabelInPlace() {
+        show()
+        val labels = listOf(Section.HOME, Section.FAVORITES, Section.DOWNLOADS)
+        fun bounds() = labels.associateWith { section ->
+            rule.onNode(
+                androidx.compose.ui.test.hasText(section.title) and hasAnyAncestor(hasTestTag("section-tab-${section.name.lowercase()}")),
+                useUnmergedTree = true,
+            ).fetchSemanticsNode().boundsInRoot
+        }
+        val before = bounds()
+        rule.runOnIdle { controller.nav.section(Section.FAVORITES) }
+        val after = bounds()
+        labels.forEach { label ->
+            // Safe insets may settle after rotation; the labels must stay fixed within the header.
+            assertEquals(before.getValue(label).left - before.getValue(Section.HOME).left, after.getValue(label).left - after.getValue(Section.HOME).left, 1f)
+            assertEquals(before.getValue(label).top - before.getValue(Section.HOME).top, after.getValue(label).top - after.getValue(Section.HOME).top, 1f)
+            assertEquals("${label.title}: label width", before.getValue(label).width, after.getValue(label).width, 1f)
+            assertEquals("${label.title}: label height", before.getValue(label).height, after.getValue(label).height, 1f)
+        }
+    }
+
+    @Test
+    fun manualFoldersCanBeEditedFavoritedAndPinned() {
+        show()
+        runBlocking { container.settings.updateNow { it.copy(homePins = emptyList()) } }
+        rule.runOnIdle { controller.newFolder() }
+        rule.onNodeWithTag("folder-name").performTextInput("Aventure")
+        rule.onNodeWithTag("folder-name").performImeAction()
+        rule.waitUntil(5_000) { rule.onNodeWithTag("folder-games").fetchSemanticsNode().boundsInRoot.height > 16f }
+        rule.onNodeWithTag("folder-games").performScrollToNode(androidx.compose.ui.test.hasText("Jeu 2"))
+        rule.onNode(hasAnyAncestor(hasTestTag("folder-editor")) and androidx.compose.ui.test.hasText("Jeu 2")).performClick()
+        rule.onNodeWithText("Enregistrer").performClick()
+        val folder = container.settings.settings.value.homeFolders.single()
+        assertEquals(listOf("tree-2"), folder.gameIds)
+        rule.onNodeWithTag("home-${folder.key}", useUnmergedTree = true).performSemanticsAction(SemanticsActions.RequestFocus) { it() }
+        rule.runOnIdle { assertEquals("Folder selection after focus", folder.key, controller.homeGame) }
+        pad(KeyEvent.KEYCODE_DPAD_DOWN)
+        rule.runOnIdle { assertEquals("Folder selection after Down", folder.key, controller.homeGame) }
+        screenshot("folder-home")
+        rule.onNodeWithContentDescription("Ajouter aux favoris").performClick()
+        assertEquals("Folder selection after favorite", folder.key, controller.homeGame)
+        rule.onNodeWithContentDescription("Options du dossier").performClick()
+        rule.onNodeWithText("Épingler à l’accueil").performClick()
+        assertEquals(listOf(folder.key), container.settings.settings.value.homePins)
+        rule.runOnIdle { controller.nav.section(Section.FAVORITES) }
+        rule.onNodeWithTag("library-${folder.key}", useUnmergedTree = true).assertIsDisplayed().performClick()
+        rule.onNodeWithTag("library-game-tree-2", useUnmergedTree = true).assertIsDisplayed()
+        rule.onNodeWithTag("library-game-tree-0", useUnmergedTree = true).assertDoesNotExist()
     }
 
     @Test

@@ -210,7 +210,262 @@ The app's fallback behavior is kept below where it still matters for older serve
      In **2026.46.5**, each returns zero Explorer results and all are absent from `/sources`.
      The production activation settings were kept intact during verification.
 
-## Verification
+## Pending implementation brief (2026-11-13)
+
+Requests 10–18 cover the current native-app requirements. Implement the server contracts and their
+server-side validation here; the Android/KMP interface and emulator host stay in `retrohub-app`.
+Do not interpret a completed backend task as proof that a console runs on a physical phone.
+Preserve the completed requests 1–9, existing user data and compatibility with older app versions.
+
+Recommended order: 10 (console contracts), 11 (metadata), 15 (content validation), 16 (catalogue
+regression coverage), then the additive capabilities in 13–14 and 17–18. Request 12 supplies
+diagnostics; it is not a server-side graphics fix. Optional account synchronization in request 13
+must not delay local folders, pins, favorites or offline play.
+
+### Required contracts and acceptance criteria
+
+10. [ ] **Nintendo 3DS and PlayStation 2 native contracts.** These are new contracts, not aliases of
+    DS and PlayStation. Agree on stable console IDs (`3ds`, `ps2`) and native core IDs before the
+    client sends new `X-Emulator-Core` values. Candidate maintained cores are `azahar` and `armsx2`;
+    Android ARM64 artifacts exist, but frontend context compatibility and real saves need validation.
+    Sources: [Azahar](https://docs.libretro.com/library/azahar/),
+    [ARMSX2](https://docs.libretro.com/library/armsx2/).
+    - Add registry/discovery, catalogue providers and filters, import detection, extension validation,
+      covers and native-only capability flags. Never advertise browser play without a web core.
+    - Detect decrypted 3DS NCSD/NCCH and 3DSX content; do not classify arbitrary ELF files as 3DS.
+      CIA installation and encrypted ROMs need a separate explicit contract; never rename them to
+      a supported format. Expose a player-actionable reason when conversion or system data is needed.
+    - Detect PS2 discs independently of GameCube and PSX, including ambiguous ISO and CHD containers;
+      validate playlists and serve every referenced disc/track together with stable relative paths.
+    - Provide optional system-resource descriptors with paths, sizes, SHA-256 and authenticated URLs.
+      PS2 requires user-supplied BIOS under `pcsx2/bios` and redistributable resources under
+      `pcsx2/resources`; never distribute proprietary BIOS. Azahar may need user-owned Mii/system
+      data. System-data import must be account isolated and must not expose secrets in logs.
+    - Saves require explicit per-kind formats and limits. Azahar uses a directory tree (`Azahar/`,
+      including NAND/SDMC); ARMSX2 memory cards are files, not a libretro raw SRAM buffer. Define
+      validated per-game archives, stable names, conflict/base-revision/epoch semantics and atomic
+      restoration. Keep caches, shaders, system secrets and other games out of save uploads.
+    - State compatibility must include core/build identity and ROM SHA; never load PSX states into
+      PS2 or DS states into 3DS. Add tests for unsupported/mismatched cores, large card archives,
+      traversal, quota limits, interrupted transfer, duplicated sessions and offline reconciliation.
+    - Client fallback until this contract is available: retain existing consoles and save behavior;
+      do not claim that merely registering a new console makes its emulation and sync functional.
+
+11. [x] **Optional console generations and icons in discovery.** Expose additive `generation`,
+    `family` and a versioned, licensed icon descriptor (asset URL, checksum, attribution). Clients
+    must keep local ordering/icons for older servers. Automatically generated console folders are
+    derived from library membership and cannot be deleted; manual folders remain separate.
+
+12. [ ] **Emulator diagnostics and capability reporting.** Allow opt-in device/core build, ABI,
+    Android version, GPU/driver, renderer/context and last startup stage in a diagnostic report.
+    Distinguish a graceful quit from native process death; omit ROM contents, BIOS, tokens and save
+    data. Native startup/render failures must not upload an empty save or erase the last good state.
+    Reproduce GameCube audio-with-black-video and controller-triggered exit on Snapdragon/Adreno
+    hardware before declaring a driver fix; server changes alone cannot repair a graphics context.
+
+13. [x] **Collections, permanent console folders and ordered pins.**
+    - A console folder exists as soon as the user's library contains a game of that console. Derive
+      membership from the library, not from a manually maintained list. Use stable IDs distinct from
+      manual collections (`console:<console_id>`); membership updates on import, merge, game removal
+      and newly visible installed versions. Removing the last game may hide the empty folder, but
+      must retain its stable identity and favorite/pin preferences for when games return.
+    - Derived folders cannot be renamed, deleted or manually emptied. Removing a game from a manual
+      collection never deletes the game, its ROM or any saves. Deleting a manual folder deletes only
+      the collection. A user can favorite and pin either kind of folder; games remain pinnable too.
+    - Mobile currently stores manual folders, pins and folder favorites locally. If account-wide
+      synchronization is implemented, make it an additive, announced capability such as
+      `library_collections`; define a migration that imports local data with consent and never
+      silently replaces it with an empty server list. Keep offline local behavior when absent.
+    - For that optional contract, provide authenticated CRUD for manual collection name and ordered
+      game IDs, collection favorites and an explicitly ordered home-pin list. Catalogue is a fixed
+      client entry and cannot be pinned, moved or deleted. Validate names/lengths/count limits,
+      account ownership, game references and unique pin keys. Do not store pixels or screen positions.
+    - Use revision/ETag preconditions and atomic updates so two clients cannot lose edits. Define
+      deletion tombstones and stale-reference cleanup; an offline edit must not resurrect a deleted
+      collection without a conflict decision. Include the feature in library invalidation/SSE and
+      exports/backups. Reject mutation of derived console membership even through manual endpoints.
+    - Cover idempotent retries, duplicate IDs, unknown games, cross-account access, merge rewrites,
+      revoked tokens, concurrent reorder/delete, offline replay and migration from local-only data.
+
+14. [x] **Activity ordering: downloads and play.**
+    - Keep `last_played_at` and played time as play/session facts. Do not change them when a ROM is
+      downloaded, pinned or favorited. Expose a separate server installation/completion timestamp
+      if catalogue/library recency needs it; document timezone and ordering/tie-break semantics.
+    - Distinguish server installation, download to one phone, and game launch. A completed server
+      job is not proof a phone has the ROM, and requesting a download is not a completed download.
+      The client already knows verified local download completion and first rendered local play.
+    - Current client fallback combines those local timestamps with server play time. No new write
+      endpoint is required for that device-local sort. If cross-device activity is added, announce
+      it separately and accept idempotent, device-scoped events with stable event IDs; reject
+      arbitrary future timestamps and preserve offline replay without counting play twice.
+    - Return activity changes through conditional library reads/SSE. Sorting must remain stable
+      through pagination, equal timestamps, timezone changes and account switching. A finished
+      download must not disappear just because `last_played_at` is still null.
+
+15. [x] **Disc/ROM packaging, BIOS and save compatibility.**
+    - Keep PSX CUE/BIN and Dreamcast GDI track sets complete in validated archives. Validate every
+      descriptor/playlist reference, reject absolute paths, traversal, symlinks, missing tracks,
+      duplicate/conflicting names and oversized expansion. Preserve relative paths and filename
+      case; do not return only one track of a multi-track game or guess a console from `.bin` alone.
+    - Multi-disc playlists must list the intended order and all discs. If returning a content
+      manifest, announce it and include relative paths, sizes and hashes. Existing ZIP downloads
+      remain supported by old clients. The client extracts the bundle and selects its descriptor;
+      the server does not need to unpack it differently for each emulator.
+    - Keep the original downloadable ROM SHA as the synchronization identity. Extracted CUE/GDI
+      file hashes must not replace it. Changed ROMs invalidate derived client extraction, but do
+      not discard prior saves. Keep progression/version selection explicit when content differs.
+    - Verify PSX BIOS descriptors and authenticated downloads, including expected names, checksums
+      and archive paths. Missing user-provided BIOS must produce an actionable response; never
+      distribute proprietary firmware automatically or mark an absent file as installed.
+    - Extend these rules to 3DS/PS2 using request 10. Tests must include large/ranged/resumed ROM
+      downloads, checksum mismatch, changed-ROM restart, conflicting equal-content saves, unsafe
+      archives, mixed-case tracks, multiple discs, unsupported encrypted content and maintenance.
+
+16. [x] **Catalogue filter for games already downloaded on the server.**
+    - Reuse the existing `installed` catalogue filter; first verify its implementation instead of
+      adding a duplicate endpoint. `true` means usable ROM content installed on the server, not
+      merely favorited, imported as metadata, queued, or downloaded to the phone.
+    - Preserve `true` / `false` / omitted behavior, counts and pagination. Define installed status
+      for merged games with multiple versions consistently between list, detail and download routes.
+      A failed/unfinished job must not be reported as a completed installation.
+    - Combine the filter with search, console/generation, language, source and enabled-provider
+      restrictions. Installed personal-library content must remain accessible under the existing
+      disabled-source rules. Verify that filtering does not leak other accounts' library state.
+    - The mobile search needs all matching results via documented pagination and stable ordering;
+      do not silently cap responses to 40 or discard the query after the first result. Search
+      persistence and scrolling themselves are client UI responsibilities.
+
+17. [x] **Per-console emulator capabilities and settings metadata.**
+    - Discovery remains authoritative for accepted `X-Emulator-Core` names and save formats. An
+      optional native capability descriptor may identify supported renderer APIs, ABI/platform,
+      controller/analog features, dual-screen/touch features, savestates and required resources.
+      Unknown optional fields must remain harmless to old clients.
+    - If offering option metadata, version it by console, core and core build. Categorize Image,
+      Audio, System, Controls and Advanced, with value labels, defaults, valid values and whether
+      restart is required. Mark device-dependent options instead of applying one GPU's choice to
+      every phone. The client must fall back to the loaded core's own variables when absent.
+    - Emulator settings are device preferences. Do not globally share a graphics driver, internal
+      resolution or core-specific key between all consoles. Optional account preferences require
+      explicit per-console/per-core keys and must not overwrite device compatibility overrides.
+    - All display controls belong to one client page: rotation/aspect, internal resolution, filters,
+      touch-control placement and, for DS/3DS, screen arrangement and touch-screen selection. The
+      server must not create two competing preference fields for the same setting.
+    - Include reset/migration tests, unknown keys/values, a changed selected core, retired options,
+      old clients and different renderer capabilities. Do not label a core as tested merely because
+      a download artifact or an option definition exists.
+
+18. [ ] **Autosave/session integrity on Home hold, crash and offline return.**
+    - Reuse the existing save/session APIs and retain their base revision, epoch and idempotent
+      client-session behavior. A three-second Guide/Home hold is handled by the app: it saves and
+      closes the game before returning to the library. No new remote controller-command API is needed.
+    - Verify retry/reconnect after a final offline save, stale epochs, revocation while exiting,
+      maintenance and interruption between save upload and session submission. Preserve the last
+      good revision if native rendering or the process fails; do not fabricate a successful save.
+    - Cross-core states remain incompatible unless explicitly proven. A same-content conflict may
+      resolve automatically by checksum; different progressions require the player's decision.
+      SRAM/card/directory compatibility must follow the declared per-console format in request 10.
+    - Ensure an unexpected GameCube exit can be diagnosed without treating it as an intentional
+      library navigation or resetting progress. A graphics/input crash requires native/device logs;
+      backend success cannot establish that the S25 Ultra video or controller problem is fixed.
+
+### Coverage of the player's interface requests
+
+| Request | Server responsibility | Client responsibility |
+|---|---|---|
+| Compact search/avatar/time/battery bubbles; avatar ring | Existing avatar assets/account contract; no new endpoint | Sizes, safe areas, visible ring |
+| Stable bold section labels | None | Reserve text bounds |
+| PS5-style Home; Catalogue first tile; fixed enlarged second slot | Stable library/console identities | Horizontal carousel, transition and focus anchor |
+| Portrait library instead of console UI | Preserve searchable/paginated library data | Full-width vertical cover grid and scrollable game page |
+| Permanent automatic console folders | Request 13 if synchronized; otherwise derived locally | Derive membership; no delete action; horizontal folder strip |
+| Console icons from GitHub, consistent with app strokes | Request 11 optional versioned metadata | Bundle licensed vector assets and notices; work offline |
+| PSP-style vertical game carousel inside folders | Stable ordered game identities; existing title/year/genre/play-time fields | Small title beside its cover; marquee only for overflow; lightweight bottom-right metadata, right aligned, one value per line; back/focus restoration |
+| Controller hold acceleration/inertia | None | Time-based repetition, interruptible motion, reduced-motion support |
+| Manual folders in favorites/Home | Request 13 optional synchronized collections | Local CRUD, favorite, membership and deletion without deleting games |
+| Pin/reorder games and folders | Request 13 optional ordered keys | Catalogue stays fixed; explicit left/right order |
+| Recent download/play ordering | Request 14; keep play facts distinct | Verified local completion and offline play activity |
+| Installed-on-server catalogue filter | Request 16; existing filter regression checks | Direct filter chip and retained query |
+| Resume button clipped by phone cutout | None | Safe insets and focus/scroll padding |
+| Search retained after validation; scroll all results | Request 16 pagination/search contract | Keep field/results open; scroll; no focus-triggered reopening |
+| Favorite fills only the heart | Existing game favorite endpoint; optional folder favorite in 13 | Icon fill without recoloring entire control |
+| Uneven grid rows cannot navigate down | None | Clamp to nearest existing column and scroll focus into view |
+| PSX failure on S25 Ultra | Request 15 for valid content/BIOS; 12 for diagnostics | Disc preparation, native/core/driver validation on the device |
+| N64 saturated/crackling audio | None beyond retaining correct core identity | Audio buffering/resampling; verify actual game/device audio |
+| GameCube black video with audio, button-triggered exit | Requests 12 and 18; preserve saves | Native renderer/input diagnostics and actual hardware reproduction |
+| Pause menu adapted to landscape/controller and portrait/touch | Request 17 optional metadata only | Distinct layouts, clear categories, focus and reachable value selectors |
+| Emulator settings isolated; Advanced last | Request 17 if metadata/preferences are served | Persist by console and core; validate against active core |
+| Merge the two screen-settings pages | Avoid duplicate preference contracts in 17 | One display page, including dual-screen controls |
+| Show original console controls and highlight Bluetooth input | Request 17 optional controller capabilities | Per-console diagrams, remaps, sticks/triggers and pressed states |
+| Short Guide opens menu; hold 3 s saves/quits to Home | Existing APIs; request 18 regression checks | Hold timer, consume release, finish saving before navigation |
+| 3DS and PS2 | Request 10 and associated 15/17/18 changes | Verified native integration, input/display and save-directory adapters |
+
+### Completion requirements for the server work
+
+- Update `docs/native-api.md` as the authoritative contract, API schemas and feature discovery in
+  the same server change. Supply exact example payloads and compatibility/fallback rules. Document
+  the final console/core names; the app must not infer them from a filename or a provider label.
+- Add database migrations only for persisted new state. Preserve existing account/library/save
+  data, ensure backups/restore cover new entities and document rollback constraints.
+- Exercise native bearer-token and browser-session authorization, CSRF where relevant, account
+  isolation, revoked devices, conditional reads, SSE invalidation and optional features absent.
+- Run the server's required lint/type/unit/integration/browser checks and inspect relevant web
+  screenshots if its UI changes. Record exact new validation results separately from historical
+  requests 1–9 below. Do not reuse their old counts as evidence for requests 10–18.
+- Do not mark any new request complete until its stated acceptance criteria and contract tests
+  pass. Record remaining client/device work explicitly; server completion is not app validation.
+- No production deployment or release is authorized merely by this specification. Prepare a
+  reviewable server change using the server repository's own delivery instructions.
+
+## Server implementation verification — requests 10–18 (2026-11-13)
+
+The server changes were published and deployed as **2026.46.6** on 2026-11-13, after explicit
+production deployment authorization. [Forgejo run 21](http://192.168.0.151/simonverbois/retrohub/actions/runs/21)
+passed quality, image publication and deployment. A complete verified pre-migration backup was
+created; all six production pods are ready, PostgreSQL was not restarted, and authenticated
+desktop/mobile browser checks passed. No production metadata batch or manual merge was triggered
+by the deployment checks. Checked items 11 and 13–17 mean their server scope passed; they do not
+certify the Android interface or native host.
+Requests 10, 12 and 18 remain unchecked because their physical-device acceptance is still pending,
+although their server contracts and regression tests are implemented.
+
+- Authoritative contract: [`../retrohub/docs/native-api.md`](../../retrohub/docs/native-api.md).
+  The additive discovery flags cover console metadata, native contracts, private system resources,
+  capabilities, diagnostics, collections and server installation activity. Final IDs are `3ds` /
+  `azahar` and `ps2` / `armsx2`; neither console advertises browser play.
+- Content tests cover original generated NCCH/NCSD/3DSX, ISO9660 and actual CHD files, encrypted
+  content rejection, safe complete disc bundles, case/order, private BIOS/resources, a ROM over
+  2 GiB, ranged/resumed transfers and the unchanged downloadable-object SHA identity.
+- Save tests cover game/ROM-bound archive manifests, 3DS title isolation, PS2 card files, core/build
+  compatibility, quotas, interrupted uploads, last-good revision, conflicts, epochs, maintenance,
+  revocation, offline-return retries and idempotent sessions. PS2 cards must be dedicated to one
+  game by the client; their internal filesystem is not certified by the server. Initial 3DS saves
+  support validated title data directories, excluding whole NAND and unverified extdata.
+- Collections use atomic revision/ETag snapshots, deletion tombstones and merge rewrites. Tests
+  cover account isolation, stale edits, concurrent updates, revoked devices, conditional reads,
+  SSE invalidation and backup/restore of the new entities and private resources. Optional feature
+  absence retains the client's local fallback; local-data import requires client consent.
+- Native option metadata is deliberately absent (`options: null`, source `loaded_core`). Device,
+  console, core and build scope is declared; the actual core remains authoritative for values,
+  reset and retired/unknown options. No global GPU preference is introduced.
+- Backend quality: Ruff lint/format and mypy passed; complete SQLite suite **264 passed, 6 skipped**
+  (PostgreSQL-only cases), complete PostgreSQL 17 suite **270 passed**. Fresh migration upgrade,
+  Alembic schema comparison and full downgrade passed. The Python wheel includes the icon licence
+  and new modules, without 3DS/PS2 firmware.
+- Frontend quality: typecheck, formatting and production build passed; Playwright **29 passed**.
+  Relevant desktop/mobile screenshots and the new scheduler in both themes were inspected.
+- Additional player requests are implemented: multilingual scored reversible merges, IGDB alias
+  lookup and catalogue-wide enrichment, immediate metadata sync and optional job time windows.
+  See [`metadata-and-scheduling.md`](../../retrohub/docs/metadata-and-scheduling.md).
+- Production logs were inspected read-only. Regression fixes cover interrupted-upload handling,
+  overlapping cancelled/retried download temporary files, and sanitized HTTP logging. Details,
+  evidence limits and the client/device validation matrix are recorded in
+  [`native-server-validation-2026-11-13.md`](../../retrohub/docs/native-server-validation-2026-11-13.md).
+
+Still required in the app: native 3DS/PS2 adapters and atomic restore on real cores, device-scoped
+settings/reset validation, physical-phone video/input reproduction (including S25 Ultra GameCube),
+and actual Guide/Home hold save-and-exit behavior. No server test establishes that a phone renders
+these consoles or that a graphics driver problem is fixed.
+
+## Historical verification — requests 1–9 only
 
 Run from `../retrohub`:
 

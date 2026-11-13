@@ -3,6 +3,7 @@ package ovh.verbois.retrohub.data
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import kotlinx.serialization.Serializable
 
 /** Une fiche du catalogue, gardée pour le hors ligne. [json] contient la fiche complète du serveur. */
 @Entity(tableName = "games", indices = [Index("console"), Index("playGameId")])
@@ -29,6 +30,7 @@ data class LocalRomEntity(
     val sha256: String,
     val size: Long,
     val downloadedAt: String,
+    val nativeTitleId: String? = null,
 )
 
 /**
@@ -36,6 +38,7 @@ data class LocalRomEntity(
  * téléchargée ou envoyée). La copie a changé localement quand [localSha] ≠ [baseSha].
  * Un conflit garde la version du serveur à côté (conflict*) jusqu’au choix du joueur.
  */
+@Serializable
 @Entity(tableName = "local_saves", primaryKeys = ["gameId", "kind", "slot"])
 data class LocalSave(
     val gameId: String,
@@ -54,6 +57,9 @@ data class LocalSave(
     val conflictDevice: String? = null,
     val conflictCore: String? = null,
     val lastError: String? = null,
+    val coreBuild: String? = null,
+    val conflictCoreBuild: String? = null,
+    val conflictRomSha: String? = null,
 ) {
     val changedLocally: Boolean get() = localSha != null && localSha != baseSha
     val inConflict: Boolean get() = conflictRevision != null

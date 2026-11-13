@@ -1,11 +1,13 @@
 package ovh.verbois.retrohub.data
 
+import android.database.sqlite.SQLiteDatabase
 import androidx.room.Room
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
+import org.json.JSONObject
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -26,6 +28,50 @@ class RoomDaoTest {
     fun close() = db.close()
 
     private fun game(id: String, position: Int) = GameEntity(id, "play-$id", "Jeu $id", "nes", false, null, 0, position, "{}")
+
+    @Test
+    fun versionOneMigrationPreservesSavedProgress() = runTest {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val context = instrumentation.targetContext
+        val name = "migration-v1-test.db"
+        context.deleteDatabase(name)
+        try {
+            val schema = instrumentation.context.assets.open("ovh.verbois.retrohub.data.AppDatabase/1.json")
+                .bufferedReader().use { JSONObject(it.readText()).getJSONObject("database") }
+            SQLiteDatabase.openOrCreateDatabase(context.getDatabasePath(name), null).use { old ->
+                val entities = schema.getJSONArray("entities")
+                for (index in 0 until entities.length()) {
+                    val entity = entities.getJSONObject(index)
+                    val placeholder = "${'$'}{TABLE_NAME}"
+                    old.execSQL(entity.getString("createSql").replace(placeholder, entity.getString("tableName")))
+                    val indices = entity.optJSONArray("indices") ?: org.json.JSONArray()
+                    for (n in 0 until indices.length()) {
+                        old.execSQL(indices.getJSONObject(n).getString("createSql").replace(placeholder, entity.getString("tableName")))
+                    }
+                }
+                val setup = schema.getJSONArray("setupQueries")
+                for (n in 0 until setup.length()) old.execSQL(setup.getString(n))
+                old.execSQL(
+                    "INSERT INTO local_saves(gameId,kind,slot,console,baseRevision,localSha,core,romSha) " +
+                        "VALUES('legacy','state',1,'nes',4,'unchanged','fceumm','original-rom')",
+                )
+                old.version = 1
+            }
+            val migrated = Room.databaseBuilder<AppDatabase>(context, name).configured()
+            try {
+                val save = migrated.saves().find("legacy", "state", 1)!!
+                assertEquals("unchanged", save.localSha)
+                assertEquals(4, save.baseRevision)
+                assertNull(save.coreBuild)
+                migrated.saves().upsert(save.copy(coreBuild = "new-build"))
+                assertEquals("new-build", migrated.saves().find("legacy", "state", 1)?.coreBuild)
+            } finally {
+                migrated.close()
+            }
+        } finally {
+            context.deleteDatabase(name)
+        }
+    }
 
     @Test
     fun catalogueIsReplacedAsAWholeAndKeepsItsOrder() = runTest {

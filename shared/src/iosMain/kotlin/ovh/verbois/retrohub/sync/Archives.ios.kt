@@ -28,3 +28,6 @@ actual fun zipEntries(fs: FileSystem, zip: Path): List<String> {
     val archive = fs.openZip(zip)
     return archive.listRecursively("/".toPath()).filter { !archive.metadata(it).isDirectory }.map { it.toString().trimStart('/') }.toList()
 }
+
+actual fun zipFiles(fs: FileSystem, files: Map<String, Path>, destination: Path): Unit =
+    throw UnsupportedOperationException("Sauvegardes natives pas encore disponibles sur iOS")

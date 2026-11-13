@@ -41,7 +41,7 @@ class RoomSaveStore(private val dao: LocalSaveDao, override val fs: FileSystem, 
 
     override fun conflictFile(gameId: String, kind: String, slot: Int): Path = paths.gameSaves(gameId) / "server-$kind-$slot.bin"
 
-    fun observe(gameId: String): Flow<List<LocalSave>> = dao.observeForGame(gameId)
+    override fun observe(gameId: String): Flow<List<LocalSave>> = dao.observeForGame(gameId)
 
     fun observeAll(): Flow<List<LocalSave>> = dao.observeAll()
 }

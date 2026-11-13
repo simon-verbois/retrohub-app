@@ -303,6 +303,7 @@ class RetroHubApi(
         val romSha256: String,
         val core: String,
         val playedAt: String?,
+        val coreBuild: String? = null,
     )
 
     /** Envoie le fichier [source] ; renvoie la nouvelle révision, ou lève SaveConflict sur 409. */
@@ -321,6 +322,7 @@ class RetroHubApi(
                             "X-Save-Epoch" to upload.saveEpoch,
                             "X-ROM-SHA256" to upload.romSha256,
                             "X-Emulator-Core" to upload.core,
+                            upload.coreBuild?.let { "X-Emulator-Build" to it },
                             upload.playedAt?.let { "X-Played-At" to it },
                             "X-Content-SHA256" to digest,
                         ),

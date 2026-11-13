@@ -15,6 +15,20 @@ import ovh.verbois.retrohub.data.LocalSave
 interface SaveStore {
     val fs: FileSystem
 
+    fun prepareGame(gameId: String, console: String) = Unit
+
+    fun registerNativeRuntime(gameId: String, console: String, core: String, directory: String, romSha: String, titleId: String?) = Unit
+
+    suspend fun checkpointGame(gameId: String) = Unit
+
+    suspend fun checkpointAll() = Unit
+
+    fun setGameActive(gameId: String, active: Boolean) = Unit
+
+    fun isGameActive(gameId: String): Boolean = false
+
+    fun observe(gameId: String): kotlinx.coroutines.flow.Flow<List<LocalSave>> = kotlinx.coroutines.flow.flow { emit(forGame(gameId)) }
+
     suspend fun find(gameId: String, kind: String, slot: Int): LocalSave?
 
     suspend fun forGame(gameId: String): List<LocalSave>
@@ -56,6 +70,9 @@ class SaveSync(private val api: RetroHubApi, private val store: SaveStore, priva
      * un conflit si la copie locale a aussi changé. Renvoie les emplacements en conflit.
      */
     suspend fun pull(game: LibraryGame): List<LocalSave> {
+        store.prepareGame(game.playGameId, game.console)
+        checkpoint { store.checkpointGame(game.playGameId) }
+        if (store.isGameActive(game.playGameId)) return store.forGame(game.playGameId).filter { it.inConflict }
         val conflicts = mutableListOf<LocalSave>()
         for (remote in game.saves) {
             val local = store.find(game.playGameId, remote.kind, remote.slot)
@@ -93,6 +110,7 @@ class SaveSync(private val api: RetroHubApi, private val store: SaveStore, priva
                 localSha = downloaded.sha256,
                 localPlayedAt = remote.playedAt,
                 core = remote.core,
+                coreBuild = remote.coreBuild,
                 romSha = remote.romSha256,
                 conflictRevision = null,
                 conflictSha = null,
@@ -117,6 +135,8 @@ class SaveSync(private val api: RetroHubApi, private val store: SaveStore, priva
                 conflictPlayedAt = remote.playedAt,
                 conflictDevice = remote.device?.name ?: WEB_DEVICE,
                 conflictCore = remote.core,
+                conflictCoreBuild = remote.coreBuild,
+                conflictRomSha = remote.romSha256,
                 lastError = null,
             )
         store.put(save)
@@ -124,17 +144,31 @@ class SaveSync(private val api: RetroHubApi, private val store: SaveStore, priva
     }
 
     /** Enregistre une sauvegarde faite sur l’appareil (après une partie, hors ligne compris). */
-    suspend fun recordLocal(gameId: String, console: String, kind: String, slot: Int, core: String, romSha: String, digest: String? = null): LocalSave? {
+    suspend fun recordLocal(
+        gameId: String,
+        console: String,
+        kind: String,
+        slot: Int,
+        core: String,
+        romSha: String,
+        digest: String? = null,
+        coreBuild: String? = null,
+    ): LocalSave? {
         val path = store.file(gameId, kind, slot)
         if (!fs.exists(path) || (fs.metadata(path).size ?: 0L) == 0L) return store.find(gameId, kind, slot)
         val digest = digest ?: fs.sha256(path)
         val existing = store.find(gameId, kind, slot)
-        if (existing != null && existing.localSha == digest) return existing
+        if (existing != null && existing.localSha == digest && existing.core == core && existing.romSha == romSha &&
+            existing.coreBuild == coreBuild
+        ) {
+            return existing
+        }
         val save =
             (existing ?: LocalSave(gameId = gameId, kind = kind, slot = slot, console = console)).copy(
                 localSha = digest,
                 localPlayedAt = clock.now().toString(),
                 core = core,
+                coreBuild = coreBuild,
                 romSha = romSha,
                 lastError = null,
             )
@@ -158,6 +192,7 @@ class SaveSync(private val api: RetroHubApi, private val store: SaveStore, priva
                         saveEpoch = saveEpoch,
                         romSha256 = save.romSha,
                         core = save.core,
+                        coreBuild = save.coreBuild,
                         playedAt = save.localPlayedAt,
                     ),
                     fs,
@@ -211,6 +246,7 @@ class SaveSync(private val api: RetroHubApi, private val store: SaveStore, priva
      * serveur (l’historique garde toutes les versions, rien n’est perdu).
      */
     suspend fun restore(gameId: String, console: String, version: RemoteSave, saveEpoch: String): PushResult {
+        store.prepareGame(gameId, console)
         val target = store.file(gameId, version.kind, version.slot)
         target.parent?.let { fs.createDirectories(it) }
         val head = api.saveVersions(gameId, version.kind, version.slot).maxOfOrNull { it.revision } ?: 0
@@ -224,6 +260,7 @@ class SaveSync(private val api: RetroHubApi, private val store: SaveStore, priva
                 localSha = digest,
                 localPlayedAt = clock.now().toString(),
                 core = version.core.ifEmpty { current.core },
+                coreBuild = version.coreBuild,
                 romSha = version.romSha256.ifEmpty { current.romSha },
                 conflictRevision = null,
                 lastError = null,
@@ -246,6 +283,8 @@ class SaveSync(private val api: RetroHubApi, private val store: SaveStore, priva
                     localSha = save.conflictSha,
                     localPlayedAt = save.conflictPlayedAt,
                     core = save.conflictCore ?: save.core,
+                    coreBuild = save.conflictCoreBuild,
+                    romSha = save.conflictRomSha ?: save.romSha,
                 ).clearConflict(),
         )
     }
@@ -256,9 +295,17 @@ class SaveSync(private val api: RetroHubApi, private val store: SaveStore, priva
      * inchangée prend la version restaurée, ou repart de zéro pour être renvoyée.
      */
     suspend fun onServerRestored(manifest: LibraryManifest) {
+        manifest.games.forEach { store.prepareGame(it.playGameId, it.console) }
+        checkpoint { store.checkpointAll() }
         val remotes = manifest.games.flatMap { it.saves.map { save -> save.copy(gameId = save.gameId.ifEmpty { it.playGameId }) } }
         val consoles = manifest.games.associate { it.playGameId to it.console }
         for (local in store.all()) {
+            if (store.isGameActive(local.gameId)) {
+                // No files are replaced while the core runs. An old epoch must never reuse a
+                // coincidentally matching revision number from the restored server.
+                store.put(local.copy(baseRevision = 0, baseSha = null).clearConflict())
+                continue
+            }
             val remote = remotes.firstOrNull { it.gameId == local.gameId && it.kind == local.kind && it.slot == local.slot }
             when {
                 remote == null -> store.put(local.copy(baseRevision = 0, baseSha = null).clearConflict())
@@ -273,8 +320,27 @@ class SaveSync(private val api: RetroHubApi, private val store: SaveStore, priva
         }
     }
 
-    private fun LocalSave.clearConflict() =
-        copy(conflictRevision = null, conflictSha = null, conflictPlayedAt = null, conflictDevice = null, conflictCore = null)
+    /** Recover flushed native files before deciding whether a remote copy can replace them. */
+    suspend fun checkpointNativeFiles() = checkpoint { store.checkpointAll() }
+
+    private suspend fun checkpoint(block: suspend () -> Unit) {
+        try {
+            block()
+        } catch (error: Exception) {
+            if (error is kotlinx.coroutines.CancellationException) throw error
+            throw ApiException.Http(409, "Les données locales sont conservées. Vérifiez l’espace libre puis réessayez la synchronisation.")
+        }
+    }
+
+    private fun LocalSave.clearConflict() = copy(
+        conflictRevision = null,
+        conflictSha = null,
+        conflictPlayedAt = null,
+        conflictDevice = null,
+        conflictCore = null,
+        conflictCoreBuild = null,
+        conflictRomSha = null,
+    )
 
     companion object {
         /** Une sauvegarde envoyée depuis le navigateur n’a pas d’appareil. */

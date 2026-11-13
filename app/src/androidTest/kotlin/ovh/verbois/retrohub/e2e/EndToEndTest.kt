@@ -6,6 +6,7 @@ import android.view.KeyEvent
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.assertIsNotSelected
 import androidx.compose.ui.test.assertIsSelected
@@ -22,7 +23,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.test.performScrollTo
-import androidx.compose.ui.test.performScrollToNode
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextClearance
 import androidx.compose.ui.test.performTextInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -93,10 +94,25 @@ class EndToEndTest {
         pad(KeyEvent.KEYCODE_BUTTON_R1)
         waitText("Aucun favori pour l’instant")
         pad(KeyEvent.KEYCODE_BUTTON_R1)
+        rule.waitUntil(5000) {
+            runCatching {
+                rule.onNodeWithTag("downloads-storage").assertIsFocused()
+                true
+            }.getOrDefault(false)
+        }
+        pad(KeyEvent.KEYCODE_BUTTON_R1)
         rule.onNodeWithTag("downloads-storage").assertIsFocused()
-        pad(KeyEvent.KEYCODE_BUTTON_R1)
+        pad(KeyEvent.KEYCODE_BUTTON_L1)
+        pad(KeyEvent.KEYCODE_BUTTON_L1)
+        rule.waitUntil(5_000) {
+            runCatching {
+                rule.onNodeWithTag("home-folder:console:nes", useUnmergedTree = true).fetchSemanticsNode().config[SemanticsProperties.Focused]
+            }.getOrDefault(false)
+        }
+        pad(KeyEvent.KEYCODE_DPAD_LEFT)
+        rule.onNodeWithTag("home-catalogue", useUnmergedTree = true).assertIsFocused()
+        pad(KeyEvent.KEYCODE_DPAD_DOWN)
         waitFocused("Filtres")
-        pad(KeyEvent.KEYCODE_BUTTON_R1)
         rule.onNodeWithTag("header-search-field").assertDoesNotExist()
         pad(KeyEvent.KEYCODE_BUTTON_A)
         waitFocused("Console")
@@ -141,7 +157,7 @@ class EndToEndTest {
         pad(KeyEvent.KEYCODE_BUTTON_R1)
         waitText("Aucun favori pour l’instant")
         pad(KeyEvent.KEYCODE_BUTTON_B)
-        rule.onNodeWithTag("home-games").performScrollToNode(hasContentDescription("Toute la bibliothèque"))
+        rule.onNodeWithTag("home-library", useUnmergedTree = true).performSemanticsAction(SemanticsActions.RequestFocus) { it() }
         clickDescription("Toute la bibliothèque")
         rule.waitUntil(10_000) { rule.onAllNodesWithContentDescription("Filtrer et trier").fetchSemanticsNodes().isNotEmpty() }
         screenshot("library-landscape")
@@ -162,6 +178,8 @@ class EndToEndTest {
         rule.onNode(hasSetTextAction()).performTextInput(title)
         rule.waitUntil(10_000) { rule.onAllNodesWithTag("search-result-$gameId").fetchSemanticsNodes().isNotEmpty() }
         search.performImeAction()
+        rule.onNodeWithTag("header-search-field").assertIsDisplayed()
+        rule.onNodeWithTag("search-result-$gameId").performClick()
 
         // Le jeu est choisi sur l’accueil ; toucher sa tuile lance l’action : ici le téléchargement,
         // vérifié par son SHA-256.
@@ -226,12 +244,13 @@ class EndToEndTest {
         device.setOrientationNatural()
         screenshot("game-options-portrait")
         device.pressBack()
+        rule.onNodeWithTag("library-game-$gameId").performClick()
         waitText("Jouer")
 
         // Selecting the cover never starts a game; the explicit action does.
         device.setOrientationNatural()
         screenshot("selected-portrait")
-        clickDescription(title)
+        rule.onNodeWithTag("game-details").assertIsDisplayed()
         assertTrue(GameActivity.current?.get() == null)
         // Lancement du cœur NES : la vue émulateur rend des images. Au moins 10 s, pour compter.
         rule.onNodeWithTag("game-primary-action").performClick()
@@ -249,6 +268,24 @@ class EndToEndTest {
         screenshot("game-portrait")
         device.setOrientationLandscape()
         pad(KeyEvent.KEYCODE_MENU)
+        waitFocused("Reprendre")
+        waitPauseLayout(portrait = false)
+        screenshot("pause-landscape")
+        device.setOrientationNatural()
+        waitPauseLayout(portrait = true)
+        screenshot("pause-portrait")
+        device.setOrientationLandscape()
+        waitFocused("Reprendre")
+        focusDownTo("Touches de la console")
+        pad(KeyEvent.KEYCODE_BUTTON_A)
+        waitFocused("Retour")
+        rule.onNodeWithTag("controller-inspector").assertIsDisplayed()
+        instrumentation.sendKeySync(KeyEvent(0, 0, KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_BUTTON_A, 0, 0, 0, 0, 0, InputDevice.SOURCE_GAMEPAD))
+        rule.onNodeWithTag("touch-key-b").assertIsSelected()
+        screenshot("controller-inspector-nes")
+        instrumentation.sendKeySync(KeyEvent(0, 0, KeyEvent.ACTION_UP, KeyEvent.KEYCODE_BUTTON_A, 0, 0, 0, 0, 0, InputDevice.SOURCE_GAMEPAD))
+        rule.onNodeWithTag("touch-key-b").assertIsNotSelected()
+        pad(KeyEvent.KEYCODE_BUTTON_MODE)
         waitFocused("Reprendre")
         focusDownTo("Image et écrans")
         pad(KeyEvent.KEYCODE_BUTTON_A)
@@ -288,7 +325,7 @@ class EndToEndTest {
 
         // Conflit : les deux versions côte à côte, le joueur garde celle du téléphone.
         waitUntil(60_000, "conflit détecté") { runBlocking { container.saveStore.find(gameId, "state", 1)?.inConflict == true } }
-        rule.onNodeWithTag("game-primary-action").performClick()
+        touchPrimaryAction()
         waitText("Quelle partie reprendre ?", timeout = 20_000)
         click("Choisir")
         waitText("Sur ce téléphone")
@@ -319,10 +356,27 @@ class EndToEndTest {
         waitUntil(30_000, "hors ligne") { !container.platform.online.value }
         // Déjà joué : la carte « Reprendre » apparaît, et le jeu se lance sans réseau.
         waitText("Reprendre")
-        rule.onNodeWithTag("game-primary-action").performClick()
+        touchPrimaryAction()
         waitFrames(60)
         Thread.sleep(12_000)
-        quitGame()
+        val guideDown = android.os.SystemClock.uptimeMillis()
+        instrumentation.sendKeySync(
+            KeyEvent(guideDown, guideDown, KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_BUTTON_MODE, 0, 0, 0, 0, 0, InputDevice.SOURCE_GAMEPAD),
+        )
+        Thread.sleep(3200)
+        instrumentation.sendKeySync(
+            KeyEvent(
+                guideDown, android.os.SystemClock.uptimeMillis(), KeyEvent.ACTION_UP, KeyEvent.KEYCODE_BUTTON_MODE,
+                0, 0, 0, 0, 0, InputDevice.SOURCE_GAMEPAD,
+            ),
+        )
+        rule.waitUntil(15_000) {
+            runCatching {
+                rule.onNodeWithTag("home-content", useUnmergedTree = true).assertIsDisplayed()
+                true
+            }.getOrDefault(false)
+        }
+        rule.onNodeWithTag("home-content", useUnmergedTree = true).assertIsDisplayed()
         waitUntil(15_000, "session en file") { runBlocking { container.database.sessions().count() } >= 1 }
         val queued = runBlocking { container.database.sessions().oldest(10) }
         Thread.sleep(3_000)
@@ -465,10 +519,24 @@ class EndToEndTest {
         click("Accueil")
     }
 
+    private fun waitPauseLayout(portrait: Boolean) {
+        rule.waitUntil(5000) {
+            runCatching {
+                val resume = rule.onNodeWithText("Reprendre").fetchSemanticsNode().boundsInRoot
+                val save = rule.onNodeWithText("Sauvegarder la partie").fetchSemanticsNode().boundsInRoot
+                if (portrait) {
+                    save.top > resume.bottom && kotlin.math.abs(save.center.x - resume.center.x) < 6f
+                } else {
+                    save.left > resume.right && kotlin.math.abs(save.top - resume.top) < 6f
+                }
+            }.getOrDefault(false)
+        }
+    }
+
     private fun saveStateInSlot(slot: Int) {
         pad(KeyEvent.KEYCODE_MENU)
         waitFocused("Reprendre")
-        pad(KeyEvent.KEYCODE_DPAD_DOWN)
+        focusDownTo("Sauvegarder la partie")
         pad(KeyEvent.KEYCODE_BUTTON_A)
         waitText("Emplacement $slot")
         waitFocused("Retour")
@@ -504,6 +572,15 @@ class EndToEndTest {
         }
     }
 
+    private fun touchPrimaryAction() {
+        // Compose can be idle before Android finishes the native activity's window transition.
+        device.waitForIdle()
+        rule.onNodeWithTag("header-search-field").assertDoesNotExist()
+        val bounds = rule.onNodeWithTag("game-primary-action").fetchSemanticsNode().boundsInWindow
+        assertTrue(device.click(bounds.center.x.toInt(), bounds.center.y.toInt()))
+        rule.waitForIdle()
+    }
+
     private fun quitGame() {
         pad(KeyEvent.KEYCODE_MENU)
         waitFocused("Reprendre")
@@ -522,6 +599,7 @@ class EndToEndTest {
         }
         pad(KeyEvent.KEYCODE_BUTTON_A)
         waitUntil(20_000, "fin de la partie") { GameActivity.current?.get()?.isDestroyed != false }
+        rule.waitUntil(10_000) { rule.activity.hasWindowFocus() }
         rule.waitForIdle()
     }
 
@@ -593,6 +671,11 @@ class EndToEndTest {
             if (runCatching { rule.onNodeWithText(text).fetchSemanticsNode().config[SemanticsProperties.Focused] }.getOrDefault(false)) return
             pad(KeyEvent.KEYCODE_DPAD_DOWN)
         }
+        pad(KeyEvent.KEYCODE_DPAD_RIGHT)
+        repeat(14) {
+            if (runCatching { rule.onNodeWithText(text).fetchSemanticsNode().config[SemanticsProperties.Focused] }.getOrDefault(false)) return
+            pad(KeyEvent.KEYCODE_DPAD_UP)
+        }
         rule.onNodeWithText(text).assertIsFocused()
     }
 
@@ -628,9 +711,18 @@ class EndToEndTest {
     private fun screenshot(name: String) {
         rule.waitForIdle()
         Thread.sleep(600)
-        val bitmap = instrumentation.uiAutomation.takeScreenshot() ?: return
         val dir = File(instrumentation.targetContext.getExternalFilesDir(null), "screens").apply { mkdirs() }
-        File(dir, "$name.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        val target = File(dir, "$name.png")
+        val bitmap = instrumentation.uiAutomation.takeScreenshot()
+        if (bitmap != null) {
+            target.outputStream().use { check(bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)) }
+        } else {
+            // Capture the guest frame when UiAutomation cannot obtain its hardware buffer.
+            android.os.ParcelFileDescriptor.AutoCloseInputStream(
+                instrumentation.uiAutomation.executeShellCommand("screencap -p"),
+            ).use { source -> target.outputStream().use { source.copyTo(it) } }
+            check(android.graphics.BitmapFactory.decodeFile(target.path) != null) { "Capture unavailable: $name" }
+        }
     }
 
     @Suppress("unused")

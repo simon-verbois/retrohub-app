@@ -82,6 +82,22 @@ object CoreOptions {
                         "melonds_audio_interpolation" to if (settings.performance == PerformanceProfile.BATTERY) "None" else "Cubic",
                     )
 
+                "azahar" -> mapOf(
+                    "citra_graphics_api" to "OpenGL",
+                    "citra_resolution_factor" to scale.toString(),
+                    "citra_layout_option" to threeDsLayoutValue(
+                        (if (portrait) console.dsLayoutPortrait else console.dsLayoutLandscape) ?: GameLayouts.defaultDsLayout(portrait),
+                    ),
+                    "citra_swap_screen" to if (console.dsSwapScreens == true) "Bottom" else "Top",
+                    "citra_use_libretro_save_path" to "LibRetro Default",
+                )
+
+                "armsx2" -> mapOf(
+                    "armsx2_renderer" to "OpenGL",
+                    "armsx2_upscale" to "${scale}x",
+                    "armsx2_fast_boot" to "enabled",
+                )
+
                 "stella2014" -> mapOf("stella2014_palette" to "standard", "stella2014_mix_frames" to "disabled")
 
                 // Glide64 tourne en GLES2 ; le rendu ParaLLEl par défaut exige Vulkan.
@@ -89,6 +105,8 @@ object CoreOptions {
                     mapOf(
                         "parallel-n64-gfxplugin" to "glide64",
                         "parallel-n64-rspplugin" to "hle",
+                        "parallel-n64-enhanced-hle-audio" to "enabled",
+                        "parallel-n64-enhanced-hle-audio-quality" to "32",
                         "parallel-n64-cpucore" to "dynamic_recompiler",
                         "parallel-n64-screensize" to n64ScreenSize(scale),
                         "parallel-n64-aspectratiohint" to if (console.widescreen == true) "widescreen" else "normal",
@@ -132,7 +150,12 @@ object CoreOptions {
 
                 else -> emptyMap()
             }
-        return options + overrides(spec, core, settings) + console.options
+        return options + overrides(spec, core, settings) + (if (core == (console.core ?: spec.cores.first())) console.options else emptyMap()) +
+            console.optionsByCore[core].orEmpty() + when (core) {
+                "azahar" -> mapOf("citra_use_libretro_save_path" to "LibRetro Default", "citra_graphics_api" to "OpenGL")
+                "armsx2" -> mapOf("armsx2_renderer" to "OpenGL")
+                else -> emptyMap()
+            }
     }
 
     /** Choix du joueur traduits en options de chaque cœur : langue, région, format, démarrage, saut d’images. */
@@ -228,7 +251,7 @@ object CoreOptions {
         return when (settings.performance) {
             PerformanceProfile.BATTERY -> 1
 
-            PerformanceProfile.BALANCED -> if (device == DeviceClass.POWERFUL && spec.id != "gamecube") 2 else 1
+            PerformanceProfile.BALANCED -> if (device == DeviceClass.POWERFUL && spec.id !in setOf("gamecube", "3ds", "ps2")) 2 else 1
 
             PerformanceProfile.QUALITY -> if (device == DeviceClass.MODEST) {
                 1
@@ -245,14 +268,14 @@ object CoreOptions {
         "psx" -> 2
         "n64" -> 4
         "gamecube" -> 4
-        "dreamcast" -> 4
+        "dreamcast", "3ds", "ps2" -> 4
         else -> 1
     }
 
     fun supportsWidescreen(console: String, core: String): Boolean = core in setOf("swanstation", "parallel_n64", "dolphin", "flycast") && console != "nds"
 
     fun shader(spec: ConsoleSpec, settings: AppSettings): Shader = settings.console(spec.id).shader ?: when (spec.id) {
-        "n64", "gamecube", "dreamcast", "psx" -> Shader.SMOOTH
+        "n64", "gamecube", "dreamcast", "psx", "3ds", "ps2" -> Shader.SMOOTH
         "gb", "gbc", "gba" -> Shader.LCD
         "nds" -> Shader.SHARP
         else -> if (settings.performance == PerformanceProfile.QUALITY) Shader.UPSCALE else Shader.SHARP
@@ -270,6 +293,13 @@ object CoreOptions {
         DsLayout.SIDE_BY_SIDE -> if (swap) "Right/Left" else "Left/Right"
         DsLayout.MAIN_LARGE -> if (swap) "Hybrid Bottom" else "Hybrid Top"
         DsLayout.TOP_ONLY -> if (swap) "Bottom Only" else "Top Only"
+    }
+
+    fun threeDsLayoutValue(layout: DsLayout): String = when (layout) {
+        DsLayout.STACKED -> "default"
+        DsLayout.SIDE_BY_SIDE -> "side_by_side"
+        DsLayout.MAIN_LARGE -> "large_screen"
+        DsLayout.TOP_ONLY -> "single_screen"
     }
 
     private fun n64ScreenSize(scale: Int): String = when (scale) {

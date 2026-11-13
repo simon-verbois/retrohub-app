@@ -30,11 +30,11 @@ class UiLogicTest {
         Game(LibraryGame(id = title, playGameId = title, title = title, console = console, lastPlayedAt = played), null)
 
     @Test
-    fun searchFindsAccentInsensitiveMatchesInALargeCatalogueAndCapsResults() {
+    fun searchFindsEveryAccentInsensitiveMatchInALargeCatalogue() {
         val games = (0 until 5000).map { game("Pokémon $it", "gb") }
         val results = ovh.verbois.retrohub.ui.shell.searchGames(games, "POKEMON game boy")
-        assertEquals(40, results.size)
-        assertEquals(games.take(40), results)
+        assertEquals(5000, results.size)
+        assertEquals(games, results)
     }
 
     @Test
@@ -126,15 +126,13 @@ class UiLogicTest {
         val nav = Navigator()
         nav.cycleSection(-1)
         assertEquals(Route.Home, nav.current)
-        for (route in listOf(Route.Favorites, Route.Downloads, Route.Catalogue)) {
+        for (route in listOf(Route.Favorites, Route.Downloads)) {
             nav.cycleSection(1)
             assertEquals(route, nav.current)
         }
         nav.cycleSection(1)
-        assertEquals(Route.Catalogue, nav.current)
-        nav.go(Route.Settings())
-        nav.cycleSection(-1)
         assertEquals(Route.Downloads, nav.current)
+        nav.go(Route.Settings())
         nav.cycleSection(-1)
         assertEquals(Route.Favorites, nav.current)
         nav.cycleSection(-1)

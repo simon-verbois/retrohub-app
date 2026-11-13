@@ -29,6 +29,43 @@ class GameSessionTest {
     private val plan = LaunchPlan("game", "play", "Jeu", "nes", "fceumm", "/rom.nes", "local-rom", "/system", "/core", "/sram", false)
 
     @Test
+    fun nativeStatesRequireTheExactConsoleCoreBuildAndRom() = runTest {
+        val saves = MemorySaveStore()
+        val engine = FakeEngine()
+        val api = TestApi()
+        try {
+            val native = plan.copy(console = "3ds", core = "azahar", coreBuild = "build-a")
+            saves.write("play", "state", 1, byteArrayOf(1))
+            val save = LocalSave("play", "state", 1, "3ds", core = "azahar", romSha = native.romSha, coreBuild = "build-a")
+            val session = GameSession(
+                native, engine, saves.fs, saves, SaveSync(api.api, saves), MemorySessionStore(), {}, backgroundScope,
+                io = StandardTestDispatcher(testScheduler),
+            )
+            for (incompatible in listOf(
+                save.copy(console = "nds"),
+                save.copy(core = "melonds"),
+                save.copy(coreBuild = null),
+                save.copy(coreBuild = "build-b"),
+                save.copy(romSha = ""),
+                save.copy(romSha = "other"),
+            )) {
+                saves.put(incompatible)
+                assertFalse(session.loadState(1))
+            }
+            assertEquals(0, engine.loaded)
+            saves.put(save)
+            assertTrue(session.loadState(1))
+            assertEquals(1, engine.loaded)
+            saves.put(save.copy(coreBuild = "old-build", localSha = "old-hash"))
+            assertTrue(session.saveState(1))
+            val retained = saves.file("play", "state", 1).parent!! / "retained"
+            assertTrue(saves.fs.list(retained).any { it.name.endsWith(".bin") })
+        } finally {
+            api.close()
+        }
+    }
+
+    @Test
     fun resetWaitsForAnOngoingSnapshotBeforeResuming() = runTest {
         val saves = MemorySaveStore()
         val engine = FakeEngine()

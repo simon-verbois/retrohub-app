@@ -69,6 +69,31 @@ class SaveSyncTest {
     }
 
     @Test
+    fun nativeStateBuildSurvivesDownloadConflictAndUpload() = runTest {
+        val state = remote(1).copy(kind = "state", core = "azahar", coreBuild = "build-a")
+        serveBody(server, 1)
+        sync.pull(game(state).copy(console = "3ds"))
+        assertEquals("build-a", store.find("jeu", "state", 0)?.coreBuild)
+        store.write("jeu", "state", 0, local)
+        sync.recordLocal("jeu", "3ds", "state", 0, "azahar", "rom", coreBuild = "build-local")
+        serveBody(server, 2)
+        sync.pull(game(state.copy(revision = 2, coreBuild = "build-server", romSha256 = "remote-rom")).copy(console = "3ds"))
+        val conflict = store.find("jeu", "state", 0)!!
+        assertEquals("build-local", conflict.coreBuild)
+        assertEquals("build-server", conflict.conflictCoreBuild)
+        sync.keepServer(conflict)
+        assertEquals("remote-rom", store.find("jeu", "state", 0)?.romSha)
+        assertEquals("build-server", store.find("jeu", "state", 0)?.coreBuild)
+        store.write("jeu", "state", 0, local)
+        val recorded = sync.recordLocal("jeu", "3ds", "state", 0, "azahar", "rom", coreBuild = "build-server")!!
+        t.enqueue(json("""{"kind":"state","slot":0,"revision":3,"sha256":"${sha256(local)}","core_build":"build-server"}"""))
+        sync.push(recorded, "epoch")
+        t.take()
+        t.take()
+        assertEquals("build-server", t.take().headers["X-Emulator-Build"])
+    }
+
+    @Test
     fun newerServerRevisionReplacesAnUnchangedCopy() = runTest {
         synced(2, changed = false)
         val newer = "nouvelle partie".encodeToByteArray()

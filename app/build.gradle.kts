@@ -96,6 +96,8 @@ android {
         }
     }
 
+    sourceSets.getByName("androidTest").assets.srcDir("../shared/schemas")
+
     sourceSets.getByName("benchmark").apply {
         manifest.srcFile("src/debug/AndroidManifest.xml")
         res.directories += "src/debug/res"

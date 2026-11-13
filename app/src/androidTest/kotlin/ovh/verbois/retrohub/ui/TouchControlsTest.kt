@@ -43,9 +43,7 @@ class TouchControlsTest {
     @Test fun touchPresetsKeepPortraitButtonsVisibleAndSupportTwoFingers() = checkPresets(true)
 
     private fun checkPresets(portrait: Boolean, allPads: Boolean = false) {
-        val instrumentation = InstrumentationRegistry.getInstrumentation()
-        val device = UiDevice.getInstance(instrumentation)
-        if (portrait) device.setOrientationNatural() else device.setOrientationLandscape()
+        rule.settleOrientation(portrait)
         var preset by mutableStateOf(TouchPreset.COMFORT)
         var padLayout by mutableStateOf(PadLayout.NINTENDO_DS)
         var scale by mutableStateOf(1f)
@@ -122,6 +120,6 @@ class TouchControlsTest {
                 }
             }
         }
-        device.setOrientationLandscape()
+        rule.settleOrientation(portrait = false)
     }
 }

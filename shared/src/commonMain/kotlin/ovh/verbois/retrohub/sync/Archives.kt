@@ -18,3 +18,6 @@ internal fun safeEntryName(name: String): String? {
     if (normalized.split('/').any { it == ".." }) return null
     return normalized
 }
+
+/** Write a deterministic archive with explicit relative paths. */
+expect fun zipFiles(fs: FileSystem, files: Map<String, Path>, destination: Path)

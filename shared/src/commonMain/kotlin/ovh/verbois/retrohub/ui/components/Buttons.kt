@@ -177,6 +177,7 @@ fun RoundButton(
     selected: Boolean = false,
     tint: Color = Palette.Text,
     background: Color = Palette.GlassLight,
+    selectedSurface: Boolean = true,
 ) {
     Box(
         modifier
@@ -186,10 +187,17 @@ fun RoundButton(
                 this.selected = selected
             }
             .consoleFocus(CircleShape, onClick, focusScale = 1.08f)
-            .consoleButtonSurface(CircleShape, primary = selected, base = background.takeIf { !selected && it != Palette.GlassLight }),
+            .consoleButtonSurface(
+                CircleShape,
+                primary = selected && selectedSurface,
+                base = background.takeIf {
+                    (!selected || !selectedSurface) &&
+                        it != Palette.GlassLight
+                },
+            ),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(icon, null, Modifier.size(size * 0.42f), tint = if (selected) Palette.OnAccent else tint)
+        Icon(icon, null, Modifier.size(size * 0.42f), tint = if (selected && selectedSurface) Palette.OnAccent else tint)
     }
 }
 

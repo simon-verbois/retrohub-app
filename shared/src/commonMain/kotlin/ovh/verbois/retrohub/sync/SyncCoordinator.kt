@@ -9,8 +9,8 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import ovh.verbois.retrohub.api.ApiException
 import ovh.verbois.retrohub.core.AppClock
-import ovh.verbois.retrohub.data.RoomSaveStore
 import ovh.verbois.retrohub.library.LibraryRepository
+import ovh.verbois.retrohub.sync.SaveStore
 import kotlin.time.Instant
 
 enum class SyncPhase { IDLE, SYNCING, OFFLINE, MAINTENANCE, SIGNED_OUT, ERROR }
@@ -42,7 +42,7 @@ sealed interface SyncOutcome {
 class SyncCoordinator(
     private val library: LibraryRepository,
     private val saveSync: SaveSync,
-    private val saves: RoomSaveStore,
+    private val saves: SaveStore,
     private val sessions: SessionUploader,
     private val pendingSessions: suspend () -> Int,
     private val clock: AppClock = AppClock.System,
@@ -92,6 +92,7 @@ class SyncCoordinator(
         val outcome =
             try {
                 library.refresh()
+                saveSync.checkpointNativeFiles()
                 val epoch = library.saveEpoch()
                 for (save in saves.all().filter { it.pendingUpload && it.lastError == null }) {
                     saveSync.push(save, epoch)

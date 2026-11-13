@@ -63,7 +63,10 @@ fun RetroHubRoot(container: AppContainer, onExit: () -> Unit = {}, onController:
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val activeAccount = (auth as? AuthState.SignedIn)?.account
     val libraryVisible = settings.setupDone && when (controller.nav.contentRoute) {
-        Route.Home, is Route.Library, Route.Favorites, Route.Downloads, Route.Catalogue, is Route.CatalogueGame, Route.Search -> true
+        Route.Home, is Route.Game, is Route.Library, is Route.Folder, Route.Favorites, Route.Downloads,
+        Route.Catalogue, is Route.CatalogueGame, Route.Search,
+        -> true
+
         else -> false
     }
     LaunchedEffect(activeAccount?.server, activeAccount?.userId, activeAccount?.deviceId, libraryVisible, lifecycle) {
@@ -82,6 +85,7 @@ fun RetroHubRoot(container: AppContainer, onExit: () -> Unit = {}, onController:
         val density = LocalDensity.current
         ProvideHaptics(settings.haptics, { container.platform.vibrate() }, sound) {
             CompositionLocalProvider(
+                ovh.verbois.retrohub.ui.components.LocalReturnHome provides { controller.returnHome() },
                 LocalServer provides (auth as? AuthState.SignedIn)?.account?.server,
                 LocalDensity provides Density(density.density, density.fontScale * settings.textSize.scale),
             ) {
@@ -142,7 +146,15 @@ private fun Screen(controller: UiController, route: Route) {
     when (route) {
         Route.Home -> HomeScreen(controller)
 
-        is Route.Library -> LibraryScreen(controller, route.console, favoritesOnly = false)
+        is Route.Game -> WithBack(controller) { ovh.verbois.retrohub.ui.home.GameDetailsScreen(controller, route.id) }
+
+        is Route.Library -> if (!controller.portrait && route.console != null) {
+            WithBack(controller) { ovh.verbois.retrohub.ui.home.ConsoleFolderScreen(controller, route.console) }
+        } else {
+            LibraryScreen(controller, route.console, favoritesOnly = false)
+        }
+
+        is Route.Folder -> WithBack(controller) { ovh.verbois.retrohub.ui.library.FolderScreen(controller, route.id) }
 
         Route.Favorites -> LibraryScreen(controller, null, favoritesOnly = true)
 

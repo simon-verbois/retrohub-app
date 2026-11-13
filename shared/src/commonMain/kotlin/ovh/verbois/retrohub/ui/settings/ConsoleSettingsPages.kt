@@ -71,23 +71,26 @@ import ovh.verbois.retrohub.ui.theme.Palette
 internal fun ConsolesPage(controller: UiController) {
     val settings by controller.container.settings.settings.collectAsState()
     val cores = remember { controller.container.platform.availableCores() }
-    SettingsGroup {
-        Consoles.all.forEachIndexed { index, spec ->
-            if (index > 0) GroupDivider()
-            val custom = settings.consoles[spec.id]?.let { it != ConsoleSettings() } == true
-            SettingRow(
-                spec.name,
-                subtitle =
-                coreLabel(settings.console(spec.id).core ?: spec.cores.first()) +
-                    when {
-                        spec.cores.none { it in cores } -> " · indisponible dans cette version"
-                        spec.id in settings.hiddenConsoles -> " · masquée"
-                        custom -> " · personnalisé"
-                        else -> ""
-                    },
-                onClick = { controller.nav.go(Route.Settings(SettingsPage.CONSOLE, spec.id)) },
-            ) {
-                Box(Modifier.size(10.dp).clip(CircleShape).background(Color(spec.color)))
+    Consoles.all.groupBy { it.generation }.toSortedMap().forEach { (generation, consoles) ->
+        SectionLabel("Génération $generation")
+        SettingsGroup {
+            consoles.forEachIndexed { index, spec ->
+                if (index > 0) GroupDivider()
+                val custom = settings.consoles[spec.id]?.let { it != ConsoleSettings() } == true
+                SettingRow(
+                    spec.name,
+                    subtitle =
+                    coreLabel(settings.console(spec.id).core ?: spec.cores.first()) +
+                        when {
+                            spec.cores.none { it in cores } -> " · indisponible dans cette version"
+                            spec.id in settings.hiddenConsoles -> " · masquée"
+                            custom -> " · personnalisé"
+                            else -> ""
+                        },
+                    onClick = { controller.nav.go(Route.Settings(SettingsPage.CONSOLE, spec.id)) },
+                ) {
+                    Box(Modifier.size(10.dp).clip(CircleShape).background(Color(spec.color)))
+                }
             }
         }
     }
@@ -289,13 +292,14 @@ internal fun ConsolePage(controller: UiController, id: String) {
             FilterChip(label, on, { update { it.copy(turbo = if (on) it.turbo - key.name else it.turbo + key.name) } })
         }
     }
-    if (console.options.isNotEmpty()) {
+    val advancedOptions = console.options + console.optionsByCore[core].orEmpty()
+    if (advancedOptions.isNotEmpty()) {
         SectionLabel("Options avancées")
         SettingsGroup {
-            console.options.entries.forEachIndexed { index, (key, value) ->
+            advancedOptions.entries.forEachIndexed { index, (key, value) ->
                 if (index > 0) GroupDivider()
                 SettingRow(key, subtitle = value, icon = Lucide.SlidersHorizontal, onClick = {
-                    update { it.copy(options = it.options - key) }
+                    update { it.copy(options = it.options - key, optionsByCore = it.optionsByCore + (core to (it.optionsByCore[core].orEmpty() - key))) }
                 }) { Text("Retirer", style = MaterialTheme.typography.labelMedium, color = Palette.Danger) }
             }
         }

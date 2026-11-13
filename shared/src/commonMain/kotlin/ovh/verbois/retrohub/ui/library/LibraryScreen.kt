@@ -76,7 +76,7 @@ enum class Sort(val label: String) {
 }
 
 fun sortGames(games: List<Game>, sort: Sort): List<Game> = when (sort) {
-    Sort.RECENT -> games.sortedWith(compareByDescending<Game> { it.lastPlayed }.thenBy { it.sortTitle })
+    Sort.RECENT -> ovh.verbois.retrohub.ui.home.homeOrder(games)
 
     Sort.TITLE -> games.sortedBy { it.sortTitle }
 
@@ -95,61 +95,70 @@ fun sortGames(games: List<Game>, sort: Sort): List<Game> = when (sort) {
     )
 }
 
-/** Bibliothèque et favoris : filtres par console, tri, grille de jaquettes. */
+/** Library games and manual folders share one grid and the same directional navigation. */
 @Composable
-fun LibraryScreen(controller: UiController, console: String?, favoritesOnly: Boolean) {
+fun LibraryScreen(controller: UiController, console: String?, favoritesOnly: Boolean, folderId: String? = null) {
     val tree = LocalNavigationFocus.current
     val games by controller.container.library.games.collectAsState()
     val downloads by controller.container.downloads.states.collectAsState()
+    val settings by controller.container.settings.settings.collectAsState()
     var filter by rememberSaveable(console) { mutableStateOf(console) }
     var sort by rememberSaveable { mutableStateOf(Sort.RECENT) }
     var focusedGame by rememberSaveable { mutableStateOf<String?>(null) }
-    val restoredFocus = remember { androidx.compose.ui.focus.FocusRequester() }
-    val hidden = controller.container.settings.settings.collectAsState().value.hiddenConsoles
-    val base =
-        remember(games, favoritesOnly, hidden) {
-            games.filter { (!favoritesOnly || it.favorite) && it.console !in hidden }
+    val folder = settings.homeFolders.firstOrNull { it.id == folderId }
+    val base = remember(games, favoritesOnly, settings.hiddenConsoles, folder) {
+        games.filter {
+            (!favoritesOnly || it.favorite) && it.console !in settings.hiddenConsoles &&
+                (folderId == null || it.id in (folder?.gameIds ?: emptyList()))
         }
+    }
     val consoles = remember(base) { Consoles.all.filter { spec -> base.any { it.console == spec.id } } }
-    val sorted by produceState<List<Game>?>(null, base, filter, sort) {
-        value = withContext(Dispatchers.Default) { sortGames(base.filter { filter == null || it.console == filter }, sort) }
+    val sorted by produceState<List<ovh.verbois.retrohub.ui.home.HomeEntry>?>(null, base, filter, sort, settings.homeFolders, settings.homeConsoleFavorites) {
+        value = withContext(Dispatchers.Default) {
+            val folders = if (folderId == null &&
+                filter == null
+            ) {
+                val manual = settings.homeFolders.filter { !favoritesOnly || it.favorite }.map { ovh.verbois.retrohub.ui.home.HomeEntry.FolderItem(it) }
+                val consoles = if (favoritesOnly) {
+                    ovh.verbois.retrohub.ui.home.homeEntries(games, settings, null).filterIsInstance<ovh.verbois.retrohub.ui.home.HomeEntry.FolderItem>()
+                        .filter { it.folder.consoleId != null && it.folder.favorite }
+                } else {
+                    emptyList()
+                }
+                consoles + manual
+            } else {
+                emptyList()
+            }
+            folders + sortGames(base.filter { filter == null || it.console == filter }, sort).map { ovh.verbois.retrohub.ui.home.HomeEntry.GameItem(it) }
+        }
     }
     val shown = sorted ?: return
+    if (favoritesOnly && base.isEmpty() && shown.isEmpty()) {
+        SideEffect { tree.content = tree.header }
+        AutoFocus(tree.header)
+        CenteredMessage("Aucun favori pour l’instant", "", Lucide.Heart)
+        return
+    }
     val grid = rememberLazyGridState()
-    LaunchedEffect(filter) { controller.backdrop = Backdrop(null, filter ?: shown.firstOrNull()?.console) }
-    val first = remember { androidx.compose.ui.focus.FocusRequester() }
-    if (focusedGame == null || shown.none { it.id == focusedGame }) ovh.verbois.retrohub.ui.components.AutoFocus(first)
-    LaunchedEffect(shown) {
-        val index = shown.indexOfFirst { it.id == focusedGame }
+    val requesters = remember { mutableMapOf<String, FocusRequester>() }
+    shown.forEach { requesters.getOrPut(it.key) { FocusRequester() } }
+    val filtersFocus = remember { FocusRequester() }
+    val selected = shown.firstOrNull { it.key == focusedGame } ?: shown.firstOrNull()
+    val contentFocus = selected?.let { requesters.getValue(it.key) } ?: filtersFocus
+    SideEffect { tree.content = contentFocus }
+    AutoFocus(contentFocus)
+    LaunchedEffect(shown.map { it.key }) {
+        val index = shown.indexOfFirst { it.key == focusedGame }
         if (index >= 0) {
             if (grid.layoutInfo.visibleItemsInfo.none { it.key == focusedGame }) grid.scrollToItem(index)
             snapshotFlow { grid.layoutInfo.visibleItemsInfo.any { it.key == focusedGame } }.first { it }
-            runCatching { restoredFocus.requestFocus() }
+            requesters[focusedGame]?.requestFocus()
         }
     }
-    if (base.isEmpty()) {
-        SideEffect { tree.content = tree.header }
-        ovh.verbois.retrohub.ui.components.AutoFocus(tree.header)
-        CenteredMessage(
-            if (favoritesOnly) "Aucun favori pour l’instant" else "Bibliothèque vide",
-            if (favoritesOnly) {
-                "Appui long sur un jeu, puis « Ajouter aux favoris »."
-            } else {
-                "Ajoutez des jeux depuis RetroHub sur le web, ils apparaîtront ici."
-            },
-            if (favoritesOnly) Lucide.Heart else Lucide.LibraryBig,
-        )
-        return
-    }
-    val filtersFocus = remember { FocusRequester() }
-    val contentFocus = when {
-        shown.isEmpty() -> filtersFocus
-        shown.any { it.id == focusedGame } -> restoredFocus
-        else -> first
-    }
-    SideEffect { tree.content = contentFocus }
-    Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-        Box(Modifier.padding(start = 12.dp, top = 8.dp)) {
+    LaunchedEffect(filter) { controller.backdrop = Backdrop(null, filter ?: base.firstOrNull()?.console) }
+    androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
+        val portrait = controller.portrait
+        val toolbar: @Composable () -> Unit = {
             FilterMenu(
                 filter,
                 sort,
@@ -166,39 +175,112 @@ fun LibraryScreen(controller: UiController, console: String?, favoritesOnly: Boo
                     up = tree.header
                     left = FocusRequester.Cancel
                     right = contentFocus
-                    down = FocusRequester.Cancel
                 },
             )
+            if (folderId == null) RoundButton(Lucide.FolderPlus, "Créer un dossier", { controller.newFolder() }, size = 48.dp)
         }
-        androidx.compose.foundation.layout.BoxWithConstraints(Modifier.weight(1f)) {
+        if (portrait) {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) { toolbar() }
+        } else {
+            Column(Modifier.padding(start = 12.dp, top = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) { toolbar() }
+        }
+        androidx.compose.foundation.layout.BoxWithConstraints(
+            Modifier.fillMaxSize().padding(start = if (portrait) 8.dp else 68.dp, top = if (portrait) 64.dp else 0.dp),
+        ) {
             val minimum = if (controller.portrait) 116.dp else 128.dp
             val columns = ((maxWidth - 32.dp + 12.dp) / (minimum + 12.dp)).toInt().coerceAtLeast(1)
-            LazyVerticalGrid(
-                state = grid,
-                columns = GridCells.Fixed(columns),
-                modifier = Modifier.fillMaxSize().focusGroup(),
-                contentPadding = PaddingValues(start = 8.dp, end = 24.dp, top = 8.dp, bottom = 24.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-            ) {
-                itemsIndexed(shown, key = { _, game -> game.id }) { index, game ->
-                    GameCard(
-                        game,
-                        { controller.showGame(game.id) },
-                        modifier = (if (game.id == focusedGame) Modifier.focusRequester(restoredFocus) else Modifier)
-                            .then(if (index == 0) Modifier.focusRequester(first) else Modifier)
-                            .focusProperties {
-                                if (index < columns) up = tree.header
-                                if (index % columns == 0) left = filtersFocus
-                                if (index % columns == columns - 1 || index == shown.lastIndex) right = FocusRequester.Cancel
-                                if (index + columns > shown.lastIndex) down = FocusRequester.Cancel
-                            }
-                            .testTag("library-game-${game.id}").onFocusChanged { if (it.isFocused) focusedGame = game.id },
-                        download = downloads[game.playGameId],
-                    )
+            val navigation = ovh.verbois.retrohub.ui.components.gridNavigation(grid, shown.size, columns)
+            if (shown.isEmpty()) {
+                CenteredMessage(if (favoritesOnly) "Aucun favori pour l’instant" else "Aucun jeu", "", if (favoritesOnly) Lucide.Heart else Lucide.FolderOpen)
+            } else {
+                LazyVerticalGrid(
+                    state = grid,
+                    columns = GridCells.Fixed(columns),
+                    modifier = Modifier.fillMaxSize().focusGroup().testTag("library-grid"),
+                    contentPadding = PaddingValues(start = 8.dp, end = 24.dp, top = 8.dp, bottom = 24.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                ) {
+                    itemsIndexed(shown, key = { _, entry -> entry.key }) { index, entry ->
+                        val modifier = navigation(index).focusRequester(requesters.getValue(entry.key)).focusProperties {
+                            if (index < columns) up = tree.header
+                            if (index % columns == 0) left = filtersFocus
+                            if (index % columns == columns - 1 || index == shown.lastIndex) right = FocusRequester.Cancel
+                            if (index / columns == shown.lastIndex / columns) down = FocusRequester.Cancel
+                        }.onFocusChanged { if (it.isFocused) focusedGame = entry.key }
+                        when (entry) {
+                            is ovh.verbois.retrohub.ui.home.HomeEntry.GameItem -> GameCard(entry.game, {
+                                controller.showGame(entry.key)
+                            }, modifier.testTag("library-game-${entry.key}"), downloads[entry.game.playGameId])
+
+                            is ovh.verbois.retrohub.ui.home.HomeEntry.FolderItem -> ovh.verbois.retrohub.ui.home.FolderCard(entry.folder, {
+                                controller.nav.go(
+                                    entry.folder.consoleId?.let { ovh.verbois.retrohub.ui.nav.Route.Library(it) }
+                                        ?: ovh.verbois.retrohub.ui.nav.Route.Folder(entry.folder.id),
+                                )
+                            }, modifier.testTag("library-${entry.key}"), onLongClick = {
+                                if (entry.folder.consoleId == null) controller.folderEditor = entry.folder
+                            })
+
+                            else -> Unit
+                        }
+                    }
                 }
             }
         }
+    }
+}
+
+@Composable
+fun FolderScreen(controller: UiController, id: String) {
+    val settings by controller.container.settings.settings.collectAsState()
+    val folder = settings.homeFolders.firstOrNull { it.id == id } ?: return
+    Column(Modifier.fillMaxSize()) {
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                folder.name,
+                Modifier.weight(1f),
+                style = MaterialTheme.typography.headlineSmall,
+                maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+            )
+            RoundButton(if (folder.favorite) Lucide.HeartFilled else Lucide.Heart, "Favori", {
+                controller.container.settings.update { current ->
+                    current.copy(
+                        homeFolders = current.homeFolders.map {
+                            if (it.id ==
+                                id
+                            ) {
+                                it.copy(favorite = !it.favorite)
+                            } else {
+                                it
+                            }
+                        },
+                    )
+                }
+            }, size = 48.dp, selected = folder.favorite, selectedSurface = false)
+            RoundButton(Lucide.Pin, "Épingler à l’accueil", {
+                controller.container.settings.update { current ->
+                    current.toggleHomePin(folder.key).copy(
+                        homeFolders = current.homeFolders.map {
+                            if (it.id ==
+                                id
+                            ) {
+                                it.copy(onHome = true)
+                            } else {
+                                it
+                            }
+                        },
+                    )
+                }
+            }, size = 48.dp, selected = folder.key in settings.homePins)
+            RoundButton(Lucide.SlidersHorizontal, "Modifier le dossier", { controller.folderEditor = folder }, size = 48.dp)
+        }
+        Box(Modifier.weight(1f)) { LibraryScreen(controller, null, false, id) }
     }
 }
 
@@ -224,6 +306,7 @@ fun DownloadsScreen(controller: UiController) {
     androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize().padding(horizontal = 18.dp)) {
         val minimum = if (controller.portrait) 116.dp else 128.dp
         val columns = (maxWidth / (minimum + 12.dp)).toInt().coerceAtLeast(1)
+        val navigation = ovh.verbois.retrohub.ui.components.gridNavigation(grid, local.size + 1, columns)
         LazyVerticalGrid(
             columns = GridCells.Fixed(columns),
             state = grid,
@@ -238,7 +321,7 @@ fun DownloadsScreen(controller: UiController) {
                     {
                         controller.nav.go(ovh.verbois.retrohub.ui.nav.Route.Settings(ovh.verbois.retrohub.ui.nav.SettingsPage.STORAGE))
                     },
-                    Modifier.focusRequester(first).focusProperties {
+                    navigation(0).focusRequester(first).focusProperties {
                         up = tree.header
                         left = FocusRequester.Cancel
                         if (local.isEmpty()) right = FocusRequester.Cancel
@@ -254,11 +337,11 @@ fun DownloadsScreen(controller: UiController) {
                     GameCard(
                         game,
                         { controller.showGame(game.id) },
-                        Modifier.testTag("download-game-${game.id}").focusProperties {
+                        navigation(index + 1).testTag("download-game-${game.id}").focusProperties {
                             if (position < columns) up = tree.header
                             if (position % columns == 0) left = FocusRequester.Cancel
                             if (position % columns == columns - 1 || index == local.lastIndex) right = FocusRequester.Cancel
-                            if (position + columns > local.size) down = FocusRequester.Cancel
+                            if (position / columns == local.size / columns) down = FocusRequester.Cancel
                         },
                         download = state,
                         onLongClick = { menuGame = game.id },
@@ -419,13 +502,18 @@ private fun FilterMenu(
             shape = androidx.compose.foundation.shape.RoundedCornerShape(18.dp),
         ) {
             // A single scrollable column stays usable on narrow phones and in split screen.
-            val choices = listOf<Pair<String?, String>>(null to "Toutes") + consoles.map { it.id to it.shortName }
             Column(Modifier.widthIn(max = 420.dp).fillMaxWidth().padding(horizontal = 6.dp)) {
-                MenuLabel("Console")
-                choices.forEach { (id, name) ->
-                    MenuChoice(name, filter == id, id?.let { Consoles[it]?.color }?.let { Color(it) }) {
-                        onFilter(id)
-                        open = false
+                MenuChoice("Toutes", filter == null, null) {
+                    onFilter(null)
+                    open = false
+                }
+                consoles.groupBy { it.generation }.toSortedMap().forEach { (generation, group) ->
+                    MenuLabel("Génération $generation")
+                    group.forEach { console ->
+                        MenuChoice(console.shortName, filter == console.id, Color(console.color)) {
+                            onFilter(console.id)
+                            open = false
+                        }
                     }
                 }
                 MenuLabel("Trier")

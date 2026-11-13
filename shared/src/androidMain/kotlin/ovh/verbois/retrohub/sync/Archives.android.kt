@@ -40,3 +40,15 @@ actual fun zipFlat(fs: FileSystem, files: List<Path>, destination: Path) {
 actual fun zipEntries(fs: FileSystem, zip: Path): List<String> = ZipInputStream(fs.source(zip).buffer().inputStream()).use { input ->
     generateSequence { input.nextEntry }.filterNot { it.isDirectory }.map { it.name }.toList()
 }
+
+actual fun zipFiles(fs: FileSystem, files: Map<String, Path>, destination: Path) {
+    destination.parent?.let { fs.createDirectories(it) }
+    ZipOutputStream(fs.sink(destination).buffer().outputStream()).use { output ->
+        for ((name, file) in files.toSortedMap()) {
+            require(safeEntryName(name) == name)
+            output.putNextEntry(ZipEntry(name).apply { time = 0 })
+            fs.source(file).buffer().use { source -> source.inputStream().copyTo(output) }
+            output.closeEntry()
+        }
+    }
+}

@@ -107,15 +107,24 @@ object GameLayouts {
     }
 
     /** Rapport largeur/hauteur de l’image de la DS selon la disposition des écrans. */
-    fun dsAspect(layout: DsLayout): Float = when (layout) {
-        DsLayout.STACKED -> 256f / 384f
+    fun dsAspect(layout: DsLayout, console: String = "nds", swap: Boolean = false): Float = if (console == "3ds") {
+        when (layout) {
+            DsLayout.STACKED -> 400f / 480f
+            DsLayout.SIDE_BY_SIDE -> 720f / 240f
+            DsLayout.MAIN_LARGE -> if (swap) (320f * 4 + 400) / (240 * 4) else (400f * 4 + 320) / (240 * 4)
+            DsLayout.TOP_ONLY -> if (swap) 320f / 240f else 400f / 240f
+        }
+    } else {
+        when (layout) {
+            DsLayout.STACKED -> 256f / 384f
 
-        DsLayout.SIDE_BY_SIDE -> 512f / 192f
+            DsLayout.SIDE_BY_SIDE -> 512f / 192f
 
-        // Hybride (melonDS sur Android : rapport 2) : écran principal ×2 et l’autre en vignette à côté.
-        DsLayout.MAIN_LARGE -> (256f * 2 + 256f) / (192f * 2)
+            // Hybride (melonDS sur Android : rapport 2) : écran principal ×2 et l’autre en vignette à côté.
+            DsLayout.MAIN_LARGE -> (256f * 2 + 256f) / (192f * 2)
 
-        DsLayout.TOP_ONLY -> 256f / 192f
+            DsLayout.TOP_ONLY -> 256f / 192f
+        }
     }
 
     /** Disposition conseillée : l’un sous l’autre en portrait, côte à côte en paysage. */

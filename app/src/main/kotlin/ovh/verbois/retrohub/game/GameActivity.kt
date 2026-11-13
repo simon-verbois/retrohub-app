@@ -1,5 +1,6 @@
 package ovh.verbois.retrohub.game
 
+import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.hardware.input.InputManager
 import android.os.Bundle
@@ -24,8 +25,10 @@ import com.swordfish.libretrodroid.GLRetroViewData
 import com.swordfish.libretrodroid.Variable
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okio.Path.Companion.toPath
@@ -52,14 +55,30 @@ class GameActivity : ComponentActivity() {
     private val menuRequests = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     private val backRequests = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     private val held = mutableSetOf<Int>()
+    private val physicalKeys = mutableSetOf<PadKey>()
+    private var motionKeys = emptySet<PadKey>()
     private lateinit var plan: LaunchPlan
     private lateinit var router: InputRouter
     private var quitting = false
+    private var returnToHome = false
+    private var inspectingControls = false
+    private val controllerInput = MutableStateFlow(ControllerInput())
+    private val guide by lazy {
+        GuideButton(
+            lifecycleScope,
+            onPress = { menuRequests.tryEmit(Unit) },
+            onHold = {
+                returnToHome = true
+                finish()
+            },
+        )
+    }
     private val inputListener = object : InputManager.InputDeviceListener {
         override fun onInputDeviceAdded(deviceId: Int) = Unit
         override fun onInputDeviceChanged(deviceId: Int) = Unit
         override fun onInputDeviceRemoved(deviceId: Int) {
             releaseInputs()
+            guide.cancel()
         }
     }
 
@@ -95,6 +114,18 @@ class GameActivity : ComponentActivity() {
             }
         }
         lifecycleScope.launch {
+            val compatible = withContext(Dispatchers.IO) {
+                plan.console !in setOf("3ds", "ps2") || (plan.coreBuild != null && app.platform.coreBuild(plan.core) == plan.coreBuild)
+            }
+            if (!compatible) {
+                android.widget.Toast.makeText(
+                    this@GameActivity,
+                    "L’émulateur a changé. Relancez le jeu depuis la bibliothèque.",
+                    android.widget.Toast.LENGTH_LONG,
+                ).show()
+                finish()
+                return@launch
+            }
             val sram = withContext(Dispatchers.IO) {
                 prepareSystem(plan)
                 if (plan.loadSram) File(plan.sramPath).takeIf { it.exists() }?.readBytes() else null
@@ -105,6 +136,12 @@ class GameActivity : ComponentActivity() {
 
     private fun createGame(app: RetroHubApp, sram: ByteArray?) {
         val container = app.container
+        plan.saveOwner?.let { owner ->
+            container.saveStore.boundTo(owner).also { store ->
+                store.prepareGame(plan.playGameId, plan.console)
+                store.setGameActive(plan.playGameId, true)
+            }
+        }
         val data =
             GLRetroViewData(this).apply {
                 coreFilePath = app.platform.corePath(plan.core)
@@ -136,7 +173,7 @@ class GameActivity : ComponentActivity() {
         lifecycleScope.launch {
             session.ui.map { it.paused }.distinctUntilChanged().collect { if (it) releaseInputs() }
         }
-        lifecycleScope.launch { engine.errors.collect { session.flash(it) } }
+        lifecycleScope.launch { engine.errors.collect { session.reportError(it) } }
         onBackPressedDispatcher.addCallback(
             this,
             object : OnBackPressedCallback(true) {
@@ -148,21 +185,33 @@ class GameActivity : ComponentActivity() {
         setContent {
             val settings by container.settings.settings.collectAsState()
             RetroHubTheme(settings.theme) {
-                ProvideHaptics(plan.haptics, { app.platform.vibrate() }) {
-                    GameScreen(
-                        session,
-                        engine,
-                        app.platform.gamepadConnected,
-                        container.sync.status,
-                        menuRequests,
-                        backRequests = backRequests,
-                        haptic = { app.platform.vibrate(10) },
-                        onQuit = { finish() },
-                        onConsoleSettings = { change -> container.settings.update { it.withConsole(plan.console, change) } },
-                        onCheats = { cheats -> container.scope.launch { container.cheats.put(plan.playGameId, cheats) } },
-                        onRumble = { app.platform.rumble(it) },
-                        onRotation = { value -> container.settings.update { it.copy(gameRotations = it.gameRotations + (plan.playGameId to value)) } },
-                    ) { AndroidView({ retroView }) }
+                androidx.compose.runtime.CompositionLocalProvider(
+                    ovh.verbois.retrohub.ui.components.LocalReturnHome provides {
+                        returnToHome = true
+                        finish()
+                    },
+                ) {
+                    ProvideHaptics(plan.haptics, { app.platform.vibrate() }) {
+                        GameScreen(
+                            session,
+                            engine,
+                            app.platform.gamepadConnected,
+                            container.sync.status,
+                            menuRequests,
+                            controllerInput = controllerInput,
+                            onInspectControls = {
+                                inspectingControls = it
+                                releaseInputs()
+                            },
+                            backRequests = backRequests,
+                            haptic = { app.platform.vibrate(10) },
+                            onQuit = { finish() },
+                            onConsoleSettings = { change -> container.settings.update { it.withConsole(plan.console, change) } },
+                            onCheats = { cheats -> container.scope.launch { container.cheats.put(plan.playGameId, cheats) } },
+                            onRumble = { app.platform.rumble(it) },
+                            onRotation = { value -> container.settings.update { it.copy(gameRotations = it.gameRotations + (plan.playGameId to value)) } },
+                        ) { AndroidView({ retroView }) }
+                    }
                 }
             }
         }
@@ -186,6 +235,16 @@ class GameActivity : ComponentActivity() {
         if (!::session.isInitialized) return super.dispatchKeyEvent(event)
         val paused = session.ui.value.paused
         val code = event.keyCode
+        if (code in setOf(KeyEvent.KEYCODE_BUTTON_MODE, KeyEvent.KEYCODE_MENU, KeyEvent.KEYCODE_HOME)) {
+            guide.event(event.action == KeyEvent.ACTION_DOWN, event.isCanceled)
+            return true
+        }
+        val mapped = remapped(code) ?: padKey(event)
+        if (mapped != null) {
+            if (event.action == KeyEvent.ACTION_DOWN) physicalKeys += mapped else physicalKeys -= mapped
+            controllerInput.update { it.copy(keys = physicalKeys + motionKeys) }
+        }
+        if (paused && inspectingControls && mapped != null) return true
         // Menu : bouton Guide / Menu, ou la combinaison choisie (Select + Start, L3 + R3).
         if (event.action == KeyEvent.ACTION_DOWN) held += code else held -= code
         val pair =
@@ -196,7 +255,7 @@ class GameActivity : ComponentActivity() {
             }
         val combo = pair != null && pair.first in held && pair.second in held
         if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0 &&
-            (code == KeyEvent.KEYCODE_BUTTON_MODE || code == KeyEvent.KEYCODE_MENU || combo)
+            combo
         ) {
             if (combo) {
                 router.releaseAll()
@@ -231,14 +290,30 @@ class GameActivity : ComponentActivity() {
     }
 
     override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean {
-        if (!::session.isInitialized || session.ui.value.paused ||
-            event.source and InputDevice.SOURCE_JOYSTICK != InputDevice.SOURCE_JOYSTICK
-        ) {
+        if (!::session.isInitialized || event.source and InputDevice.SOURCE_JOYSTICK != InputDevice.SOURCE_JOYSTICK) {
             return super.dispatchGenericMotionEvent(event)
         }
         val port = port(event)
         val hatX = event.getAxisValue(MotionEvent.AXIS_HAT_X)
         val hatY = event.getAxisValue(MotionEvent.AXIS_HAT_Y)
+        val leftX = event.getAxisValue(MotionEvent.AXIS_X)
+        val leftY = event.getAxisValue(MotionEvent.AXIS_Y)
+        val rightX = event.getAxisValue(MotionEvent.AXIS_Z)
+        val rightY = event.getAxisValue(MotionEvent.AXIS_RZ)
+        val leftTrigger = maxOf(event.getAxisValue(MotionEvent.AXIS_LTRIGGER), event.getAxisValue(MotionEvent.AXIS_BRAKE))
+        val rightTrigger = maxOf(event.getAxisValue(MotionEvent.AXIS_RTRIGGER), event.getAxisValue(MotionEvent.AXIS_GAS))
+        controllerInput.update { input ->
+            motionKeys = buildSet {
+                if (hatX < -0.5f) add(PadKey.LEFT)
+                if (hatX > 0.5f) add(PadKey.RIGHT)
+                if (hatY < -0.5f) add(PadKey.UP)
+                if (hatY > 0.5f) add(PadKey.DOWN)
+                if (leftTrigger > 0.5f) add(PadKey.L2)
+                if (rightTrigger > 0.5f) add(PadKey.R2)
+            }
+            input.copy(keys = physicalKeys + motionKeys, leftX = leftX, leftY = leftY, rightX = rightX, rightY = rightY)
+        }
+        if (session.ui.value.paused) return if (inspectingControls) true else super.dispatchGenericMotionEvent(event)
         router.key(PadKey.LEFT, hatX < -0.5f, port)
         router.key(PadKey.RIGHT, hatX > 0.5f, port)
         router.key(PadKey.UP, hatY < -0.5f, port)
@@ -256,6 +331,9 @@ class GameActivity : ComponentActivity() {
     private fun releaseInputs() {
         if (::router.isInitialized) router.releaseAll()
         held.clear()
+        physicalKeys.clear()
+        motionKeys = emptySet()
+        controllerInput.value = ControllerInput()
     }
 
     /** Manette Android → RetroPad (A et B, X et Y inversés), et un clavier pour jouer au bureau. */
@@ -280,6 +358,8 @@ class GameActivity : ComponentActivity() {
     }
 
     override fun onPause() {
+        guide.cancel()
+        releaseInputs()
         super.onPause()
         // L’appareil passe à autre chose : la partie est mise en pause et gardée.
         if (!isFinishing && ::session.isInitialized) {
@@ -304,6 +384,13 @@ class GameActivity : ComponentActivity() {
         session.pause()
         lifecycleScope.launch {
             session.finish()
+            if (returnToHome) {
+                startActivity(
+                    Intent(this@GameActivity, ovh.verbois.retrohub.MainActivity::class.java)
+                        .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                        .putExtra(ovh.verbois.retrohub.MainActivity.EXTRA_RETURN_HOME, true),
+                )
+            }
             super@GameActivity.finish()
         }
     }

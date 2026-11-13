@@ -53,8 +53,9 @@ fun GameTile(
     modifier: Modifier = Modifier,
     download: DownloadState? = null,
     onLongClick: (() -> Unit)? = null,
+    reduceMotion: Boolean = false,
 ) {
-    val side by animateDpAsState(if (selected) selectedSize else size, spring(dampingRatio = 0.75f, stiffness = 500f))
+    val side by animateDpAsState(if (selected) selectedSize else size, androidx.compose.animation.core.tween(if (reduceMotion) 0 else 260))
     val shape = RoundedCornerShape(14.dp)
     Box(
         modifier

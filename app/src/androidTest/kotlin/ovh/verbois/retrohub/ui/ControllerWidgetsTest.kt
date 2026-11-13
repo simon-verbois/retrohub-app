@@ -78,7 +78,12 @@ class ControllerWidgetsTest {
         show { Onboarding(container, AuthState.SignedOut()) }
         waitFocused("Commencer")
         pad(KeyEvent.KEYCODE_BUTTON_A)
-        rule.onNodeWithText("Votre serveur").assertIsDisplayed()
+        rule.waitUntil(5000) {
+            runCatching {
+                rule.onNodeWithText("Adresse du serveur").assertIsDisplayed()
+                true
+            }.getOrDefault(false)
+        }
         pad(KeyEvent.KEYCODE_BUTTON_B)
         waitFocused("Commencer")
     }

@@ -50,6 +50,8 @@ interface Platform {
     /** Cœurs libretro présents dans l’application. */
     fun availableCores(): Set<String>
 
+    fun coreBuild(core: String): String? = null
+
     fun launchGame(plan: LaunchPlan)
 
     fun freeBytes(): Long

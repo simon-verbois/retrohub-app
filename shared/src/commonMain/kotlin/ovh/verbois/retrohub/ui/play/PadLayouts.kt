@@ -26,6 +26,7 @@ data class Shoulder(val key: PadKey, val label: String, val left: Boolean, val r
 data class PadSpec(
     val dpad: Boolean = true,
     val leftStick: Boolean = false,
+    val rightStick: Boolean = false,
     val face: List<FaceButton>,
     val stickButtons: List<StickButton> = emptyList(),
     val shoulders: List<Shoulder> = emptyList(),
@@ -58,6 +59,18 @@ fun padSpec(layout: PadLayout): PadSpec = when (layout) {
             ),
             shoulders = listOf(Shoulder(PadKey.L, "L", true), Shoulder(PadKey.R, "R", false)),
         )
+
+    PadLayout.NINTENDO_3DS -> padSpec(PadLayout.NINTENDO_DS).copy(
+        leftStick = true,
+        shoulders = listOf(
+            Shoulder(PadKey.L, "L", true),
+            Shoulder(PadKey.R, "R", false),
+            Shoulder(PadKey.L2, "ZL", true, 1),
+            Shoulder(PadKey.R2, "ZR", false, 1),
+        ),
+    )
+
+    PadLayout.PLAYSTATION_2 -> padSpec(PadLayout.PLAYSTATION).copy(leftStick = true, rightStick = true)
 
     PadLayout.MASTER_SYSTEM ->
         PadSpec(
