@@ -10,6 +10,12 @@ change, in plain text. Never rewrite the notes of a published version.
 
 ## [Unreleased]
 
+## [2026.46.12] - 2026-11-14
+
+### Changed
+
+- Reorganize the README with a project overview, installation and contribution guides, a project image, and support links immediately after the license.
+
 ## [2026.46.11] - 2026-11-14
 
 ### Changed

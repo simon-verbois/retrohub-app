@@ -1,82 +1,185 @@
-# RetroHub for Android
+<a id="readme-top"></a>
 
-The Android app for RetroHub (iOS prepared): your RetroHub library in a handheld-console interface,
-with built-in emulators (NES, Super Nintendo, Game Boy / Color / Advance, Master System, Mega Drive,
-PlayStation, Nintendo DS, Atari 2600, Nintendo 64, GameCube, Dreamcast), offline play and progress
-synced with the web.
+<div align="center">
+  <a href="https://simon-verbois.github.io/retrohub-app/">
+    <img src="docs/favicon.svg" alt="RetroHub app" width="80" height="80">
+  </a>
+  <h1>RetroHub for Android</h1>
+  <p>Your RetroHub library, ready to play anywhere.</p>
+  <p>
+    <a href="https://github.com/simon-verbois/retrohub-app/releases"><strong>Download the APK</strong></a>
+    · <a href="https://simon-verbois.github.io/retrohub-app/">Website</a>
+    · <a href="https://github.com/simon-verbois/retrohub-app/issues">Report an issue</a>
+  </p>
+</div>
 
-It is a client for the [RetroHub](https://github.com/simon-verbois/retrohub) server
-([overview](https://simon-verbois.github.io/retrohub/)): the library, games and saves come from it.
-App website: https://simon-verbois.github.io/retrohub-app/
+<p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="Code license: MIT"></a>
+  <img src="https://img.shields.io/badge/platform-Android-3DDC84" alt="Platform: Android">
+  <img src="https://img.shields.io/badge/interface-French-blue" alt="Interface language: French">
+</p>
 
-<a href="https://buymeacoffee.com/simonverbois"><img src="docs/buy-me-a-coffee.png" width="178" height="50" alt="Buy Me a Coffee"></a>
+<details>
+  <summary>Table of contents</summary>
 
-The app interface is in French for now; more languages will follow.
+- [About the project](#about-the-project)
+- [Getting started](#getting-started)
+- [Usage](#usage)
+- [Development](#development)
+- [Roadmap](#roadmap)
+- [Contributing](#contributing)
+- [License](#license)
+- [Support the project](#support-the-project)
+- [Contact](#contact)
+- [Acknowledgments](#acknowledgments)
 
-## Install
+</details>
 
-Each version's signed APK is published in the
-[GitHub releases](https://github.com/simon-verbois/retrohub-app/releases), with its SHA-256 sums.
-You need a RetroHub server: the app links to it with a pairing code shown on the web
-(Settings → Apps and devices) or with your password.
+## About the project
 
-## Develop
+[![RetroHub app home screen with a demo library](docs/screenshots/overview.webp)](https://simon-verbois.github.io/retrohub-app/)
+
+RetroHub brings your self-hosted game library to an Android phone or handheld. Download games
+from your [RetroHub server](https://github.com/simon-verbois/retrohub), play with built-in
+emulators, and continue your progress on the web or another device.
+
+- Play downloaded games offline; synchronize when the connection returns.
+- Navigate with a controller, touch or keyboard, in landscape or portrait.
+- Browse your library and the server catalogue, search games and manage favorites.
+- Synchronize saves and save states, with a choice when progress conflicts.
+- Adjust touch controls, display and emulator options per game or console.
+
+The interface is currently in French. Android is available; the Kotlin Multiplatform codebase
+also prepares for iOS, which is not released yet.
+
+### Built with
+
+[Kotlin Multiplatform](https://kotlinlang.org/multiplatform/),
+[Compose Multiplatform](https://www.jetbrains.com/compose-multiplatform/),
+[Ktor](https://ktor.io/), Room, WorkManager and
+[LibretroDroid](https://github.com/Swordfish90/LibretroDroid).
+See the [core inventory](docs/cores.md) for emulator versions and platform constraints.
+
+## Getting started
+
+### Prerequisites
+
+An Android device and a reachable [RetroHub server](https://github.com/simon-verbois/retrohub).
+The server provides your library, games and saves.
+
+### Installation
+
+1. Download the signed APK from [Releases](https://github.com/simon-verbois/retrohub-app/releases).
+   Each release includes SHA-256 checksums.
+2. Install the APK on your device, allowing installation from that source when Android asks.
+3. Enter your server address.
+4. Pair with the code shown on the web under **Settings → Apps and devices**, or sign in with
+   your password. QR-code pairing is also available.
+5. Choose your starting settings and download a game from your library.
+
+## Usage
+
+Open a game and choose Play or Resume. Download it before going offline. Save and close the
+game before switching devices so the next device receives your latest progress.
+
+Use the pause menu to change controls, image and sound settings. Conflicting progress asks
+for your choice before anything is replaced. Save states require compatible ROM and core
+versions; see the [core notes](docs/cores.md).
+
+## Development
 
 ### Requirements
 
-Linux x86_64 with KVM (`/dev/kvm`), `curl`, `unzip`, `uv`, and the `../retrohub` repository for the
-end-to-end tests. No Android Studio or Gradle installation needed.
-
-### Get started
+Linux x86_64 with KVM (`/dev/kvm`), Git, `curl`, `unzip`, `uv`, and the server repository
+checked out alongside this one as `../retrohub` for end-to-end tests.
+Android Studio and a separate Gradle installation are not required.
 
 ```sh
-scripts/setup-sdk.sh        # JDK 21 and Android SDK in ~/Android (idempotent)
-scripts/fetch-cores.sh      # libretro cores verified against cores.lock
+git clone https://github.com/simon-verbois/retrohub-app.git
+cd retrohub-app
+scripts/setup-sdk.sh        # JDK 21 and Android SDK in ~/Android
+scripts/fetch-cores.sh      # Verified emulator cores
 ./gradlew :app:assembleDebug
-scripts/emulator.sh up && scripts/emulator.sh wait
-scripts/test.sh             # unit, instrumented, e2e (or a single level)
-scripts/ci.sh               # the whole chain, cleanup included
-scripts/start-retrohub.sh   # emulator window, landscape, app launched
+scripts/start-retrohub.sh --backend
 ```
 
-`scripts/start-retrohub.sh --backend` also starts a disposable RetroHub server
-(`http://127.0.0.1:8011`, account `e2e-admin` / `test-browser-password-only`); `--fresh` starts over
-from a first launch.
+The last command launches the app in a landscape emulator and starts a disposable server at
+`http://127.0.0.1:8011` (test account: `e2e-admin` / `test-browser-password-only`). Use
+`--fresh` to start from first launch. Without `--backend`, use your own server.
 
-### On a real phone
+For a real phone:
 
 ```sh
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
-On first launch: server address, then pairing code (web: Settings → Apps and devices) or password,
-then three starting settings.
+Build for a single device architecture with `./gradlew :app:assembleDebug -Pretrohub.abis=arm64-v8a`.
 
-For a lighter APK targeting a single device type: `./gradlew :app:assembleDebug -Pretrohub.abis=arm64-v8a`.
+### Verification
 
-See `docs/` for design decisions, licences and server requests.
+```sh
+./gradlew spotlessCheck :app:lintDebug
+scripts/test.sh unit        # Also: instrumented, e2e, all
+RETROHUB_AVD=retrohub-ci RETROHUB_EMULATOR_PORT=5582 scripts/ci.sh
+```
 
-### Website
+The full pipeline clears test app data; use the separate virtual device shown above.
+Inspect the end-to-end screenshots in `build/screens/`.
 
-The GitHub Pages site is static HTML, CSS and JavaScript, available in English, French, German,
-Spanish, Italian, Dutch and Portuguese. Edit `docs/site-template.html`, `docs/styles.css`,
-`docs/site.js` and the translations in `docs/locales/`,
-then regenerate and check the committed pages:
+### Documentation and website
+
+- [Design decisions](docs/decisions.md), [emulator cores](docs/cores.md) and [iOS status](docs/ios.md).
+- [Localization](docs/localization.md) and [server integration requests](docs/server-requests.md).
+
+The static GitHub Pages site lives in `docs/`, in English, French, German, Spanish, Italian,
+Dutch and Portuguese. Edit `docs/site-template.html`, `docs/styles.css`, `docs/site.js` and
+`docs/locales/`, then regenerate the pages:
 
 ```sh
 python3 scripts/build_site.py --generate
 python3 scripts/build_site.py --check
-python3 scripts/build_site.py --output build/site  # requires an empty output directory
+python3 scripts/build_site.py --output build/site  # Empty output directory required
 ```
 
-Screenshots in `docs/screenshots/` show the app with a demo library. Fonts and images are served
-locally; the site needs no external scripts or build dependencies. The Pages workflow publishes
-only the generated pages and their assets.
+Project screenshots live in `docs/screenshots/`; fonts and images are served locally.
+The Pages workflow publishes only the generated pages and their assets.
+
+## Roadmap
+
+Follow [open issues](https://github.com/simon-verbois/retrohub-app/issues) and the
+[changelog](CHANGELOG.md). iOS preparation and additional interface languages are documented
+in the [iOS](docs/ios.md) and [localization](docs/localization.md) notes.
+
+## Contributing
+
+Open an issue with your Android version, device, console and steps to reproduce, or propose
+a focused pull request. Run the checks above and add an English note under **Unreleased**
+in [CHANGELOG.md](CHANGELOG.md) for a visible change. Keep interface text in French.
 
 ## License
 
-Code under the MIT license (`LICENSE`). The APK bundles LibretroDroid (GPL-3.0) and libretro cores
-under their own licenses: see `docs/licenses.md`.
+The app code is under the [MIT license](LICENSE). The APK bundles LibretroDroid (GPL-3.0)
+and libretro cores under their respective licenses; see [third-party licenses](docs/licenses.md).
+
+## Support the project
+
+If RetroHub is useful to you, you can [buy me a coffee](https://buymeacoffee.com/simonverbois).
+Reporting issues, sharing the project and contributing also help.
+
+<a href="https://buymeacoffee.com/simonverbois"><img src="docs/buy-me-a-coffee.png" width="178" height="50" alt="Support the project on Buy Me a Coffee"></a>
+
+## Contact
+
+[Simon Verbois](https://github.com/simon-verbois) ·
+[Project issues](https://github.com/simon-verbois/retrohub-app/issues) ·
+[RetroHub server](https://github.com/simon-verbois/retrohub)
+
+## Acknowledgments
+
+- The LibretroDroid and libretro projects, and each emulator core's authors.
+- [Best-README-Template](https://github.com/othneildrew/Best-README-Template) for the README structure.
+
+<p align="right"><a href="#readme-top">Back to top</a></p>
 
 ---
 
