@@ -148,13 +148,12 @@ private fun Screen(controller: UiController, route: Route) {
 
         is Route.Game -> WithBack(controller) { ovh.verbois.retrohub.ui.home.GameDetailsScreen(controller, route.id) }
 
-        is Route.Library -> if (!controller.portrait && route.console != null) {
-            WithBack(controller) { ovh.verbois.retrohub.ui.home.ConsoleFolderScreen(controller, route.console) }
-        } else {
-            LibraryScreen(controller, route.console, favoritesOnly = false)
-        }
+        is Route.Library -> LibraryScreen(controller, route.console, favoritesOnly = false)
 
-        is Route.Folder -> WithBack(controller) { ovh.verbois.retrohub.ui.library.FolderScreen(controller, route.id) }
+        is Route.Folder -> {
+            LaunchedEffect(route.id) { controller.returnHome() }
+            HomeScreen(controller)
+        }
 
         Route.Favorites -> LibraryScreen(controller, null, favoritesOnly = true)
 

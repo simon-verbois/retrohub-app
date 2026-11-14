@@ -107,11 +107,13 @@ internal fun HeaderSearch(controller: UiController, state: HeaderSearchState, di
                     state.bounds = Rect(bounds.left + insetPx, bounds.top, bounds.right - insetPx, bounds.bottom)
                 }.onFocusChanged { state.fieldFocused = it.hasFocus }.focusGroup(),
         ) {
-            Box(
-                Modifier.align(Alignment.Center).fillMaxWidth().padding(horizontal = inset).height(diameter)
-                    .testTag("header-search-bubble")
-                    .consoleButtonSurface(CircleShape),
-            )
+            if (controller.portrait || controller.searching) {
+                Box(
+                    Modifier.align(Alignment.Center).fillMaxWidth().padding(horizontal = inset).height(diameter)
+                        .testTag("header-search-bubble")
+                        .consoleButtonSurface(CircleShape),
+                )
+            }
             if (controller.searching) {
                 BasicTextField(
                     value = state.query,
@@ -175,7 +177,13 @@ internal fun HeaderSearch(controller: UiController, state: HeaderSearchState, di
             } else {
                 Box(
                     Modifier.fillMaxSize().testTag("header-search-button")
-                        .consoleFocus(CircleShape, { controller.searching = true }, label = "Rechercher", focusScale = 1f),
+                        .consoleFocus(
+                            CircleShape,
+                            { controller.searching = true },
+                            label = "Rechercher",
+                            focusScale = if (controller.portrait) 1f else 1.12f,
+                            highlightFocus = controller.portrait,
+                        ),
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(Lucide.Search, "Rechercher", Modifier.size(18.dp), tint = Palette.Text)

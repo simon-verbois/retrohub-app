@@ -165,7 +165,13 @@ fun CatalogueScreen(controller: UiController) {
     }
     Column(Modifier.fillMaxSize().testTag("catalogue").padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            ovh.verbois.retrohub.ui.components.RoundButton(Lucide.ArrowLeft, "Retour à l’accueil", { controller.nav.back() }, size = 48.dp)
+            ovh.verbois.retrohub.ui.components.RoundButton(
+                Lucide.ArrowLeft,
+                "Retour à l’accueil",
+                { controller.nav.back() },
+                if (controller.portrait) Modifier else Modifier.focusRequester(tree.header),
+                size = 48.dp,
+            )
             OutlinedTextField(
                 search,
                 {

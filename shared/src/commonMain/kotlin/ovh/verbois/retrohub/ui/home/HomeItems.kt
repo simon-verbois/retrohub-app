@@ -6,6 +6,20 @@ import ovh.verbois.retrohub.emulation.HomeFolder
 import ovh.verbois.retrohub.emulation.HomeOrder
 import ovh.verbois.retrohub.library.Game
 
+/** Catalogue and Favorites lead the horizontal carousel, followed by console libraries. */
+data class HomeColumn(val key: String, val title: String, val games: List<Game>, val console: String? = null)
+
+fun homeColumns(games: List<Game>, settings: AppSettings): List<HomeColumn> {
+    val ordered = homeOrder(games, settings.homeOrder, settings.hiddenConsoles, settings.offlineOnly, settings.homeActivity)
+    val consoles = ordered.groupBy { it.console }.map { (console, items) ->
+        HomeColumn("console:$console", ovh.verbois.retrohub.emulation.Consoles.name(console), items, console)
+    }.sortedBy { it.title }
+    return listOf(
+        HomeColumn("catalogue", "Catalogue", emptyList()),
+        HomeColumn("favorites", "Favoris", ordered.filter { it.favorite }),
+    ) + consoles
+}
+
 sealed interface HomeEntry {
     val key: String
 
@@ -57,9 +71,8 @@ fun homeEntries(games: List<Game>, settings: AppSettings, selected: String?): Li
             ),
         )
     }
-    val folders = settings.homeFolders.filter { it.onHome }.map { HomeEntry.FolderItem(it) }
-    val available = automatic + folders + ordered.filter { it.id in settings.homePins }.map { HomeEntry.GameItem(it) }
+    val available = automatic + ordered.filter { it.id in settings.homePins }.map { HomeEntry.GameItem(it) }
     val byKey = available.associateBy { it.key }
     val pins = settings.homePins.distinct().mapNotNull(byKey::get)
-    return listOf(HomeEntry.Catalogue) + (pins + folders + automatic).distinctBy { it.key } + listOf(HomeEntry.Library, HomeEntry.NewFolder)
+    return listOf(HomeEntry.Catalogue) + (pins + automatic).distinctBy { it.key } + HomeEntry.Library
 }

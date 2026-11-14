@@ -28,13 +28,22 @@ nothing required otherwise.
   `shell.tsx`): blue gradient, glows, line ribbons, particles, glass and white text, Manrope font.
   The dark variant is the same sky at night. By default the app follows the phone; the system
   "remove animations" setting freezes the background.
-- Home screen in the style of the PS5, validated on a mockup: a row of covers, the game's artwork
-  in large, activity cards. No game detail page: tapping the selected tile runs the main action, a
-  long press or □ opens the game menu under its title; the rest (cheats, history, removal) lives in
-  the game options.
-- Tabs are Home, Favorites, Downloaded and Catalogue; the local library opens from the tile at
-  the end of the home row. Home has no vertical scrolling: covers adapt to the height left by
-  game information and actions.
+- Landscape uses one permanent PSP-style home: Catalogue, Favorites and console silhouettes slide
+  horizontally; the active category's games scroll vertically around a fixed selection. Each
+  category remembers its selected game. Catalogue is leftmost, followed by Favorites and then consoles
+  in alphabetical order. Favorites is selected at startup; each category slides to that same fixed
+  intersection, with its vertical game list underneath. Custom folders and the Downloads category are
+  absent; storage stays in the profile tools. There are no tabs or separate library or folder pages.
+- Home controls have no filled surfaces. Tapping the selected cover runs its main action; holding
+  a cover, pressing the controller Options/Start button, or using the X shortcut opens a menu
+  anchored to its artwork. Favorites and game actions live in that menu. Select also opens these
+  actions in landscape instead of jumping to settings. The profile avatar opens account tools;
+  the dedicated Home/Guide button retains its short menu press and long return-home gesture.
+- Search, the catalogue, settings and save decisions open over Home. Portrait retains its vertical
+  library and scrollable game details.
+- Interface orientation is a local System, Portrait or Landscape preference, available from the
+  first setup step and Display settings. Android applies it immediately and after activity restarts;
+  game orientation keeps its existing independent defaults and console overrides.
 - Android system bars stay hidden throughout the app. An edge swipe reveals them temporarily.
   The header groups local time and the phone battery; a controller battery appears only when
   Android reports a real capacity for an external game controller (API 31+), without Bluetooth

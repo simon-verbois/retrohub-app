@@ -95,7 +95,7 @@ fun sortGames(games: List<Game>, sort: Sort): List<Game> = when (sort) {
     )
 }
 
-/** Library games and manual folders share one grid and the same directional navigation. */
+/** Library games use one grid and the same directional navigation. */
 @Composable
 fun LibraryScreen(controller: UiController, console: String?, favoritesOnly: Boolean, folderId: String? = null) {
     val tree = LocalNavigationFocus.current
@@ -118,14 +118,13 @@ fun LibraryScreen(controller: UiController, console: String?, favoritesOnly: Boo
             val folders = if (folderId == null &&
                 filter == null
             ) {
-                val manual = settings.homeFolders.filter { !favoritesOnly || it.favorite }.map { ovh.verbois.retrohub.ui.home.HomeEntry.FolderItem(it) }
                 val consoles = if (favoritesOnly) {
                     ovh.verbois.retrohub.ui.home.homeEntries(games, settings, null).filterIsInstance<ovh.verbois.retrohub.ui.home.HomeEntry.FolderItem>()
                         .filter { it.folder.consoleId != null && it.folder.favorite }
                 } else {
                     emptyList()
                 }
-                consoles + manual
+                consoles
             } else {
                 emptyList()
             }
@@ -177,7 +176,6 @@ fun LibraryScreen(controller: UiController, console: String?, favoritesOnly: Boo
                     right = contentFocus
                 },
             )
-            if (folderId == null) RoundButton(Lucide.FolderPlus, "Créer un dossier", { controller.newFolder() }, size = 48.dp)
         }
         if (portrait) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) { toolbar() }

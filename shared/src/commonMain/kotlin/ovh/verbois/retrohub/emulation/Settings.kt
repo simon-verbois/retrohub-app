@@ -73,6 +73,13 @@ enum class HintsMode(val label: String) {
 }
 
 @Serializable
+enum class InterfaceOrientation(val label: String) {
+    SYSTEM("Système"),
+    PORTRAIT("Portrait"),
+    LANDSCAPE("Paysage"),
+}
+
+@Serializable
 enum class Orientation(val label: String) {
     AUTO("Automatique"),
     LANDSCAPE("Paysage"),
@@ -226,6 +233,7 @@ data class AppSettings(
     val navigationSounds: Boolean = false,
     val textSize: TextSize = TextSize.NORMAL,
     // Affichage
+    val interfaceOrientation: InterfaceOrientation = InterfaceOrientation.SYSTEM,
     val orientation: Orientation = Orientation.AUTO,
     val portraitPosition: PortraitPosition = PortraitPosition.TOP,
     val useDisplayCutout: Boolean = false,

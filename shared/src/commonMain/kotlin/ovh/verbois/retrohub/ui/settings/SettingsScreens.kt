@@ -70,7 +70,7 @@ fun coreLabel(core: String): String = when (core) {
 @Composable
 fun SettingsScreen(controller: UiController, page: SettingsPage, console: String?) {
     val first = remember { FocusRequester() }
-    LaunchedEffect(page) { controller.backdrop = Backdrop(null, console?.takeIf { Consoles[it] != null }) }
+    LaunchedEffect(page) { if (controller.portrait) controller.backdrop = Backdrop(null, console?.takeIf { Consoles[it] != null }) }
     val title =
         when {
             page == SettingsPage.CONSOLE && console != null -> Consoles.name(console)

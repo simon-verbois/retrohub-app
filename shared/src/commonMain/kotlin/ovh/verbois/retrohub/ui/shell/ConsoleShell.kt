@@ -119,6 +119,10 @@ private val Pill = RoundedCornerShape(percent = 50)
 
 @Composable
 fun ConsoleShell(controller: UiController, account: Account, content: @Composable (Route) -> Unit) {
+    if (!controller.portrait) {
+        ConsoleLandscapeShell(controller, account, content)
+        return
+    }
     val container = controller.container
     val sync by container.sync.status.collectAsState()
     val online by container.platform.online.collectAsState()
@@ -495,7 +499,7 @@ private fun SectionTab(title: String, active: Boolean, modifier: Modifier = Modi
 private fun statusBubbleSize() = with(LocalDensity.current) { 16.sp.toDp() }.plus(10.dp).coerceAtLeast(30.dp)
 
 @Composable
-internal fun StatusPill(platform: Platform) {
+internal fun StatusPill(platform: Platform, transparent: Boolean = false) {
     val textStyle = MaterialTheme.typography.labelLarge.copy(fontSize = 12.sp, lineHeight = 16.sp, fontFeatureSettings = "tnum")
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val power by produceState(PowerStatus(), platform, lifecycle) {
@@ -519,7 +523,7 @@ internal fun StatusPill(platform: Platform) {
         Modifier.heightIn(
             min = statusBubbleSize(),
         ).testTag("header-status").semantics(mergeDescendants = true) {}
-            .consoleButtonSurface(Pill).padding(horizontal = 7.dp, vertical = 3.dp),
+            .then(if (transparent) Modifier else Modifier.consoleButtonSurface(Pill)).padding(horizontal = 7.dp, vertical = 3.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(5.dp),
     ) {

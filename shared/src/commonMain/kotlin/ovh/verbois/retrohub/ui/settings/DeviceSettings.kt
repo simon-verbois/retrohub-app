@@ -27,6 +27,7 @@ import ovh.verbois.retrohub.core.formatBytes
 import ovh.verbois.retrohub.emulation.Consoles
 import ovh.verbois.retrohub.emulation.HintsMode
 import ovh.verbois.retrohub.emulation.HomeOrder
+import ovh.verbois.retrohub.emulation.InterfaceOrientation
 import ovh.verbois.retrohub.emulation.MenuShortcut
 import ovh.verbois.retrohub.emulation.Orientation
 import ovh.verbois.retrohub.emulation.PerformanceProfile
@@ -146,6 +147,10 @@ internal fun DisplayPage(controller: UiController) {
     val repo = controller.container.settings
     val settings by repo.settings.collectAsState()
     SettingsGroup {
+        ChoiceRow("Orientation de l’interface", InterfaceOrientation.entries, settings.interfaceOrientation, { it.label }, { value ->
+            repo.update { it.copy(interfaceOrientation = value) }
+        }, icon = Lucide.Smartphone, recommended = InterfaceOrientation.SYSTEM)
+        GroupDivider()
         SwitchRow(stringResource(Res.string.setting_fullscreen), settings.useDisplayCutout, { v ->
             repo.update { it.copy(useDisplayCutout = v) }
         }, null, Lucide.Maximize)
@@ -323,10 +328,12 @@ internal fun StoragePage(controller: UiController) {
             Lucide.Trash2,
             recommended = 0,
         )
-        GroupDivider()
-        NavigationRow("Gérer les jeux téléchargés", Lucide.HardDriveDownload, {
-            controller.nav.section(Section.DOWNLOADS)
-        }, "Supprimer un jeu garde ses sauvegardes.")
+        if (controller.portrait) {
+            GroupDivider()
+            NavigationRow("Gérer les jeux téléchargés", Lucide.HardDriveDownload, {
+                controller.nav.section(Section.DOWNLOADS)
+            }, "Supprimer un jeu garde ses sauvegardes.")
+        }
     }
     SectionLabel("Emplacement")
     SettingsGroup {

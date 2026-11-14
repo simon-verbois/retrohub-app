@@ -1,6 +1,7 @@
 package ovh.verbois.retrohub
 
 import android.content.Intent
+import android.content.pm.ActivityInfo
 import android.os.Bundle
 import android.view.KeyEvent
 import androidx.activity.ComponentActivity
@@ -12,14 +13,19 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import com.journeyapps.barcodescanner.ScanContract
 import com.journeyapps.barcodescanner.ScanOptions
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import ovh.verbois.retrohub.account.AuthState
 import ovh.verbois.retrohub.account.QrCameraException
+import ovh.verbois.retrohub.emulation.InterfaceOrientation
 import ovh.verbois.retrohub.ui.RetroHubRoot
 import ovh.verbois.retrohub.ui.UiController
 
@@ -67,6 +73,18 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         immersive()
         val container = (application as RetroHubApp).container
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                container.settings.settings.map { it.interfaceOrientation }.distinctUntilChanged().collect { orientation ->
+                    val requested = when (orientation) {
+                        InterfaceOrientation.SYSTEM -> ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+                        InterfaceOrientation.PORTRAIT -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
+                        InterfaceOrientation.LANDSCAPE -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                    }
+                    if (requestedOrientation != requested) requestedOrientation = requested
+                }
+            }
+        }
         (application as RetroHubApp).platform.qrScanner = { scanQrCode() }
         onBackPressedDispatcher.addCallback(
             this,
@@ -104,7 +122,7 @@ class MainActivity : ComponentActivity() {
     @android.annotation.SuppressLint("RestrictedApi")
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         val active = controller
-        if (event.keyCode in setOf(KeyEvent.KEYCODE_BUTTON_MODE, KeyEvent.KEYCODE_MENU, KeyEvent.KEYCODE_HOME) &&
+        if (event.keyCode in setOf(KeyEvent.KEYCODE_BUTTON_MODE, KeyEvent.KEYCODE_HOME) &&
             active?.container?.account?.auth?.value is AuthState.SignedIn && active.container.settings.settings.value.setupDone
         ) {
             guide.event(event.action == KeyEvent.ACTION_DOWN, event.isCanceled)

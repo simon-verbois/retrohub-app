@@ -21,6 +21,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.drawOutline
@@ -74,6 +75,7 @@ fun Modifier.consoleFocus(
     onLongClick: (() -> Unit)? = null,
 ): Modifier {
     val activity = LocalFocusActivity.current
+    val active = LocalScreenActive.current
     val intoView = remember { BringIntoViewRequester() }
     val interaction = remember { MutableInteractionSource() }
     var focused by remember { mutableStateOf(false) }
@@ -92,6 +94,7 @@ fun Modifier.consoleFocus(
     val highlight by animateFloatAsState(if (focused && keyboard && highlightFocus) 1f else 0f)
     LaunchedEffect(focused) { if (focused) intoView.bringIntoView() }
     return this
+        .then(if (active) Modifier else Modifier.focusProperties { canFocus = false })
         .bringIntoViewRequester(intoView)
         .graphicsLayer {
             scaleX = scale

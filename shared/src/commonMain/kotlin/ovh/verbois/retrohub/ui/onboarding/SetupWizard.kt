@@ -64,6 +64,7 @@ import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
 import ovh.verbois.retrohub.AppContainer
 import ovh.verbois.retrohub.emulation.HintsMode
+import ovh.verbois.retrohub.emulation.InterfaceOrientation
 import ovh.verbois.retrohub.emulation.PerformanceProfile
 import ovh.verbois.retrohub.resources.Res
 import ovh.verbois.retrohub.resources.action_back
@@ -99,6 +100,7 @@ import ovh.verbois.retrohub.resources.setup_touch_description
 import ovh.verbois.retrohub.ui.components.ActionButtons
 import ovh.verbois.retrohub.ui.components.AutoFocus
 import ovh.verbois.retrohub.ui.components.Badge
+import ovh.verbois.retrohub.ui.components.ChoiceRow
 import ovh.verbois.retrohub.ui.components.consoleFocus
 import ovh.verbois.retrohub.ui.icons.Lucide
 import ovh.verbois.retrohub.ui.theme.Palette
@@ -174,6 +176,9 @@ fun SetupWizard(container: AppContainer, username: String) {
                                     PlayStyle.BOTH,
                                     wide,
                                 )
+                                ChoiceRow("Orientation de l’interface", InterfaceOrientation.entries, settings.interfaceOrientation, { it.label }, { value ->
+                                    repo.update { it.copy(interfaceOrientation = value) }
+                                }, icon = Lucide.Smartphone, recommended = InterfaceOrientation.SYSTEM)
                             }
 
                             1 -> {

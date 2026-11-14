@@ -3,6 +3,7 @@ package ovh.verbois.retrohub
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import ovh.verbois.retrohub.account.AccountPreferences
+import ovh.verbois.retrohub.api.ApiJson
 import ovh.verbois.retrohub.api.LibraryGame
 import ovh.verbois.retrohub.core.DeviceClass
 import ovh.verbois.retrohub.core.Pin
@@ -18,6 +19,7 @@ import ovh.verbois.retrohub.emulation.FrameSkip
 import ovh.verbois.retrohub.emulation.GameLanguage
 import ovh.verbois.retrohub.emulation.GameLayouts
 import ovh.verbois.retrohub.emulation.HomeOrder
+import ovh.verbois.retrohub.emulation.InterfaceOrientation
 import ovh.verbois.retrohub.emulation.Orientation
 import ovh.verbois.retrohub.emulation.Region
 import ovh.verbois.retrohub.game.InputRouter
@@ -31,6 +33,17 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class SettingsLogicTest {
+    @Test
+    fun interfaceOrientationDefaultsToSystemAndSurvivesStoredSettings() {
+        assertEquals(InterfaceOrientation.SYSTEM, ApiJson.decodeFromString(AppSettings.serializer(), "{}").interfaceOrientation)
+        InterfaceOrientation.entries.forEach { choice ->
+            val settings = AppSettings(interfaceOrientation = choice, orientation = Orientation.LANDSCAPE)
+            val restored = ApiJson.decodeFromString(AppSettings.serializer(), ApiJson.encodeToString(AppSettings.serializer(), settings))
+            assertEquals(choice, restored.interfaceOrientation)
+            assertEquals(Orientation.LANDSCAPE, restored.orientation)
+        }
+    }
+
     @Test
     fun accountPreferencesWinAndOnlyKnownCoresAreTaken() {
         val remote =

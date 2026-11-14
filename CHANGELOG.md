@@ -10,6 +10,17 @@ change, in plain text. Never rewrite the notes of a published version.
 
 ## [Unreleased]
 
+## [2026.46.11] - 2026-11-14
+
+### Changed
+
+- Choose System, Portrait or Landscape for the app interface during setup or in Display settings, and retain the choice across restarts.
+- Rebuild landscape console navigation around one permanent home: surface-free console icons scroll horizontally, Catalogue and Favorites lead the carousel, followed by alphabetically ordered consoles; each game list opens beneath the same fixed cross, initially focused on Favorites, and tools open over Home. Game actions live in a cover-anchored menu opened by a touch hold or the controller Options button, without inline favorite or action buttons.
+
+### Removed
+
+- Remove custom folder creation and navigation, and remove the Downloads category and footer shortcuts from landscape Home.
+
 ## [2026.46.10] - 2026-11-13
 
 ### Added

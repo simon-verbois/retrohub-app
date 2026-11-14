@@ -14,16 +14,20 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
+import ovh.verbois.retrohub.library.DownloadState
 import ovh.verbois.retrohub.library.Game
 import ovh.verbois.retrohub.ui.UiController
 import ovh.verbois.retrohub.ui.components.AutoFocus
+import ovh.verbois.retrohub.ui.components.ConfirmDialog
 import ovh.verbois.retrohub.ui.components.consoleFocus
 import ovh.verbois.retrohub.ui.components.controllerDialog
 import ovh.verbois.retrohub.ui.icons.Lucide
@@ -34,10 +38,10 @@ import ovh.verbois.retrohub.ui.theme.Palette
 /** Le menu du jeu choisi, ancré sous son titre : jouer, partie neuve, favori, options. */
 @Composable
 fun GameMenu(controller: UiController, game: Game) {
-    val settings by controller.container.settings.settings.collectAsState()
     val downloads by controller.container.downloads.states.collectAsState()
     val first = remember { FocusRequester() }
     val close = { controller.gameMenu = false }
+    var removing by remember(game.id) { mutableStateOf(false) }
     DropdownMenu(
         expanded = controller.gameMenu,
         onDismissRequest = close,
@@ -61,28 +65,44 @@ fun GameMenu(controller: UiController, game: Game) {
             close()
             controller.toggleFavorite(game)
         }
-        PinMenuItems(controller, game.id)
-        settings.homeFolders.forEach { folder ->
-            Item(Lucide.FolderOpen, if (game.id in folder.gameIds) "Retirer de ${folder.name}" else "Ajouter à ${folder.name}") {
-                controller.container.settings.update { current ->
-                    current.copy(
-                        homeFolders = current.homeFolders.map {
-                            if (it.id == folder.id) it.copy(gameIds = if (game.id in it.gameIds) it.gameIds - game.id else it.gameIds + game.id) else it
-                        },
-                    )
-                }
-                close()
-            }
-        }
-        Item(Lucide.FolderPlus, "Nouveau dossier") {
-            controller.newFolder()
-            controller.folderEditor = controller.folderEditor?.copy(gameIds = listOf(game.id))
-            close()
-        }
+        if (controller.portrait) PinMenuItems(controller, game.id)
         Item(Lucide.Settings2, "Options du jeu") {
             close()
             controller.nav.go(Route.Settings(SettingsPage.GAME, game.id))
         }
+        val download = downloads[game.playGameId]
+        if (download is DownloadState.Failed && download.retryable) {
+            Item(Lucide.RefreshCw, "Réessayer le téléchargement") {
+                close()
+                controller.container.downloads.start(game)
+            }
+        }
+        if (download is DownloadState.Running || download is DownloadState.Failed) {
+            Item(Lucide.X, "Annuler le téléchargement") {
+                close()
+                controller.container.downloads.cancel(game.playGameId)
+            }
+        }
+        if (game.downloaded && download !is DownloadState.Running) {
+            Item(Lucide.Trash2, "Supprimer du téléphone") {
+                close()
+                removing = true
+            }
+        }
+    }
+    if (removing) {
+        ConfirmDialog(
+            "Supprimer du téléphone ?",
+            "« ${game.title} » sera retiré de cet appareil. Vos sauvegardes sont conservées.",
+            "Supprimer",
+            onConfirm = {
+                removing = false
+                controller.deleteDownload(game)
+            },
+            onDismiss = { removing = false },
+            destructive = true,
+            focusDismiss = true,
+        )
     }
 }
 

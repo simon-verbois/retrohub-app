@@ -27,6 +27,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import androidx.test.uiautomator.UiDevice
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -49,6 +50,7 @@ import ovh.verbois.retrohub.ui.theme.RetroHubTheme
 class ControllerWidgetsTest {
     @get:Rule val rule = createAndroidComposeRule<ComponentActivity>()
     private val instrumentation = InstrumentationRegistry.getInstrumentation()
+    private val device = UiDevice.getInstance(instrumentation)
 
     private fun show(content: @Composable () -> Unit) {
         instrumentation.setInTouchMode(false)
@@ -56,7 +58,9 @@ class ControllerWidgetsTest {
             LocalInputModeManager.current.requestInputMode(InputMode.Keyboard)
             RetroHubTheme(content = content)
         }
+        rule.waitUntil(5_000) { rule.activity.hasWindowFocus() }
         rule.waitForIdle()
+        device.waitForIdle()
     }
 
     private fun pad(code: Int) {
@@ -70,6 +74,7 @@ class ControllerWidgetsTest {
         rule.waitUntil(5_000) {
             runCatching { rule.onNodeWithText(text).fetchSemanticsNode().config[SemanticsProperties.Focused] }.getOrDefault(false)
         }
+        device.waitForIdle()
     }
 
     @Test
@@ -118,17 +123,19 @@ class ControllerWidgetsTest {
         }
         waitFocused("Avant")
         pad(KeyEvent.KEYCODE_DPAD_DOWN)
-        rule.onNodeWithText("Choix").assertIsFocused()
+        waitFocused("Choix")
         pad(KeyEvent.KEYCODE_BUTTON_A)
         val current = rule.onNode(hasText("Deux") and SemanticsMatcher.keyIsDefined(SemanticsProperties.Selected))
+        rule.waitUntil(5_000) { runCatching { current.fetchSemanticsNode().config[SemanticsProperties.Focused] }.getOrDefault(false) }
+        device.waitForIdle()
         current.assertIsFocused()
         pad(KeyEvent.KEYCODE_DPAD_DOWN)
         pad(KeyEvent.KEYCODE_BUTTON_A)
         assertEquals("Trois", selected)
-        rule.onNodeWithText("Choix").assertIsFocused()
+        waitFocused("Choix")
         pad(KeyEvent.KEYCODE_BUTTON_A)
         pad(KeyEvent.KEYCODE_BUTTON_B)
-        rule.onNodeWithText("Choix").assertIsFocused()
+        waitFocused("Choix")
         pad(KeyEvent.KEYCODE_DPAD_DOWN)
         rule.onNodeWithText("Après").assertIsFocused()
     }
@@ -153,14 +160,14 @@ class ControllerWidgetsTest {
         }
         waitFocused("Avant")
         pad(KeyEvent.KEYCODE_DPAD_DOWN)
-        rule.onNodeWithText("Ouvrir").assertIsFocused()
+        waitFocused("Ouvrir")
         pad(KeyEvent.KEYCODE_BUTTON_A)
         waitFocused("Nom")
         for (key in listOf(KeyEvent.KEYCODE_BUTTON_Y, KeyEvent.KEYCODE_BUTTON_L1, KeyEvent.KEYCODE_BUTTON_R1, KeyEvent.KEYCODE_BUTTON_START)) pad(key)
         rule.onNodeWithText("Formulaire").assertIsDisplayed()
         pad(KeyEvent.KEYCODE_BUTTON_B)
         rule.onNodeWithText("Formulaire").assertDoesNotExist()
-        rule.onNodeWithText("Ouvrir").assertIsFocused()
+        waitFocused("Ouvrir")
         assertEquals(0, submitted)
     }
 
@@ -185,12 +192,12 @@ class ControllerWidgetsTest {
         pad(KeyEvent.KEYCODE_BUTTON_R1)
         rule.onNodeWithText("Annuler").assertIsFocused()
         pad(KeyEvent.KEYCODE_BUTTON_B)
-        rule.onNodeWithText("Retirer").assertIsFocused()
+        waitFocused("Retirer")
         assertEquals(0, confirmed)
         pad(KeyEvent.KEYCODE_BUTTON_A)
         waitFocused("Annuler")
         pad(KeyEvent.KEYCODE_DPAD_RIGHT)
-        rule.onNodeWithText("Supprimer").assertIsFocused()
+        waitFocused("Supprimer")
         pad(KeyEvent.KEYCODE_BUTTON_A)
         assertEquals(1, confirmed)
     }
@@ -210,6 +217,7 @@ class ControllerWidgetsTest {
         waitFocused("Avant")
         pad(KeyEvent.KEYCODE_DPAD_DOWN)
         pad(KeyEvent.KEYCODE_DPAD_RIGHT)
+        rule.waitUntil(5_000) { value > 0.5f }
         org.junit.Assert.assertTrue(value > 0.5f)
         pad(KeyEvent.KEYCODE_DPAD_DOWN)
         rule.onNodeWithTag("after-slider").assertIsFocused()

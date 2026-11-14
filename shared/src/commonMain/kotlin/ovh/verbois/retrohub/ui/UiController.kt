@@ -30,6 +30,7 @@ class UiController(val container: AppContainer, private val scope: CoroutineScop
         get() = nav.current == Route.Search
         set(value) {
             if (value) {
+                gameMenu = false
                 nav.section(ovh.verbois.retrohub.ui.nav.Section.SEARCH)
             } else if (searching) {
                 nav.back()
@@ -39,6 +40,7 @@ class UiController(val container: AppContainer, private val scope: CoroutineScop
         get() = nav.current == Route.User
         set(value) {
             if (value) {
+                gameMenu = false
                 nav.section(ovh.verbois.retrohub.ui.nav.Section.USER)
             } else if (menuOpen) {
                 nav.back()
@@ -59,6 +61,22 @@ class UiController(val container: AppContainer, private val scope: CoroutineScop
 
     /** Jeu choisi sur l’accueil : la bibliothèque et la recherche y renvoient (plus de page de fiche). */
     var homeGame by mutableStateOf<String?>(null)
+
+    var homeColumn by mutableStateOf<String?>(null)
+    private val homeSelections = mutableMapOf<String, String>()
+
+    fun selectHomeColumn(key: String) {
+        homeColumn?.let { column -> homeGame?.let { homeSelections[column] = it } }
+        homeColumn = key
+        homeGame = homeSelections[key]
+        gameMenu = false
+    }
+
+    fun cycleHomeColumn(step: Int) {
+        val columns = ovh.verbois.retrohub.ui.home.homeColumns(container.library.games.value, container.settings.settings.value)
+        val index = columns.indexOfFirst { it.key == (homeColumn ?: "favorites") }.coerceAtLeast(0)
+        columns.getOrNull((index + step).coerceIn(0, columns.lastIndex))?.let { selectHomeColumn(it.key) }
+    }
 
     /** Menu du jeu choisi, qui descend de son titre (appui long ou bouton □ de la manette). */
     var gameMenu by mutableStateOf(false)
@@ -105,7 +123,20 @@ class UiController(val container: AppContainer, private val scope: CoroutineScop
         container.downloads.start(game)
     }
 
+    fun deleteDownload(game: Game) {
+        scope.launch {
+            container.downloads.delete(game.playGameId)
+            show("« ${game.title} » a été supprimé de cet appareil. Vos sauvegardes sont conservées.")
+        }
+    }
+
     fun showGame(id: String) {
+        if (!portrait) {
+            val game = container.library.games.value.firstOrNull { it.id == id }
+            val column = ovh.verbois.retrohub.ui.home.homeColumns(container.library.games.value, container.settings.settings.value)
+                .firstOrNull { it.key == homeColumn }
+            if (column?.games?.none { it.id == id } != false && game != null) selectHomeColumn("console:${game.console}")
+        }
         homeGame = id
         searching = false
         if (portrait) nav.go(Route.Game(id)) else nav.section(ovh.verbois.retrohub.ui.nav.Section.HOME)
@@ -145,23 +176,35 @@ class UiController(val container: AppContainer, private val scope: CoroutineScop
 
         Button.LB -> {
             gameMenu = false
-            nav.cycleSection(-1)
+            if (!portrait && nav.contentRoute == Route.Home && !searching && !menuOpen) {
+                cycleHomeColumn(-1)
+            } else if (portrait) {
+                nav.cycleSection(-1)
+            }
             true
         }
 
         Button.RB -> {
             gameMenu = false
-            nav.cycleSection(1)
+            if (!portrait && nav.contentRoute == Route.Home && !searching && !menuOpen) {
+                cycleHomeColumn(1)
+            } else if (portrait) {
+                nav.cycleSection(1)
+            }
             true
         }
 
         Button.START -> {
-            menuOpen = !menuOpen
+            if (!portrait && nav.contentRoute == Route.Home && !menuOpen && !searching && homeGame != null) gameMenu = true else menuOpen = !menuOpen
             true
         }
 
         Button.SELECT -> {
-            nav.go(ovh.verbois.retrohub.ui.nav.Route.Settings())
+            if (!portrait) {
+                if (nav.contentRoute == Route.Home && !menuOpen && !searching && homeGame != null) gameMenu = true else menuOpen = !menuOpen
+            } else {
+                nav.go(ovh.verbois.retrohub.ui.nav.Route.Settings())
+            }
             true
         }
     }

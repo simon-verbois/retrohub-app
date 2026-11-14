@@ -8,10 +8,12 @@ import ovh.verbois.retrohub.emulation.HomeFolder
 import ovh.verbois.retrohub.library.Game
 import ovh.verbois.retrohub.ui.components.gridVerticalTarget
 import ovh.verbois.retrohub.ui.home.HomeEntry
+import ovh.verbois.retrohub.ui.home.homeColumns
 import ovh.verbois.retrohub.ui.home.homeEntries
 import ovh.verbois.retrohub.ui.home.homeOrder
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -20,6 +22,28 @@ class HomeItemsTest {
         LibraryGame(id, id, title = id, console = "nes", lastPlayedAt = played),
         downloaded?.let { LocalRomEntity(id, id, "nes", id, "/$id.nes", "sha", 1, it) },
     )
+
+    @Test
+    fun catalogueAndFavoritesComeBeforeConsolesWithoutCustomFoldersOrDownloads() {
+        val nes = game("nes-game", downloaded = "2026-11-13T12:00:00Z")
+        val snes = Game(LibraryGame("snes-game", "snes-game", title = "SNES", console = "snes", favorite = true), null)
+        val folder = HomeFolder("custom", "Aventure", listOf(nes.id, snes.id))
+        val settings = AppSettings(homeFolders = listOf(folder), homePins = listOf(nes.id))
+        val columns = homeColumns(listOf(nes, snes), settings)
+        assertEquals(listOf("catalogue", "favorites", "console:nes", "console:snes"), columns.map { it.key })
+        assertEquals(listOf(nes.id), columns.first { it.key == "console:nes" }.games.map { it.id })
+        assertEquals(listOf(snes.id), columns.first { it.key == "favorites" }.games.map { it.id })
+        assertFalse(columns.any { it.key == "downloads" || it.key == folder.key })
+        assertTrue(columns.first().games.isEmpty())
+    }
+
+    @Test
+    fun emptyCollectionsRemainAvailableAndHiddenConsolesStayHidden() {
+        assertEquals(listOf("catalogue", "favorites"), homeColumns(emptyList(), AppSettings()).map { it.key })
+        val columns = homeColumns(listOf(game("hidden")), AppSettings(hiddenConsoles = setOf("nes")))
+        assertEquals(listOf("catalogue", "favorites"), columns.map { it.key })
+        assertTrue(columns.all { it.games.isEmpty() })
+    }
 
     @Test
     fun downloadAndOfflinePlayStayInTheRecentStripAlongsideServerActivity() {
@@ -37,12 +61,12 @@ class HomeItemsTest {
     }
 
     @Test
-    fun catalogueIsAlwaysFirstAndPinnedGamesAndFoldersKeepTheirExplicitOrder() {
+    fun legacyCustomFolderPinsAreIgnoredWithoutChangingTheirStoredData() {
         val folder = HomeFolder("collection", "Mes jeux", listOf("game-1"), favorite = true)
         val games = (0..25).map { game("game-$it") }
         val settings = AppSettings(homePins = listOf("game-25", folder.key, "game-2"), homeFolders = listOf(folder))
         val entries = homeEntries(games, settings, null)
-        assertEquals(listOf("catalogue", "game-25", folder.key, "game-2"), entries.take(4).map { it.key })
+        assertEquals(listOf("catalogue", "game-25", "game-2", "folder:console:nes"), entries.take(4).map { it.key })
         assertEquals(entries.size, entries.distinctBy { it.key }.size)
         assertEquals(listOf("game-25", "game-2", folder.key), settings.moveHomePin(folder.key, 1).homePins)
         assertEquals(listOf("game-25", "game-2"), settings.toggleHomePin(folder.key).homePins)
@@ -54,7 +78,7 @@ class HomeItemsTest {
         val settings = AppSettings(homeFolders = listOf(folder), homePins = listOf(folder.key))
         assertEquals(settings, ApiJson.decodeFromString(AppSettings.serializer(), ApiJson.encodeToString(AppSettings.serializer(), settings)))
         assertTrue(ApiJson.decodeFromString(AppSettings.serializer(), "{}").homeFolders.isEmpty())
-        assertTrue(homeEntries(emptyList(), settings, null).any { it is HomeEntry.FolderItem })
+        assertFalse(homeEntries(emptyList(), settings, null).any { it is HomeEntry.FolderItem })
     }
 
     @Test
