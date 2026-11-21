@@ -88,4 +88,8 @@ interface Platform {
 
     /** Partage d’un rapport (journal de l’application et état) pour signaler un problème. */
     fun shareLogs(summary: String)
+
+    val reportCapture: ovh.verbois.retrohub.diagnostics.ReportCapture? get() = null
+
+    fun scheduleReports() = Unit
 }

@@ -46,6 +46,24 @@ class AppContainer(val platform: Platform, val database: AppDatabase, val clock:
         }
     val account = AccountRepository(platform, keyValues)
     val api = RetroHubApi(apiHttpClient(), account).also { account.api = it }
+    val reports = platform.reportCapture?.let { capture ->
+        ovh.verbois.retrohub.diagnostics.ReportSender(capture, api, ::reportOwner)
+    }
+    val reportRequest = MutableStateFlow<String?>(null)
+
+    fun openReport() {
+        scope.launch {
+            try {
+                platform.reportCapture?.createReport(reportOwner())?.let { reportRequest.value = it.id }
+            } catch (_: Exception) {
+                reportRequest.value = "history"
+            }
+        }
+    }
+
+    fun reportOwner(): String? = account.account?.let {
+        ovh.verbois.retrohub.diagnostics.reportOwner(it.server, it.userId, it.deviceId)
+    }
     val artworkClient = artworkHttpClient(account)
     val saveStore = ovh.verbois.retrohub.data.NativeSaveStore(RoomSaveStore(database.saves(), fs, paths), fs, paths.root / "native-saves", owner = {
         nativeOwner()
@@ -119,7 +137,7 @@ class AppContainer(val platform: Platform, val database: AppDatabase, val clock:
             platform.notify(
                 NOTIFY_CONFLICT,
                 "Une sauvegarde attend votre choix",
-                "Elle a avancé sur ce téléphone et ailleurs. Ouvrez la fiche du jeu pour choisir la version à garder.",
+                "Elle a avancé sur ce téléphone et ailleurs. Touchez cette notification pour choisir la version à garder.",
             )
         }
         notifiedConflicts = conflicts
@@ -129,7 +147,16 @@ class AppContainer(val platform: Platform, val database: AppDatabase, val clock:
     suspend fun start() = startLock.withLock {
         if (started) return@withLock
         settings.load()
+        try {
+            platform.reportCapture?.initialize()
+        } catch (error: Exception) {
+            if (error is kotlinx.coroutines.CancellationException) throw error
+            // Optional diagnostics must never prevent the library from opening.
+        }
         account.load()
+        if (platform.reportCapture?.reports?.value?.any { it.approved?.owner == reportOwner() && !it.sent && !it.deliveryError } == true) {
+            platform.scheduleReports()
+        }
         sync.refreshCounts()
         scope.launch {
             platform.online.drop(1).collect { online ->

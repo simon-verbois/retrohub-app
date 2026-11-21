@@ -19,6 +19,7 @@ import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsFocused
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -30,12 +31,12 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performImeAction
-import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeLeft
 import androidx.compose.ui.test.swipeUp
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.Density
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -88,6 +89,8 @@ class NavigationTreeTest {
         twoConsoles: Boolean = false,
         reducedMotion: Boolean = false,
         browseConsole: Boolean = true,
+        artwork: Boolean = false,
+        longTitle: Boolean = false,
     ) {
         rule.settleOrientation(portrait)
         instrumentation.setInTouchMode(false)
@@ -95,7 +98,19 @@ class NavigationTreeTest {
             container.settings.updateNow { it.copy(homePins = (0 until 8).map { index -> "tree-$index" }, reduceMotion = reducedMotion) }
             container.database.games().replaceAll(
                 (0 until 8).map { index ->
-                    val game = LibraryGame("tree-$index", "tree-$index", title = "Jeu $index", console = if (twoConsoles && index >= 4) "snes" else "nes")
+                    val game = LibraryGame(
+                        "tree-$index",
+                        "tree-$index",
+                        title = if (longTitle && index == 0) "Professeur Layton et la Boîte de Pandore" else "Jeu $index",
+                        console = if (twoConsoles &&
+                            index >= 4
+                        ) {
+                            "snes"
+                        } else {
+                            "nes"
+                        },
+                        screenshots = if (artwork) listOf("/games/tree-$index/screenshots/0") else emptyList(),
+                    )
                     GameEntity(
                         game.id, game.playGameId, game.title, game.console, false, null, 0, index,
                         ApiJson.encodeToString(LibraryGame.serializer(), game),
@@ -123,7 +138,7 @@ class NavigationTreeTest {
                             is Route.Game -> ovh.verbois.retrohub.ui.home.GameDetailsScreen(ui, route.id)
                             Route.Downloads -> DownloadsScreen(ui)
                             is Route.Library -> ovh.verbois.retrohub.ui.library.LibraryScreen(ui, route.console, false)
-                            is Route.Folder -> ovh.verbois.retrohub.ui.library.FolderScreen(ui, route.id)
+                            is Route.Folder -> HomeScreen(ui)
                             Route.Favorites -> ovh.verbois.retrohub.ui.library.LibraryScreen(ui, null, true)
                             is Route.Settings -> SettingsScreen(ui, route.page, route.console)
                             Route.Catalogue -> ovh.verbois.retrohub.ui.catalogue.CatalogueScreen(ui)
@@ -140,7 +155,10 @@ class NavigationTreeTest {
         if (section != Section.USER) rule.waitUntil(5_000) { rule.activity.hasWindowFocus() }
         if (section == Section.HOME && !portrait && browseConsole) {
             rule.waitUntil(5_000) { container.library.games.value.any { it.id == "tree-0" } }
-            rule.runOnIdle { controller.selectHomeColumn("console:nes") }
+            rule.runOnIdle {
+                controller.selectHomeColumn("console:nes")
+                if (longTitle) controller.selectHomeGame("tree-0")
+            }
         }
         try {
             rule.waitUntil(5_000) {
@@ -195,6 +213,102 @@ class NavigationTreeTest {
     }
 
     @Test
+    fun onlyTheActiveCategoryAndGameShowTheirLabels() {
+        show(twoConsoles = true)
+        rule.onNodeWithText(ovh.verbois.retrohub.emulation.Consoles.name("nes")).assertIsDisplayed()
+        rule.onNodeWithText(ovh.verbois.retrohub.emulation.Consoles.name("snes")).assertDoesNotExist()
+        rule.onNodeWithText("Jeu 0").assertIsDisplayed()
+        rule.onNodeWithText("Jeu 1").assertDoesNotExist()
+        rule.onNodeWithContentDescription("Jeu 1").assertIsDisplayed()
+        screenshot("xmb-active-labels")
+    }
+
+    @Test
+    fun interruptedColumnTransitionsExposeOnlyTheCurrentGameToInput() {
+        show(twoConsoles = true)
+        rule.mainClock.autoAdvance = false
+        try {
+            pad(KeyEvent.KEYCODE_DPAD_RIGHT)
+            rule.mainClock.advanceTimeByFrame()
+            rule.onNodeWithTag("home-game-tree-4").assertIsFocused()
+            rule.onNodeWithTag("home-game-tree-0").assertDoesNotExist()
+            pad(KeyEvent.KEYCODE_DPAD_LEFT)
+            rule.mainClock.advanceTimeByFrame()
+            rule.onNodeWithTag("home-game-tree-0").assertIsFocused()
+            rule.onNodeWithTag("home-game-tree-4").assertDoesNotExist()
+        } finally {
+            rule.mainClock.autoAdvance = true
+        }
+    }
+
+    @Test
+    fun previousGamesRemainVisibleAboveTheCategoryBand() {
+        show()
+        selectGame(5)
+        val previous = rule.onNodeWithTag("home-game-tree-4").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+        val categories = rule.onNodeWithTag("home-categories").fetchSemanticsNode().boundsInRoot
+        val selected = rule.onNodeWithTag("home-game-tree-5").assertIsFocused().fetchSemanticsNode().boundsInRoot
+        assertTrue(previous.bottom <= categories.top)
+        assertTrue(selected.top >= categories.bottom)
+        screenshot("xmb-previous-items-above")
+    }
+
+    @Test
+    fun sideActionsKeepTheSelectedGameVisibleAndRestoreItsFocus() {
+        show()
+        selectGame(2)
+        pad(KeyEvent.KEYCODE_BUTTON_X)
+        val panel = rule.onNodeWithTag("xmb-options-panel").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+        val parent = rule.onNodeWithTag("home-cover-tree-2", useUnmergedTree = true).assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+        val home = rule.onNodeWithTag("home-content").fetchSemanticsNode().boundsInRoot
+        assertTrue(panel.width <= home.right - parent.right)
+        screenshot("xmb-side-actions")
+        pad(KeyEvent.KEYCODE_BUTTON_B)
+        rule.onNodeWithTag("xmb-options-panel").assertDoesNotExist()
+        rule.onNodeWithTag("home-game-tree-2").assertIsFocused()
+    }
+
+    @Test
+    fun restingArtworkIsCancelledWhenTheSelectionChangesAgain() {
+        show(artwork = true)
+        rule.mainClock.autoAdvance = false
+        try {
+            pad(KeyEvent.KEYCODE_DPAD_DOWN)
+            rule.mainClock.advanceTimeBy(160)
+            rule.onNodeWithTag("home-preview-tree-1").assertDoesNotExist()
+            pad(KeyEvent.KEYCODE_DPAD_DOWN)
+            rule.mainClock.advanceTimeBy(600)
+            rule.waitForIdle()
+            rule.onNodeWithTag("home-preview-tree-1").assertDoesNotExist()
+            rule.onNodeWithTag("home-preview-tree-2").assertIsDisplayed()
+            rule.onNodeWithTag("home-game-tree-2").assertIsFocused()
+            screenshot("xmb-resting-preview")
+        } finally {
+            rule.mainClock.autoAdvance = true
+        }
+    }
+
+    @Test
+    fun carouselFitsTheViewportAndKeepsItsCrossWhileNavigating() {
+        show(artwork = true)
+        val before = rule.onNodeWithTag("home-cover-tree-0", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+        selectGame(4)
+        rule.waitUntil(5_000) { rule.onAllNodesWithTag("home-preview-tree-4").fetchSemanticsNodes().isNotEmpty() }
+        val home = rule.onNodeWithTag("home-content").fetchSemanticsNode().boundsInRoot
+        val cover = rule.onNodeWithTag("home-cover-tree-4", useUnmergedTree = true).assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+        val category = rule.onNodeWithTag("home-category-console:nes").fetchSemanticsNode().boundsInRoot
+        val row = rule.onNodeWithTag("home-game-tree-4").assertIsFocused().fetchSemanticsNode().boundsInRoot
+        val preview = rule.onNodeWithTag("home-preview-tree-4").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+        assertEquals(before.center.x, cover.center.x, 1f)
+        assertEquals(before.center.y, cover.center.y, 1f)
+        assertEquals(category.center.x, cover.center.x, 1f)
+        assertTrue(cover.top >= home.top && cover.bottom <= home.bottom)
+        assertTrue(row.right <= preview.left)
+        assertTrue(preview.top >= home.top && preview.bottom <= home.bottom && preview.right <= home.right)
+        screenshot("xmb-adaptive-viewport")
+    }
+
+    @Test
     fun portraitHomeUsesTheLibraryAndOpensAScrollableGamePage() {
         show(portrait = true)
         rule.onNodeWithTag("home-games", useUnmergedTree = true).assertDoesNotExist()
@@ -228,7 +342,9 @@ class NavigationTreeTest {
         rule.onNodeWithTag("home-game-tree-2").assertIsFocused()
         assertEquals(Route.Home, controller.nav.current)
         rule.onNodeWithTag("home-categories").assertIsDisplayed()
-        rule.onNodeWithTag("console-game-info").assertIsDisplayed()
+        rule.waitUntil(5_000) {
+            runCatching { rule.onNodeWithTag("console-game-info", useUnmergedTree = true).assertIsDisplayed() }.isSuccess
+        }
         screenshot("console-vertical-strip")
     }
 
@@ -236,7 +352,7 @@ class NavigationTreeTest {
     fun touchSwipesUseTheSameCrossNavigationWithReducedMotion() {
         show(twoConsoles = true, reducedMotion = true)
         rule.onNodeWithTag("home-games").performTouchInput { swipeUp() }
-        rule.runOnIdle { assertEquals("tree-1", controller.homeGame) }
+        rule.runOnIdle { assertEquals("tree-3", controller.homeGame) }
         rule.onNodeWithTag("home-categories").performTouchInput { swipeLeft() }
         rule.runOnIdle {
             assertEquals("console:snes", controller.homeColumn)
@@ -289,6 +405,21 @@ class NavigationTreeTest {
     }
 
     @Test
+    fun activeLabelsRemainReadableWithLargeTextAndNoArtwork() {
+        show(largeText = true, longTitle = true)
+        for (text in listOf("NES / Famicom", "Professeur Layton et la Boîte de Pandore", "Pas encore sur le serveur")) {
+            val layouts = mutableListOf<TextLayoutResult>()
+            rule.onNodeWithText(text, useUnmergedTree = true).assertIsDisplayed().performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
+            assertTrue("Missing text layout: $text", layouts.isNotEmpty())
+            for (layout in layouts) {
+                assertFalse("Clipped height: $text", layout.didOverflowHeight)
+                repeat(layout.lineCount) { line -> assertFalse("Ellipsis: $text", layout.isLineEllipsized(line)) }
+            }
+        }
+        screenshot("xmb-readable-active-labels")
+    }
+
+    @Test
     fun focusingTheSearchButtonWaitsForExplicitActivation() {
         show()
         rule.onNodeWithTag("header-search-button").performSemanticsAction(SemanticsActions.RequestFocus) { it() }
@@ -332,7 +463,7 @@ class NavigationTreeTest {
         rule.onNodeWithTag("home-content", useUnmergedTree = true).assertIsDisplayed()
         assertEquals(Route.Home, controller.nav.current)
         pad(KeyEvent.KEYCODE_BUTTON_Y)
-        rule.onNodeWithTag("home-category-console:nes", useUnmergedTree = true).performSemanticsAction(SemanticsActions.RequestFocus) { it() }
+        rule.onNodeWithTag("home-category-console:nes", useUnmergedTree = true).assertIsNotEnabled()
         rule.onNodeWithTag("header-search-field").assertIsDisplayed()
         assertTrue(controller.searching)
         pad(KeyEvent.KEYCODE_BUTTON_B)

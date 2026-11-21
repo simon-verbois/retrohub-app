@@ -7,9 +7,9 @@ import androidx.compose.ui.input.key.*
 import kotlin.time.TimeSource
 
 /** Repeated pad directions start deliberately, then accelerate while remaining interruptible. */
-class NavigationRepeat {
+class NavigationRepeat(private val clock: TimeSource = TimeSource.Monotonic) {
     private var held: Key? = null
-    private var started = TimeSource.Monotonic.markNow()
+    private var started = clock.markNow()
     private var last = started
 
     fun accept(key: Key, down: Boolean): Boolean {
@@ -19,17 +19,17 @@ class NavigationRepeat {
         }
         if (held != key) {
             held = key
-            started = TimeSource.Monotonic.markNow()
+            started = clock.markNow()
             last = started
             return true
         }
         val interval = when {
-            started.elapsedNow().inWholeMilliseconds < 1000 -> 280
-            started.elapsedNow().inWholeMilliseconds < 2200 -> 160
-            else -> 90
+            started.elapsedNow().inWholeMilliseconds < 900 -> 140
+            started.elapsedNow().inWholeMilliseconds < 1800 -> 90
+            else -> 55
         }
         if (last.elapsedNow().inWholeMilliseconds < interval) return false
-        last = TimeSource.Monotonic.markNow()
+        last = clock.markNow()
         return true
     }
 }

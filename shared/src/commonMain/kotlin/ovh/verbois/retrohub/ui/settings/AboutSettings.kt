@@ -34,7 +34,6 @@ internal fun AboutPage(controller: UiController) {
     val container = controller.container
     val platform = container.platform
     val status by container.serverStatus.collectAsState()
-    val sync by container.sync.status.collectAsState()
     val android = status?.apps?.android
     val level = updateLevel(platform.appVersion, android?.latestVersion, android?.minVersion)
     if (level != UpdateLevel.NONE) {
@@ -64,19 +63,17 @@ internal fun AboutPage(controller: UiController) {
             "Signaler un problème",
             icon = Lucide.Share2,
             onClick = {
-                val account = container.account.account
-                platform.shareLogs(
-                    buildString {
-                        appendLine("RetroHub ${platform.appVersion}")
-                        account?.let { appendLine("Serveur : ${it.serverName} ${it.serverVersion}") }
-                        appendLine(
-                            "Synchronisation : ${sync.phase}, ${sync.pendingSaves} sauvegarde(s) et ${sync.pendingSessions} session(s) en attente, ${sync.conflicts} conflit(s)",
-                        )
-                        appendLine("Émulateurs : ${platform.availableCores().sorted().joinToString()}")
-                    },
-                )
+                if (platform.reportCapture != null) {
+                    container.openReport()
+                } else {
+                    platform.shareLogs("RetroHub ${platform.appVersion}")
+                }
             },
         )
+        if (platform.reportCapture != null) {
+            GroupDivider()
+            NavigationRow("Rapports enregistrés", Lucide.FileText, { container.reportRequest.value = "history" })
+        }
         GroupDivider()
         SettingRow(
             "Licences",

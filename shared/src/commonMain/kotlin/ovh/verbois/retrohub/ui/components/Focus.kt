@@ -2,6 +2,7 @@ package ovh.verbois.retrohub.ui.components
 
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.focusGroup
@@ -55,6 +56,8 @@ val LocalNavSound = staticCompositionLocalOf<() -> Unit> { {} }
 /** Outgoing animated screens must not reclaim focus from the incoming page. */
 val LocalScreenActive = staticCompositionLocalOf { true }
 
+val LocalReducedMotion = staticCompositionLocalOf { false }
+
 /** Le bouton A de la manette (et Entrée, OK de télécommande) valide l’élément qui a le focus. */
 internal val ConfirmKeys = setOf(Key.ButtonA, Key.Enter, Key.NumPadEnter, Key.DirectionCenter, Key.Spacebar)
 
@@ -73,6 +76,7 @@ fun Modifier.consoleFocus(
     onFocus: (Boolean) -> Unit = {},
     /** Appui long, ou bouton □ / X de la manette : le menu de l’élément. */
     onLongClick: (() -> Unit)? = null,
+    bringIntoView: Boolean = true,
 ): Modifier {
     val activity = LocalFocusActivity.current
     val active = LocalScreenActive.current
@@ -83,16 +87,26 @@ fun Modifier.consoleFocus(
     val keyboard = LocalInputModeManager.current.inputMode == InputMode.Keyboard
     val haptics = LocalHaptics.current
     val navSound = LocalNavSound.current
+    val reduced = LocalReducedMotion.current
     val scale by animateFloatAsState(
         when {
             pressed -> 0.97f
             focused && keyboard -> focusScale
             else -> 1f
         },
-        spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow),
+        if (reduced) snap() else spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessHigh),
     )
-    val highlight by animateFloatAsState(if (focused && keyboard && highlightFocus) 1f else 0f)
-    LaunchedEffect(focused) { if (focused) intoView.bringIntoView() }
+    val highlight by animateFloatAsState(
+        if (focused && keyboard &&
+            highlightFocus
+        ) {
+            1f
+        } else {
+            0f
+        },
+        if (reduced) snap() else androidx.compose.animation.core.tween(100),
+    )
+    LaunchedEffect(focused, bringIntoView) { if (focused && bringIntoView) intoView.bringIntoView() }
     return this
         .then(if (active) Modifier else Modifier.focusProperties { canFocus = false })
         .bringIntoViewRequester(intoView)
@@ -215,20 +229,28 @@ fun Modifier.controllerDialog(onDismiss: () -> Unit, dismissOnStart: Boolean = f
     }
 }
 
-/** Scroll past the last setting too, so informational storage rows stay reachable with a pad. */
+/** Follow row order across mixed widths, and scroll past the last control to reach information. */
 @Composable
 fun Modifier.controllerVerticalScroll(scroll: androidx.compose.foundation.ScrollState): Modifier {
     val focus = androidx.compose.ui.platform.LocalFocusManager.current
+    val activity = LocalFocusActivity.current
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     val step = with(androidx.compose.ui.platform.LocalDensity.current) { 120.dp.toPx() }
-    return verticalScroll(scroll).focusGroup().onPreviewKeyEvent { event ->
+    return verticalScroll(scroll).focusProperties {
+        onExit = {
+            if (requestedFocusDirection == androidx.compose.ui.focus.FocusDirection.Next) cancelFocusChange()
+        }
+    }.focusGroup().onPreviewKeyEvent { event ->
         val direction = when (event.key) {
-            Key.DirectionDown -> androidx.compose.ui.focus.FocusDirection.Down
-            Key.DirectionUp -> androidx.compose.ui.focus.FocusDirection.Up
+            Key.DirectionDown -> androidx.compose.ui.focus.FocusDirection.Next
+            Key.DirectionUp -> androidx.compose.ui.focus.FocusDirection.Previous
             else -> return@onPreviewKeyEvent false
         }
-        if (event.type == KeyEventType.KeyDown && !focus.moveFocus(direction)) {
-            scope.launch { scroll.animateScrollBy(if (event.key == Key.DirectionDown) step else -step) }
+        if (event.type == KeyEventType.KeyDown) {
+            activity.generation++
+            if (!focus.moveFocus(direction)) {
+                scope.launch { scroll.animateScrollBy(if (event.key == Key.DirectionDown) step else -step) }
+            }
         }
         true
     }

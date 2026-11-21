@@ -15,8 +15,11 @@ import android.os.Vibrator
 import android.os.VibratorManager
 import android.view.InputDevice
 import androidx.core.net.toUri
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import okio.FileSystem
 import okio.Path
 import okio.Path.Companion.toOkioPath
@@ -37,6 +40,9 @@ import ovh.verbois.retrohub.work.SyncWorker
 import java.io.File
 
 class AndroidPlatform(private val context: Context) : Platform {
+    override val reportCapture = ovh.verbois.retrohub.diagnostics.AndroidReports(context)
+
+    override fun scheduleReports() = ovh.verbois.retrohub.diagnostics.ReportWorker.enqueue(context)
     internal var qrScanner: (suspend () -> String?)? = null
     override val canScanQrCode: Boolean get() = qrScanner != null &&
         context.packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_CAMERA_ANY)
@@ -250,27 +256,32 @@ class AndroidPlatform(private val context: Context) : Platform {
     }
 
     override fun shareLogs(summary: String) {
-        val dir = File(context.cacheDir, "reports").apply { mkdirs() }
-        val file = File(dir, "retrohub-rapport.txt")
-        val log =
-            runCatching {
-                ProcessBuilder(
-                    "logcat",
-                    "-d",
-                    "-t",
-                    "3000",
-                    "--pid=${android.os.Process.myPid()}",
-                ).redirectErrorStream(true).start().inputStream.bufferedReader().readText()
-            }.getOrDefault("Journal indisponible.")
-        file.writeText(summary + "\n\n--- Journal de l’application ---\n" + log)
-        val uri = androidx.core.content.FileProvider.getUriForFile(context, context.packageName + ".reports", file)
-        val send =
-            Intent(Intent.ACTION_SEND)
-                .setType("text/plain")
-                .putExtra(Intent.EXTRA_STREAM, uri)
-                .putExtra(Intent.EXTRA_SUBJECT, "Rapport RetroHub ${BuildConfig.VERSION_NAME}")
-                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        context.startActivity(Intent.createChooser(send, "Partager le rapport").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        val application = context.applicationContext as ovh.verbois.retrohub.RetroHubApp
+        application.container.scope.launch(Dispatchers.IO) {
+            try {
+                val dir = File(context.cacheDir, "reports").apply { mkdirs() }
+                val file = File(dir, "retrohub-rapport.txt")
+                file.writeText(summary)
+                val uri = androidx.core.content.FileProvider.getUriForFile(context, context.packageName + ".reports", file)
+                val send = Intent(Intent.ACTION_SEND)
+                    .setType("text/plain")
+                    .putExtra(Intent.EXTRA_STREAM, uri)
+                    .putExtra(Intent.EXTRA_SUBJECT, "Rapport RetroHub ${BuildConfig.VERSION_NAME}")
+                    .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                withContext(Dispatchers.Main) {
+                    context.startActivity(Intent.createChooser(send, "Partager le rapport").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                }
+            } catch (error: Exception) {
+                if (error is kotlinx.coroutines.CancellationException) throw error
+                withContext(Dispatchers.Main) {
+                    android.widget.Toast.makeText(
+                        context,
+                        "Le rapport n’a pas pu être partagé. Vérifiez l’espace libre et réessayez.",
+                        android.widget.Toast.LENGTH_LONG,
+                    ).show()
+                }
+            }
+        }
     }
 
     private fun vibrator(): Vibrator? = if (Build.VERSION.SDK_INT >= 31) {

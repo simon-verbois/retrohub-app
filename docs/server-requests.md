@@ -487,3 +487,21 @@ older servers and interrupted streams retain conditional polling. Protocol, coal
 revocation and polling fallback are covered separately in the app unit tests; the Android end-to-end
 journey checks live imports against the real stream and suspension during gameplay. No Android
 build or physical-camera test is claimed by the server validation above.
+
+
+## Optional full bug reports (2026-11-20)
+
+The app retains private reports locally and supports the existing `emulator_diagnostics`
+contract without adding fields to that route. Full text reports need a separate opt-in contract:
+
+- Advertise `bug_reports_v1` only when `POST /native/bug-reports` is implemented for device tokens.
+- Accept `id`, `app_version`, `kind`, `description` (at most 2,000 characters), filtered `logs`
+  (at most 16,000 characters), optional `diagnostic` using the existing diagnostic schema, and
+  mandatory `consent: true`. Return 201 with `{id}` and make identical retries idempotent per
+  device; reject reuse of an ID with different content.
+- Restrict reports to their owning account, bound retention and request sizes, and do not alter
+  games, progress, save revisions or played time. Never require ROMs, BIOS files or saved games.
+
+Until that feature is advertised, the app sends only the existing technical diagnostic when
+supported and explicitly approved. Descriptions and filtered logs remain available through local
+sharing. An approval freezes the body and destination; retries cannot send another account's data.

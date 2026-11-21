@@ -53,6 +53,7 @@ class ControllerWidgetsTest {
     private val device = UiDevice.getInstance(instrumentation)
 
     private fun show(content: @Composable () -> Unit) {
+        rule.settleOrientation(portrait = false)
         instrumentation.setInTouchMode(false)
         rule.setContent {
             LocalInputModeManager.current.requestInputMode(InputMode.Keyboard)
@@ -141,6 +142,25 @@ class ControllerWidgetsTest {
     }
 
     @Test
+    fun aQuickBackFromAnInlineChoiceKeepsItsOpenerFocused() {
+        show {
+            val first = remember { FocusRequester() }
+            Column(Modifier.fillMaxSize().controllerVerticalScroll(rememberScrollState())) {
+                GlassButton("Avant", {}, Modifier.focusRequester(first))
+                ChoiceRow("Choix", listOf("Un", "Deux"), "Un", { it }, {})
+            }
+            AutoFocus(first)
+        }
+        waitFocused("Avant")
+        pad(KeyEvent.KEYCODE_DPAD_DOWN)
+        waitFocused("Choix")
+        pad(KeyEvent.KEYCODE_BUTTON_A)
+        pad(KeyEvent.KEYCODE_BUTTON_B)
+        waitFocused("Choix")
+        rule.onNode(hasText("Un") and SemanticsMatcher.keyIsDefined(SemanticsProperties.Selected)).assertDoesNotExist()
+    }
+
+    @Test
     fun formsCloseWithButtonBAndRestoreTheirOpenerWithoutSubmitting() {
         var submitted = 0
         show {
@@ -216,6 +236,12 @@ class ControllerWidgetsTest {
         }
         waitFocused("Avant")
         pad(KeyEvent.KEYCODE_DPAD_DOWN)
+        rule.waitUntil(5_000) {
+            runCatching {
+                rule.onNode(SemanticsMatcher.keyIsDefined(SemanticsProperties.ProgressBarRangeInfo))
+                    .fetchSemanticsNode().config[SemanticsProperties.Focused]
+            }.getOrDefault(false)
+        }
         pad(KeyEvent.KEYCODE_DPAD_RIGHT)
         rule.waitUntil(5_000) { value > 0.5f }
         org.junit.Assert.assertTrue(value > 0.5f)

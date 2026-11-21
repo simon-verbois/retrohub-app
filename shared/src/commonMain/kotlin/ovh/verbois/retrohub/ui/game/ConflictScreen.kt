@@ -3,6 +3,7 @@ package ovh.verbois.retrohub.ui.game
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -30,6 +31,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
@@ -52,14 +54,22 @@ import kotlin.time.Instant
  * est mise en avant mais le joueur choisit toujours explicitement. Rien n’est écrasé sans lui.
  */
 @Composable
-fun ConflictScreen(controller: UiController, gameId: String) {
+fun ConflictScreen(controller: UiController, gameId: String?) {
     val container = controller.container
-    val saves by remember(gameId) { container.saveStore.observe(gameId) }.collectAsState(emptyList())
+    val saves by remember(gameId) {
+        if (gameId == null) container.saveStore.observeAll() else container.saveStore.observe(gameId)
+    }.collectAsState(initial = null)
     val games by container.library.games.collectAsState()
-    val game = games.firstOrNull { it.playGameId == gameId || it.id == gameId }
-    val conflicts = saves.filter { it.inConflict }
-    var busy by remember { mutableStateOf(false) }
+    val conflicts = saves?.filter { it.inConflict }?.sortedWith(compareBy({ it.gameId }, { it.kind }, { it.slot }))
+    val save = conflicts?.firstOrNull()
+    val currentGameId = save?.gameId ?: gameId
+    val game = games.firstOrNull { it.playGameId == currentGameId || it.id == currentGameId }
+    var busy by remember(gameId) { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+    if (conflicts == null) {
+        CenteredMessage("Chargement des sauvegardes…", "", Lucide.Cloud)
+        return
+    }
     if (conflicts.isEmpty()) {
         CenteredMessage("Tout est en ordre", "Vos sauvegardes sont à jour. Bonne partie !", Lucide.CircleCheck) {
             if (game != null) {
@@ -71,9 +81,10 @@ fun ConflictScreen(controller: UiController, gameId: String) {
         }
         return
     }
-    val save = conflicts.first()
+    if (save == null) return
     val first = remember { FocusRequester() }
     fun resolve(keepLocal: Boolean) {
+        if (busy) return
         busy = true
         scope.launch {
             try {
@@ -100,59 +111,62 @@ fun ConflictScreen(controller: UiController, gameId: String) {
     val localAt = parseInstant(save.localPlayedAt)
     val serverAt = parseInstant(save.conflictPlayedAt)
     val localNewer = localAt != null && (serverAt == null || localAt > serverAt)
-    Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 28.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(18.dp),
-    ) {
-        Text("Deux progressions différentes", Modifier.semantics { heading() }, style = MaterialTheme.typography.displayMedium)
-        Text(
-            "« ${slotLabel(
-                save.kind,
-                save.slot,
-            )} » de ${game?.title ?: "ce jeu"} a avancé sur ce téléphone et ailleurs. Choisissez celle à garder : l’autre sera remplacée.",
-            style = MaterialTheme.typography.bodyLarge,
-            color = Palette.TextDim,
-        )
-        val cards: @Composable (Modifier) -> Unit = { modifier ->
-            VersionCard(
-                "Sur ce téléphone",
-                Lucide.Smartphone,
-                localAt,
-                "ce téléphone",
-                localNewer,
-                "Garder celle-ci",
-                busy,
-                { resolve(true) },
-                modifier.then(if (localNewer) Modifier.focusRequester(first) else Modifier),
-            )
-            VersionCard(
-                "Sur le serveur",
-                Lucide.Cloud,
-                serverAt,
-                save.conflictDevice ?: "le web",
-                !localNewer,
-                "Garder celle-ci",
-                busy,
-                { resolve(false) },
-                modifier.then(if (!localNewer) Modifier.focusRequester(first) else Modifier),
-            )
-        }
-        if (controller.portrait) {
-            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) { cards(Modifier.fillMaxWidth()) }
-        } else {
-            Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) { cards(Modifier.weight(1f)) }
-        }
-        if (conflicts.size >
-            1
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val sideBySide = maxWidth >= 640.dp * LocalDensity.current.fontScale.coerceAtLeast(1f)
+        Column(
+            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 28.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(18.dp),
         ) {
+            Text("Deux progressions différentes", Modifier.semantics { heading() }, style = MaterialTheme.typography.headlineSmall)
             Text(
-                "${conflicts.size - 1} autre(s) emplacement(s) à choisir ensuite.",
-                style = MaterialTheme.typography.bodyMedium,
+                "« ${slotLabel(
+                    save.kind,
+                    save.slot,
+                )} » de ${game?.title ?: "ce jeu"} a avancé sur ce téléphone et ailleurs. Choisissez celle à garder : l’autre sera remplacée.",
+                style = MaterialTheme.typography.bodyLarge,
                 color = Palette.TextDim,
             )
+            val cards: @Composable (Modifier) -> Unit = { modifier ->
+                VersionCard(
+                    "Sur ce téléphone",
+                    Lucide.Smartphone,
+                    localAt,
+                    "ce téléphone",
+                    localNewer,
+                    "Garder celle-ci",
+                    busy,
+                    { resolve(true) },
+                    modifier.then(if (localNewer) Modifier.focusRequester(first) else Modifier),
+                )
+                VersionCard(
+                    "Sur le serveur",
+                    Lucide.Cloud,
+                    serverAt,
+                    save.conflictDevice ?: "le web",
+                    !localNewer,
+                    "Garder celle-ci",
+                    busy,
+                    { resolve(false) },
+                    modifier.then(if (!localNewer) Modifier.focusRequester(first) else Modifier),
+                )
+            }
+            if (sideBySide) {
+                Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) { cards(Modifier.weight(1f)) }
+            } else {
+                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) { cards(Modifier.fillMaxWidth()) }
+            }
+            if (conflicts.size >
+                1
+            ) {
+                Text(
+                    "${conflicts.size - 1} autre(s) emplacement(s) à choisir ensuite.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Palette.TextDim,
+                )
+            }
         }
     }
-    LaunchedEffect(save.kind, save.slot) { runCatching { first.requestFocus() } }
+    LaunchedEffect(save.gameId, save.kind, save.slot) { runCatching { first.requestFocus() } }
 }
 
 @Composable

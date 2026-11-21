@@ -191,7 +191,7 @@ fun CatalogueGameScreen(controller: UiController, id: String) {
             if (download is DownloadState.Running) {
                 Text("Téléchargement sur le téléphone · ${(download.fraction * 100).toInt()} %", style = MaterialTheme.typography.titleMedium)
                 ProgressLine(download.fraction, Modifier.fillMaxWidth())
-                GlassButton("Annuler sur le téléphone", { container.downloads.cancel(known!!.playGameId) })
+                GlassButton("Annuler sur le téléphone", { container.downloads.cancel(known.playGameId) })
             } else if (known?.downloaded == true && detail.versionId == version.id && !known.updateAvailable) {
                 PrimaryButton("Jouer", { controller.play(known) }, icon = Lucide.Play, enabled = known.supported)
             } else {

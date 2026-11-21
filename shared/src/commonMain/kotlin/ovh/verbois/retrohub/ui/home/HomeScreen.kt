@@ -52,8 +52,7 @@ fun Kicker(game: Game, compact: Boolean = false) {
 
 @Composable
 internal fun GamePlayButton(controller: UiController, game: Game, modifier: Modifier = Modifier) {
-    val downloads by controller.container.downloads.states.collectAsState()
-    val download = downloads[game.playGameId]
+    val download = downloadState(controller, game)
     val action = gameAction(controller, game, download)
     if (download is DownloadState.Running) {
         Text("Téléchargement en cours", modifier, style = MaterialTheme.typography.bodyMedium, color = Palette.TextDim)

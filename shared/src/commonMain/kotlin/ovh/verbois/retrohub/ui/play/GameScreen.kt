@@ -125,6 +125,7 @@ fun GameScreen(
     onInspectControls: (Boolean) -> Unit = {},
     haptic: () -> Unit,
     onQuit: () -> Unit,
+    onReport: (() -> Unit)? = null,
     /** Enregistre un changement des réglages de la console (options avancées, commandes tactiles). */
     onConsoleSettings: ((ConsoleSettings) -> ConsoleSettings) -> Unit = {},
     onCheats: (List<Cheat>) -> Unit = {},
@@ -175,6 +176,7 @@ fun GameScreen(
     }
     LaunchedEffect(Unit) {
         menuRequests.collect {
+            if (session.ui.value.failed) return@collect
             if (session.ui.value.paused && page == MenuPage.CONTROLS) {
                 page = MenuPage.MAIN
             } else if (session.ui.value.paused) {
@@ -185,8 +187,8 @@ fun GameScreen(
             }
         }
     }
-    LaunchedEffect(ui.message) {
-        if (ui.message != null) {
+    LaunchedEffect(ui.message, ui.failed) {
+        if (ui.message != null && !ui.failed) {
             delay(3500)
             session.flash(null)
         }
@@ -194,6 +196,7 @@ fun GameScreen(
     val showTouch = !(gamepad && plan.hideTouchWithGamepad)
     val handleBack by rememberUpdatedState {
         when {
+            session.ui.value.failed -> onQuit()
             confirmQuit -> confirmQuit = false
             confirmReset -> confirmReset = false
             overwrite != null -> overwrite = null
@@ -370,7 +373,7 @@ fun GameScreen(
         }
         if (plan.showFps) FpsText(engine.frames, Modifier.align(Alignment.TopEnd).windowInsetsPadding(WindowInsets.safeDrawing).padding(12.dp))
         AnimatedVisibility(
-            ui.message != null,
+            ui.message != null && !ui.failed,
             Modifier.align(Alignment.TopCenter).windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top)).padding(top = 56.dp),
             enter = fadeIn(),
             exit = fadeOut(),
@@ -385,7 +388,7 @@ fun GameScreen(
                 style = MaterialTheme.typography.bodyMedium,
             )
         }
-        if (!ui.started) {
+        if (!ui.started && !ui.failed) {
             Box(Modifier.fillMaxSize().background(Color.Black), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text(plan.title, style = MaterialTheme.typography.headlineMedium)
@@ -395,12 +398,15 @@ fun GameScreen(
                         style = MaterialTheme.typography.bodyMedium,
                         color = Palette.TextDim,
                     )
-                    if (ui.startupError != null) GlassButton("Retour", onQuit, icon = Lucide.ArrowLeft)
+                    if (ui.startupError != null) {
+                        onReport?.let { GlassButton("Signaler un problème", it, icon = Lucide.Share2) }
+                        GlassButton("Retour", onQuit, icon = Lucide.ArrowLeft)
+                    }
                 }
             }
         }
         AnimatedVisibility(
-            ui.paused && !editing,
+            ui.paused && !editing && !ui.failed,
             enter = fadeIn() + slideInHorizontally { -it / 6 },
             exit =
             fadeOut() + slideOutHorizontally { -it / 6 },
@@ -446,9 +452,11 @@ fun GameScreen(
                     onConsoleSettings { it.copy(optionsByCore = it.optionsByCore + (plan.core to (it.optionsByCore[plan.core].orEmpty() + (key to value)))) }
                 },
                 onQuit = { confirmQuit = true },
+                onReport = onReport,
             )
         }
-        overwrite?.let { slot ->
+        if (ui.failed) GameFailurePanel(ui.message, onQuit, onReport)
+        overwrite?.takeIf { !ui.failed }?.let { slot ->
             ConfirmDialog(
                 "Remplacer l’emplacement $slot ?",
                 "La partie de cet emplacement sera remplacée.",
@@ -460,10 +468,10 @@ fun GameScreen(
                 onDismiss = { overwrite = null },
             )
         }
-        if (confirmQuit) {
+        if (confirmQuit && !ui.failed) {
             ConfirmDialog(
                 "Quitter la partie ?",
-                "Votre partie est sauvegardée automatiquement.",
+                if (ui.failed) "Votre dernière sauvegarde valide est conservée." else "Votre partie est sauvegardée automatiquement.",
                 "Quitter",
                 onConfirm = {
                     confirmQuit = false
@@ -475,7 +483,7 @@ fun GameScreen(
                 onDismiss = { confirmQuit = false },
             )
         }
-        if (confirmReset) {
+        if (confirmReset && !ui.failed) {
             ConfirmDialog(
                 "Redémarrer le jeu ?",
                 "Pensez à sauvegarder avant.",
@@ -581,6 +589,7 @@ private fun PauseMenu(
     engine: EmulatorEngine,
     onOption: (String, String) -> Unit,
     onQuit: () -> Unit,
+    onReport: (() -> Unit)?,
 ) {
     val scope = rememberCoroutineScope()
     val first = remember { FocusRequester() }
@@ -661,6 +670,7 @@ private fun PauseMenu(
             Text(session.plan.title, style = MaterialTheme.typography.headlineSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
             when (page) {
                 MenuPage.MAIN -> {
+                    onReport?.let { GlassButton("Signaler un problème", it, Modifier.fillMaxWidth(), icon = Lucide.Share2) }
                     BoxWithConstraints(Modifier.fillMaxWidth()) {
                         val actionWidth = if (portraitMenu) maxWidth else (maxWidth - 12.dp) / 2
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {

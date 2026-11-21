@@ -42,6 +42,7 @@ data class GameUiState(
     val started: Boolean = false,
     val message: String? = null,
     val startupError: String? = null,
+    val failed: Boolean = false,
     val slots: List<SlotInfo> = emptyList(),
     val lastSavedAt: Instant? = null,
 )
@@ -80,7 +81,7 @@ class GameSession(
 
     /** À la première image : on recharge la dernière partie, puis la sauvegarde périodique démarre. */
     suspend fun onFirstFrame() = lock.withLock {
-        if (state.value.started || finished) return@withLock
+        if (state.value.started || state.value.failed || finished) return@withLock
         onStarted()
         startedAt = clock.now()
         resumedAt = startedAt
@@ -119,6 +120,7 @@ class GameSession(
     }
 
     fun resume() {
+        if (state.value.failed) return
         if (!state.value.paused) return
         resumedAt = clock.now()
         engine.resume()
@@ -132,15 +134,19 @@ class GameSession(
         state.update { it.copy(fastForward = enabled) }
     }
 
-    fun reportError(message: String) {
-        state.update { it.copy(message = message, startupError = if (it.started) null else message) }
+    fun reportError(message: String, fatal: Boolean = false) {
+        state.update { it.copy(message = message, startupError = if (it.started) null else message, failed = it.failed || fatal) }
+        if (fatal) {
+            autosave?.cancel()
+            pause()
+        }
     }
 
     fun flash(message: String?) = state.update { it.copy(message = message) }
 
     /** A reset cannot overlap a snapshot or an initial restore, and never blocks the UI caller. */
     suspend fun reset() = lock.withLock {
-        if (finished) return@withLock
+        if (finished || state.value.failed) return@withLock
         try {
             engine.reset()
             resume()
@@ -162,12 +168,13 @@ class GameSession(
 
     suspend fun saveState(slot: Int): Boolean = withContext(io) {
         lock.withLock {
+            if (state.value.failed) return@withLock false
             val data = engine.saveState()
             if (data == null || data.isEmpty()) {
                 flash("Cet émulateur ne peut pas sauvegarder à cet instant. Réessayez dans un moment.")
                 return@withLock false
             }
-            write("state", slot, data)
+            if (!write("state", slot, data)) return@withLock false
             if (slot > 0) flash("Partie sauvegardée dans l’emplacement $slot")
             refreshSlots()
             true
@@ -176,6 +183,7 @@ class GameSession(
 
     suspend fun loadState(slot: Int): Boolean = withContext(io) {
         lock.withLock {
+            if (state.value.failed) return@withLock false
             val file = saves.file(plan.playGameId, "state", slot)
             val save = saves.find(plan.playGameId, "state", slot)
             if (!fs.exists(file)) return@withLock false
@@ -204,7 +212,7 @@ class GameSession(
     /** SRAM et état automatique (emplacement 0), seulement s’ils ont changé. */
     suspend fun autoSave() = withContext(io) {
         lock.withLock {
-            if (!state.value.started || finished) return@withLock
+            if (!state.value.started || state.value.failed || finished) return@withLock
             val code = plan.gameCode
             val userDir = plan.dolphinUserDir
             if (plan.console in setOf("3ds", "ps2")) {
@@ -244,7 +252,8 @@ class GameSession(
         }
     }
 
-    private suspend fun write(kind: String, slot: Int, data: ByteArray) {
+    private suspend fun write(kind: String, slot: Int, data: ByteArray): Boolean {
+        if (state.value.failed) return false
         val target = saves.file(plan.playGameId, kind, slot)
         target.parent?.let { fs.createDirectories(it) }
         val digest = sha256(data)
@@ -252,13 +261,18 @@ class GameSession(
         if (fs.exists(target) && previous?.localSha == digest && previous.core == plan.core && previous.coreBuild == plan.coreBuild &&
             previous.romSha == plan.romSha
         ) {
-            return
+            return true
         }
         preservePrevious(kind, slot)
         val temporary = target.parent!! / (target.name + ".tmp")
         fs.write(temporary) { write(data) }
+        if (state.value.failed) {
+            fs.delete(temporary)
+            return false
+        }
         fs.atomicMove(temporary, target)
         saveSync.recordLocal(plan.playGameId, plan.console, kind, slot, plan.core, plan.romSha, digest, plan.coreBuild)
+        return true
     }
 
     /** Keep an incompatible local checkpoint before a new core/ROM writes its first snapshot. */

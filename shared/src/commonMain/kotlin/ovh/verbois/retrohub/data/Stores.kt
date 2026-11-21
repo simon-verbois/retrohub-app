@@ -43,7 +43,7 @@ class RoomSaveStore(private val dao: LocalSaveDao, override val fs: FileSystem, 
 
     override fun observe(gameId: String): Flow<List<LocalSave>> = dao.observeForGame(gameId)
 
-    fun observeAll(): Flow<List<LocalSave>> = dao.observeAll()
+    override fun observeAll(): Flow<List<LocalSave>> = dao.observeAll()
 }
 
 class RoomSessionStore(private val dao: PlaySessionDao) : SessionStore {

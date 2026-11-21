@@ -5,22 +5,67 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import ovh.verbois.retrohub.AppContainer
 import ovh.verbois.retrohub.api.ApiException
 import ovh.verbois.retrohub.game.LaunchCheck
 import ovh.verbois.retrohub.library.Game
+import ovh.verbois.retrohub.ui.home.*
 import ovh.verbois.retrohub.ui.nav.Navigator
 import ovh.verbois.retrohub.ui.nav.Route
 
-/** Fond de l’écran courant ; [hero] montre l’illustration en grand (accueil façon console). */
-data class Backdrop(val url: String?, val console: String?, val hero: Boolean = false)
+/** Artwork and console palette behind the current screen. */
+data class Backdrop(val url: String?, val console: String?)
 
 /** État partagé de l’interface : navigation, fond, messages et lancement des jeux. */
 class UiController(val container: AppContainer, private val scope: CoroutineScope) {
     val nav = Navigator()
+    val home: StateFlow<HomeLibrary> = combine(
+        container.library.games,
+        container.settings.settings.map { HomePreferences(it) }.distinctUntilChanged(),
+    ) { games, preferences -> homeLibrary(games, preferences) }
+        .flowOn(Dispatchers.Default).stateIn(scope, SharingStarted.Eagerly, HomeLibrary.Empty)
+
+    var homeMoving by mutableStateOf(false)
+        private set
+    private var homeMotionJob: Job? = null
+
+    private fun homeMoved() {
+        homeMoving = true
+        homeMotionJob?.cancel()
+        homeMotionJob = scope.launch {
+            delay(180)
+            homeMoving = false
+        }
+    }
+
+    fun homeSelection(model: HomeLibrary = home.value): HomeSelection {
+        val column = model.byColumn[homeColumn]
+            ?: model.byId[homeGame]?.let { model.byColumn["console:${it.console}"] }
+            ?: model.byColumn.getValue("favorites")
+        return HomeSelection(column, model.columnIndices.getValue(column.key), column.indices[homeGame] ?: 0)
+    }
+
+    fun moveHomeGame(step: Int) {
+        val selection = homeSelection()
+        selection.column.games.getOrNull((selection.gameIndex + step).coerceIn(0, (selection.column.games.size - 1).coerceAtLeast(0)))?.let {
+            selectHomeGame(it.id)
+        }
+    }
+
+    fun selectHomeGame(id: String) {
+        if (homeGame == id) return
+        homeGame = id
+        homeMoved()
+    }
+
+    fun activateHomeGame() {
+        homeSelection().game?.let { gameAction(this, it, container.downloads.states.value[it.playGameId]).run() }
+    }
     var backdrop by mutableStateOf(Backdrop(null, null))
     var toast by mutableStateOf<String?>(null)
         private set
@@ -66,43 +111,39 @@ class UiController(val container: AppContainer, private val scope: CoroutineScop
     private val homeSelections = mutableMapOf<String, String>()
 
     fun selectHomeColumn(key: String) {
+        if (key == homeColumn) return
+        homeMoved()
         homeColumn?.let { column -> homeGame?.let { homeSelections[column] = it } }
         homeColumn = key
-        homeGame = homeSelections[key]
+        val column = home.value.byColumn[key]
+        homeGame = homeSelections[key]?.takeIf { column?.indices?.containsKey(it) == true } ?: column?.games?.firstOrNull()?.id
         gameMenu = false
     }
 
     fun cycleHomeColumn(step: Int) {
-        val columns = ovh.verbois.retrohub.ui.home.homeColumns(container.library.games.value, container.settings.settings.value)
+        val columns = home.value.columns
         val index = columns.indexOfFirst { it.key == (homeColumn ?: "favorites") }.coerceAtLeast(0)
         columns.getOrNull((index + step).coerceIn(0, columns.lastIndex))?.let { selectHomeColumn(it.key) }
     }
 
     /** Menu du jeu choisi, qui descend de son titre (appui long ou bouton □ de la manette). */
     var gameMenu by mutableStateOf(false)
-    var folderEditor by mutableStateOf<ovh.verbois.retrohub.emulation.HomeFolder?>(null)
-
-    fun newFolder() {
-        folderEditor = ovh.verbois.retrohub.emulation.HomeFolder(kotlin.uuid.Uuid.random().toString(), "")
-    }
-
-    fun deleteFolder(folder: ovh.verbois.retrohub.emulation.HomeFolder) {
-        container.settings.update { it.copy(homeFolders = it.homeFolders.filterNot { item -> item.id == folder.id }, homePins = it.homePins - folder.key) }
-        if (homeGame == folder.key) homeGame = null
-        if (nav.current == Route.Folder(folder.id)) nav.back()
-        folderEditor = null
-    }
-
     fun returnHome() {
         autoStarted = true
         gameMenu = false
         exitRequested = false
-        folderEditor = null
         downloadRequest = null
         launchIssue = null
         pinRequest = null
         keyCapture = null
         nav.section(ovh.verbois.retrohub.ui.nav.Section.HOME)
+    }
+
+    /** An explicit notification action takes priority over automatic last-game launch. */
+    fun reviewSaveConflicts() {
+        if (launchIssue == Route.Conflict() || nav.contentRoute == Route.Conflict()) return
+        returnHome()
+        launchIssue = Route.Conflict()
     }
     var downloadRequest by mutableStateOf<Game?>(null)
         private set
@@ -132,12 +173,11 @@ class UiController(val container: AppContainer, private val scope: CoroutineScop
 
     fun showGame(id: String) {
         if (!portrait) {
-            val game = container.library.games.value.firstOrNull { it.id == id }
-            val column = ovh.verbois.retrohub.ui.home.homeColumns(container.library.games.value, container.settings.settings.value)
-                .firstOrNull { it.key == homeColumn }
-            if (column?.games?.none { it.id == id } != false && game != null) selectHomeColumn("console:${game.console}")
+            val game = home.value.byId[id]
+            val column = home.value.byColumn[homeColumn]
+            if (column?.indices?.containsKey(id) != true && game != null) selectHomeColumn("console:${game.console}")
         }
-        homeGame = id
+        selectHomeGame(id)
         searching = false
         if (portrait) nav.go(Route.Game(id)) else nav.section(ovh.verbois.retrohub.ui.nav.Section.HOME)
     }
@@ -158,7 +198,7 @@ class UiController(val container: AppContainer, private val scope: CoroutineScop
     enum class Button { B, Y, LB, RB, START, SELECT }
 
     fun onButton(button: Button): Boolean = when {
-        folderEditor != null || exitRequested || downloadRequest != null || pinRequest != null || launchIssue != null -> {
+        exitRequested || downloadRequest != null || pinRequest != null || launchIssue != null -> {
             if (button == Button.B) back()
             true
         }
@@ -210,11 +250,6 @@ class UiController(val container: AppContainer, private val scope: CoroutineScop
     }
 
     fun back(): Boolean = when {
-        folderEditor != null -> {
-            folderEditor = null
-            true
-        }
-
         exitRequested -> {
             exitRequested = false
             true
@@ -271,6 +306,7 @@ class UiController(val container: AppContainer, private val scope: CoroutineScop
     fun autoStart() {
         if (autoStarted) return
         autoStarted = true
+        if (container.platform.reportCapture?.reports?.value?.any { it.prompt && (it.owner == null || it.owner == container.reportOwner()) } == true) return
         if (!container.settings.settings.value.startOnLastGame) return
         val last = container.library.games.value.filter { it.downloaded && it.lastPlayed != null }.maxByOrNull { it.lastPlayed!! } ?: return
         play(last)

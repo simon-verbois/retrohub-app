@@ -26,6 +26,7 @@ import kotlinx.coroutines.launch
 import ovh.verbois.retrohub.account.AuthState
 import ovh.verbois.retrohub.account.QrCameraException
 import ovh.verbois.retrohub.emulation.InterfaceOrientation
+import ovh.verbois.retrohub.platform.Notifications
 import ovh.verbois.retrohub.ui.RetroHubRoot
 import ovh.verbois.retrohub.ui.UiController
 
@@ -71,6 +72,7 @@ class MainActivity : ComponentActivity() {
             navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
         )
         super.onCreate(savedInstanceState)
+        if (savedInstanceState?.getBoolean(EXTRA_REVIEW_HANDLED) == true) intent.putExtra(EXTRA_REVIEW_HANDLED, true)
         immersive()
         val container = (application as RetroHubApp).container
         lifecycleScope.launch {
@@ -97,10 +99,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             RetroHubRoot(container, onExit = { finish() }) {
                 controller = it
-                if (intent.getBooleanExtra(EXTRA_RETURN_HOME, false)) {
-                    it.returnHome()
-                    intent.removeExtra(EXTRA_RETURN_HOME)
-                }
+                handleLaunchIntent()
             }
         }
         // Notifications (téléchargements, conflits) : demandées une fois la configuration faite.
@@ -163,10 +162,30 @@ class MainActivity : ComponentActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        if (intent.getBooleanExtra(EXTRA_RETURN_HOME, false)) {
-            val ui = controller
-            if (ui != null) ui.returnHome() else this.intent.putExtra(EXTRA_RETURN_HOME, true)
+        if (controller == null) setIntent(intent)
+        handleLaunchIntent(intent)
+    }
+
+    /** Consume launch commands once, after Compose has supplied its controller. */
+    private fun handleLaunchIntent(command: Intent = intent) {
+        val ui = controller ?: return
+        when {
+            command.action == Notifications.ACTION_REVIEW_SAVE_CONFLICTS && !command.getBooleanExtra(EXTRA_REVIEW_HANDLED, false) -> {
+                command.putExtra(EXTRA_REVIEW_HANDLED, true)
+                command.removeExtra(EXTRA_RETURN_HOME)
+                ui.reviewSaveConflicts()
+            }
+
+            command.getBooleanExtra(EXTRA_RETURN_HOME, false) -> {
+                command.removeExtra(EXTRA_RETURN_HOME)
+                ui.returnHome()
+            }
         }
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        outState.putBoolean(EXTRA_REVIEW_HANDLED, intent.getBooleanExtra(EXTRA_REVIEW_HANDLED, false))
+        super.onSaveInstanceState(outState)
     }
 
     override fun onPause() {
@@ -198,6 +217,7 @@ class MainActivity : ComponentActivity() {
 
     companion object {
         const val EXTRA_RETURN_HOME = "return_home"
+        private const val EXTRA_REVIEW_HANDLED = "save_conflicts_reviewed"
     }
 
     private fun immersive() {

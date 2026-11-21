@@ -120,6 +120,7 @@ Build for a single device architecture with `./gradlew :app:assembleDebug -Pretr
 ```sh
 ./gradlew spotlessCheck :app:lintDebug
 scripts/test.sh unit        # Also: instrumented, e2e, all
+scripts/test.sh performance # Optimized home, real animations and rapid controller input
 RETROHUB_AVD=retrohub-ci RETROHUB_EMULATOR_PORT=5582 scripts/ci.sh
 ```
 

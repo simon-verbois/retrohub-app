@@ -28,7 +28,7 @@ fun gridVerticalTarget(index: Int, count: Int, columns: Int, down: Boolean): Int
 @Composable
 fun gridNavigation(state: LazyGridState, count: Int, columns: Int): (Int) -> Modifier {
     val scope = rememberCoroutineScope()
-    val requesters = remember { mutableMapOf<Int, FocusRequester>() }
+    val requesters = remember(count, columns) { mutableMapOf<Int, FocusRequester>() }
     return { index ->
         Modifier.focusRequester(requesters.getOrPut(index) { FocusRequester() }).onPreviewKeyEvent { event ->
             val down = when (event.key) {

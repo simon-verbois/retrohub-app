@@ -73,6 +73,28 @@ class RetroHubApi(
     private val maxInlineWaitSeconds: Long = 30,
     private val maxMaintenanceRetries: Int = 3,
 ) {
+    /** Only the two consented report contracts may be used by the persisted outbox. */
+    suspend fun sendReport(route: String, body: String, id: String) {
+        require(route in setOf("/native/diagnostics", "/native/bug-reports"))
+        // A maintenance retry must never pick up another account's token after a sign-in change.
+        val destination = api(route)
+        val token = session.token ?: throw ApiException.Unauthorized("Reliez cet appareil à votre compte.")
+        val response = try {
+            request(
+                HttpMethod.Post,
+                destination,
+                authenticated = false,
+                json = body,
+                headers = listOf(HttpHeaders.Authorization to "Bearer $token"),
+            ) { it.bodyAsText() }
+        } catch (error: ApiException.Unauthorized) {
+            if (session.token == token) session.onUnauthorized(error.message.orEmpty())
+            throw error
+        }
+        val accepted = runCatching { ApiJson.parseToJsonElement(response).jsonObject["id"]?.jsonPrimitive?.content }.getOrNull()
+        if (accepted != id) throw ApiException.UnsupportedServer("Le serveur n’a pas confirmé le rapport. Réessayez ou utilisez Partager.")
+    }
+
     // ---- Découverte et connexion ------------------------------------------------------------
 
     suspend fun status(server: String): ServerStatus {

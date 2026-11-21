@@ -29,6 +29,8 @@ interface SaveStore {
 
     fun observe(gameId: String): kotlinx.coroutines.flow.Flow<List<LocalSave>> = kotlinx.coroutines.flow.flow { emit(forGame(gameId)) }
 
+    fun observeAll(): kotlinx.coroutines.flow.Flow<List<LocalSave>> = kotlinx.coroutines.flow.flow { emit(all()) }
+
     suspend fun find(gameId: String, kind: String, slot: Int): LocalSave?
 
     suspend fun forGame(gameId: String): List<LocalSave>

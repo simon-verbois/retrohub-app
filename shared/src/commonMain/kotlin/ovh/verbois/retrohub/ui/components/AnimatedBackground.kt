@@ -15,7 +15,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.drawWithCache
-import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.BlendMode
@@ -41,61 +40,57 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import org.jetbrains.compose.resources.painterResource
 import ovh.verbois.retrohub.ui.theme.Palette
-import ovh.verbois.retrohub.ui.theme.SkyScheme
 import kotlin.math.PI
 import kotlin.math.roundToInt
 import kotlin.math.sin
-import kotlin.random.Random
 
-/** Le fond ne se redessine que 24 fois par seconde, comme le ciel du web : il bouge lentement. */
+/** Slow decorative motion is capped at 24 fps and yields to navigation. */
 private const val FRAME_MS = 1000L / 24
 
-private class Star(val x: Float, val y: Float, val radius: Float, val period: Float, val delay: Float)
-
-/** Un ruban de fines lignes ondulées, comme le ciel du web (shell.tsx). */
-private class Ribbon(val lines: Int, val amplitude: Float, val seed: Float, val top: Float, val period: Float, val opacity: Float)
+/** Broad translucent wave sheets, rasterized once and moved as alpha masks. */
+private class Ribbon(val amplitude: Float, val seed: Float, val top: Float, val period: Float, val opacity: Float)
 
 private val Ribbons =
     listOf(
-        Ribbon(lines = 16, amplitude = 46f, seed = 0.4f, top = 0.40f, period = 80f, opacity = 1f),
-        Ribbon(lines = 12, amplitude = 34f, seed = 2.1f, top = 0.66f, period = 120f, opacity = 0.6f),
+        Ribbon(amplitude = 38f, seed = 0.4f, top = 0.34f, period = 80f, opacity = 1f),
+        Ribbon(amplitude = 28f, seed = 2.1f, top = 0.56f, period = 120f, opacity = 0.65f),
     )
-
-private val Stars =
-    Random(42).let { r -> List(30) { Star(r.nextFloat(), r.nextFloat(), 0.8f + r.nextFloat() * 1.8f, 12f + r.nextFloat() * 16f, r.nextFloat() * 20f) } }
 
 /** Ruban déjà dessiné, deux écrans de large : une image n’en copie qu’une partie. */
 private class RibbonImage(val image: ImageBitmap, val band: Float, val ribbon: Ribbon)
 
-/**
- * Le ciel de RetroHub : dégradé bleu, halos qui dérivent, rubans de lignes et particules, avec
- * l’illustration du jeu choisi. Optimisé comme le web : 24 images par seconde au plus, rubans et
- * particules dessinés une fois puis seulement déplacés, aucun flou animé. Figé quand les
- * animations sont réduites ; Android cesse de le dessiner dès que l’application est cachée.
- *
- * [hero] : l’illustration est bien visible à droite, fondue dans le ciel vers la gauche et le bas
- * (accueil façon console) ; sinon elle reste un voile flou.
- */
+/** PSP sky: cached soft waves with independently tinted console artwork. */
 @Composable
-fun AnimatedBackground(artworkUrl: String?, console: String?, accent: Color, animated: Boolean, modifier: Modifier = Modifier, hero: Boolean = false) {
+fun AnimatedBackground(
+    artworkUrl: String?,
+    console: String?,
+    accent: Color,
+    animated: Boolean,
+    modifier: Modifier = Modifier,
+    reducedMotion: Boolean = false,
+    paused: Boolean = false,
+) {
     val scheme = Palette.scheme
+    val geometry = remember { SkyGeometry() }
     var time by remember { mutableFloatStateOf(6f) }
-    LaunchedEffect(animated) {
-        if (!animated) return@LaunchedEffect
+    val moving = animated && !paused
+    LaunchedEffect(moving) {
+        if (!moving) return@LaunchedEffect
         // Animation « infinie » au sens de Compose : elle ne bloque ni l’inactivité ni les tests.
+        val initial = time
         val start = withInfiniteAnimationFrameMillis { it }
         var last = start - FRAME_MS
         while (true) {
             withInfiniteAnimationFrameMillis { now ->
                 if (now - last >= FRAME_MS) {
                     last = now
-                    time = 6f + (now - start) / 1000f
+                    time = initial + (now - start) / 1000f
                 }
             }
         }
     }
     Box(
-        modifier.fillMaxSize().drawWithCache {
+        modifier.fillMaxSize().graphicsLayer { compositingStrategy = if (moving) CompositingStrategy.Auto else CompositingStrategy.Offscreen }.drawWithCache {
             val gradient = Brush.verticalGradient(0f to scheme.skyTop, 0.48f to scheme.skyMid, 1f to scheme.skyLow)
             val top = Brush.radialGradient(listOf(scheme.glowTop, Color.Transparent), Offset(size.width / 2, -size.height * 0.1f), size.width * 0.7f)
             onDrawBehind {
@@ -104,24 +99,20 @@ fun AnimatedBackground(artworkUrl: String?, console: String?, accent: Color, ani
             }
         },
     ) {
-        Crossfade(Triple(artworkUrl, console, hero), animationSpec = tween(650), label = "backdrop") { (url, consoleId, big) ->
+        Crossfade(artworkUrl to console, animationSpec = tween(if (reducedMotion) 0 else 180), label = "backdrop") { (url, consoleId) ->
             val model = resolveArtwork(url)
-            if (big && model != null) {
-                HeroArt(model, scheme)
-            } else {
-                Box(Modifier.fillMaxSize().graphicsLayer { alpha = if (scheme.dark) 0.16f else 0.2f }) {
-                    if (model != null) {
-                        AsyncImage(model, null, Modifier.fillMaxSize().blur(24.dp), contentScale = ContentScale.Crop)
-                    } else if (consoleId != null) {
-                        Image(painterResource(artworkResource(consoleId)), null, Modifier.fillMaxSize().blur(12.dp), contentScale = ContentScale.Crop)
-                    }
+            Box(Modifier.fillMaxSize().graphicsLayer { alpha = if (scheme.dark) 0.16f else 0.2f }) {
+                if (model != null) {
+                    AsyncImage(model, null, Modifier.fillMaxSize().blur(24.dp), contentScale = ContentScale.Crop)
+                } else if (consoleId != null) {
+                    Image(painterResource(artworkResource(consoleId)), null, Modifier.fillMaxSize().blur(12.dp), contentScale = ContentScale.Crop)
                 }
             }
         }
         Box(
             Modifier.fillMaxSize().drawWithCache {
-                val ribbons = Ribbons.map { prerender(it, size, this, layoutDirection) }
-                val sprite = starSprite(this, layoutDirection)
+                geometry.prepare(size, this, layoutDirection)
+                val ribbons = geometry.ribbons
                 val radius = size.maxDimension * 0.42f
                 val glowA = Brush.radialGradient(listOf(scheme.glowA, Color.Transparent), Offset.Zero, radius)
                 val glowB = Brush.radialGradient(listOf(scheme.glowB, Color.Transparent), Offset.Zero, radius * 0.9f)
@@ -140,33 +131,24 @@ fun AnimatedBackground(artworkUrl: String?, console: String?, accent: Color, ani
                     }
                     translate(size.width * 0.5f, size.height) { drawCircle(glowBottom, radius, Offset.Zero) }
                     ribbons.forEach { drawRibbon(it, t, white) }
-                    drawStars(sprite, t)
                 }
             },
         )
     }
 }
 
-/** Illustration à la manière d’une console : nette, à droite, fondue dans le ciel. */
-@Composable
-private fun HeroArt(model: Any, scheme: SkyScheme) {
-    AsyncImage(
-        model,
-        null,
-        Modifier.fillMaxSize()
-            .graphicsLayer {
-                alpha = if (scheme.dark) 0.5f else 0.6f
-                compositingStrategy = CompositingStrategy.Offscreen
-            }.drawWithContent {
-                drawContent()
-                drawRect(
-                    Brush.horizontalGradient(0f to Color.Transparent, 0.3f to Color.Black.copy(alpha = 0.45f), 0.65f to Color.Black),
-                    blendMode = BlendMode.DstIn,
-                )
-                drawRect(Brush.verticalGradient(0.5f to Color.Black, 1f to Color.Transparent), blendMode = BlendMode.DstIn)
-            },
-        contentScale = ContentScale.Crop,
-    )
+/** Accent and theme changes must not rerasterize geometry or allocate new mask bitmaps. */
+private class SkyGeometry {
+    private var key: Triple<Size, Float, LayoutDirection>? = null
+    var ribbons: List<RibbonImage> = emptyList()
+        private set
+
+    fun prepare(size: Size, density: Density, direction: LayoutDirection) {
+        val next = Triple(size, density.density, direction)
+        if (next == key) return
+        ribbons = Ribbons.map { prerender(it, size, density, direction) }
+        key = next
+    }
 }
 
 /** Dessine un ruban une fois, en masque alpha (8 bits par pixel : peu de mémoire). */
@@ -177,20 +159,32 @@ private fun prerender(ribbon: Ribbon, size: Size, density: Density, direction: L
     val scale = band / 300f
     val base = image.height / 2f
     val step = with(density) { 6.dp.toPx() }
-    val stroke = Stroke(with(density) { 1.2.dp.toPx() })
     CanvasDrawScope().draw(density, direction, Canvas(image), Size(image.width.toFloat(), image.height.toFloat())) {
-        for (k in 0 until ribbon.lines) {
-            val path = Path()
-            var x = 0f
-            while (x <= image.width + step) {
-                val u = x / width * 2 * PI.toFloat()
-                val y =
-                    (ribbon.amplitude + k * 2.4f) * sin(u + ribbon.seed + k * 0.09f) +
-                        ribbon.amplitude * 0.35f * sin(2 * u + ribbon.seed * 2 + k * 0.16f)
-                if (x == 0f) path.moveTo(x, base + y * scale) else path.lineTo(x, base + y * scale)
-                x += step
-            }
-            drawPath(path, Color.White.copy(alpha = (0.08f + k.toFloat() / ribbon.lines * 0.32f) * ribbon.opacity), style = stroke)
+        val edge = Path()
+        var x = 0f
+        while (x <= image.width + step) {
+            val u = x / width * 2 * PI.toFloat()
+            val y = base + (ribbon.amplitude * sin(u + ribbon.seed) + ribbon.amplitude * 0.35f * sin(2 * u + ribbon.seed * 2)) * scale
+            if (x == 0f) edge.moveTo(x, y) else edge.lineTo(x, y)
+            x += step
+        }
+        val sheet = Path().apply {
+            addPath(edge)
+            lineTo(image.width.toFloat(), image.height.toFloat())
+            lineTo(0f, image.height.toFloat())
+            close()
+        }
+        drawPath(
+            sheet,
+            Brush.verticalGradient(
+                0f to Color.Transparent,
+                0.35f to Color.White.copy(alpha = 0.06f * ribbon.opacity),
+                0.65f to Color.White.copy(alpha = 0.16f * ribbon.opacity),
+                1f to Color.Transparent,
+            ),
+        )
+        for ((widthDp, alpha) in listOf(12f to 0.025f, 6f to 0.04f, 2f to 0.09f)) {
+            drawPath(edge, Color.White.copy(alpha = alpha * ribbon.opacity), style = Stroke(with(density) { widthDp.dp.toPx() }))
         }
     }
     return RibbonImage(image, band, ribbon)
@@ -209,43 +203,4 @@ private fun DrawScope.drawRibbon(ribbon: RibbonImage, t: Float, white: ColorFilt
         dstSize = IntSize(width, ribbon.image.height),
         colorFilter = white,
     )
-}
-
-/** Particule : un point lumineux dessiné une fois, puis copié à chaque image. */
-private fun starSprite(density: Density, direction: LayoutDirection): ImageBitmap {
-    val side = 32
-    val image = ImageBitmap(side, side)
-    CanvasDrawScope().draw(density, direction, Canvas(image), Size(side.toFloat(), side.toFloat())) {
-        drawCircle(
-            Brush.radialGradient(
-                0f to Color.White,
-                0.3f to Color.White.copy(alpha = 0.9f),
-                0.45f to Color(0x66BED7FF),
-                1f to Color.Transparent,
-                center = Offset(side / 2f, side / 2f),
-                radius = side / 2f,
-            ),
-        )
-    }
-    return image
-}
-
-private fun DrawScope.drawStars(sprite: ImageBitmap, t: Float) {
-    for (star in Stars) {
-        // Une particule naît, monte d’environ 100 px en dérivant, scintille puis s’éteint (rh-float).
-        val p = ((t + star.delay) % star.period) / star.period
-        val alpha =
-            when {
-                p < 0.25f -> p / 0.25f * 0.75f
-                p < 0.5f -> 0.75f - (p - 0.25f) / 0.25f * 0.5f
-                p < 0.75f -> 0.25f + (p - 0.5f) / 0.25f * 0.4f
-                else -> 0.65f * (1 - (p - 0.75f) / 0.25f)
-            }
-        val drift = 12.dp.toPx() * sin(p * PI.toFloat())
-        val rise = (20f - 100f * p) * density
-        val side = (star.radius * density * 6f * (0.6f + 0.4f * sin(p * PI.toFloat()))).roundToInt().coerceAtLeast(2)
-        val x = (star.x * size.width + drift - side / 2f).roundToInt()
-        val y = (star.y * size.height + rise - side / 2f).roundToInt()
-        drawImage(sprite, dstOffset = IntOffset(x, y), dstSize = IntSize(side, side), alpha = alpha.coerceIn(0f, 1f))
-    }
 }

@@ -10,6 +10,41 @@ change, in plain text. Never rewrite the notes of a published version.
 
 ## [Unreleased]
 
+## [2026.47.1] - 2026-11-21
+
+### Added
+
+- Keep private crash and game-error reports on the device, with explicit approval before sending supported diagnostics, a sharing fallback, and retry after the network returns.
+
+### Changed
+
+- Adapt the landscape XMB scene to the available screen: scale covers and spacing, fade neighbors at the edges, and fit the artwork preview beside readable game text on phones and tablets.
+- Bring landscape Home closer to the PSP XMB: label only the active category and game, show previous items above the horizontal axis, and coordinate sliding, scale, fading and soft selection halos.
+- Open landscape game actions and tools as side panels with the parent screen still visible; lighten typography, icons and the status bar.
+- Use softer background wave sheets and reveal selected-game details and available artwork after a short pause, cancelling stale previews when navigation resumes.
+- Make controller navigation respond immediately while the PSP-style home glides into place; accelerate held directions and let longer touch swipes traverse several games.
+- Apply downloaded-only filtering and home ordering consistently in portrait and landscape.
+
+### Fixed
+
+- Open the existing save-choice prompt from conflict notifications on launch and when the app is already open, then review pending games without choosing or launching automatically; keep version cards readable in narrow windows.
+- Give active XMB labels room to wrap, and return unused preview space to the game title when artwork is unavailable.
+- Preserve the opener's controller focus when an inline choice is closed before its initial focus transition finishes.
+- Confirm the currently selected game during rapid directional input, including before its visual transition finishes.
+- Keep scrollable settings in row order during controller navigation and prevent delayed autofocus from reclaiming the selection.
+- Cache home categories and game indexes outside the interface thread, and parse activity dates once per library change.
+- Reuse background wave geometry across console changes, give rapid home navigation priority over background motion, and respect reduced motion in background and focus transitions.
+- Preserve the last valid checkpoint after a fatal emulator error and offer reporting without restarting the failed game.
+
+### Removed
+
+- Remove obsolete folder and tile screens, ineffective pinning controls, unused font state and the unused Syne font while retaining older stored preferences.
+
+### Internal
+
+- Test home latency and rapid confirmation with normal animations and large local libraries in the optimized emulator pipeline.
+
+
 ## [2026.46.12] - 2026-11-14
 
 ### Changed

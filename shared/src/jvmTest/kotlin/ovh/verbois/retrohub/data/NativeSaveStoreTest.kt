@@ -1,6 +1,11 @@
 package ovh.verbois.retrohub.data
 
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import okio.Path.Companion.toPath
 import ovh.verbois.retrohub.MemorySaveStore
 import kotlin.test.Test
@@ -11,6 +16,22 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class NativeSaveStoreTest {
+    @Test
+    fun allSaveObservationCombinesLegacySavesAndLivePrivateConflicts() = runTest {
+        val legacy = MemorySaveStore()
+        legacy.put(LocalSave("legacy", "sram", 0, "nes", conflictRevision = 2))
+        val store = NativeSaveStore(legacy, legacy.fs, "/private".toPath(), { "account-a" })
+        val updates = Channel<List<LocalSave>>(Channel.UNLIMITED)
+        suspend fun next() = withContext(Dispatchers.Default) { withTimeout(5000) { updates.receive() } }
+        backgroundScope.launch { store.observeAll().collect { updates.send(it) } }
+        assertEquals(listOf("legacy"), next().map { it.gameId })
+        val privateSave = LocalSave("private", "sram", 0, "3ds", conflictRevision = 3)
+        store.put(privateSave)
+        assertEquals(setOf("legacy", "private"), next().filter { it.inConflict }.map { it.gameId }.toSet())
+        store.put(privateSave.copy(conflictRevision = null))
+        assertEquals(listOf("legacy"), next().filter { it.inConflict }.map { it.gameId })
+    }
+
     @Test
     fun accountsAndRunningSessionsKeepSeparatePersistentSaveIdentities() = runTest {
         val legacy = MemorySaveStore()

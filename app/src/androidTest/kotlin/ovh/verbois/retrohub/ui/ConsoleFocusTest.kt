@@ -46,6 +46,7 @@ class ConsoleFocusTest {
 
     @Test
     fun joystickNavigationMovesOneItemAndNeutralStopsRepeating() {
+        rule.settleOrientation(portrait = false)
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         instrumentation.setInTouchMode(false)
         val first = FocusRequester()
@@ -89,6 +90,7 @@ class ConsoleFocusTest {
 
     @Test
     fun dpadMovesTheFocusAndButtonAClicks() {
+        rule.settleOrientation(portrait = false)
         // Une manette fait sortir Android du mode tactile : les éléments deviennent focalisables.
         InstrumentationRegistry.getInstrumentation().setInTouchMode(false)
         var clicked by mutableStateOf("")

@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -63,7 +64,7 @@ import ovh.verbois.retrohub.library.Game
 import ovh.verbois.retrohub.ui.components.ActionButtons
 import ovh.verbois.retrohub.ui.components.ChoiceRow
 import ovh.verbois.retrohub.ui.components.SettingsGroup
-import ovh.verbois.retrohub.ui.home.GameTile
+import ovh.verbois.retrohub.ui.home.GameCard
 import ovh.verbois.retrohub.ui.icons.Lucide
 import ovh.verbois.retrohub.ui.nav.SettingsPage
 import ovh.verbois.retrohub.ui.onboarding.SetupWizard
@@ -207,13 +208,13 @@ class AdaptiveLayoutTest {
         var progress by mutableStateOf(DownloadState.Running(25, 100))
         val game = Game(LibraryGame("cover", "cover", title = "Jeu", console = "nds"), null)
         show(320f, fontScale = 1.6f) {
-            GameTile(game, true, 80.dp, 112.dp, {}, {}, Modifier.testTag("cover"), download = progress)
+            GameCard(game, {}, Modifier.width(112.dp).testTag("cover"), download = progress)
         }
         val overlay = rule.onNodeWithTag("game-download-progress", useUnmergedTree = true)
         val cover = rule.onNodeWithTag("cover", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
         val bounds = overlay.fetchSemanticsNode().boundsInRoot
         assertTrue(bounds.top >= cover.top)
-        assertTrue(abs(bounds.bottom - cover.bottom) < 1f)
+        assertTrue(abs(bounds.bottom - (cover.top + cover.width)) < 1f)
         assertEquals(0.25f, overlay.fetchSemanticsNode().config[SemanticsProperties.ProgressBarRangeInfo].current)
         rule.runOnIdle { progress = DownloadState.Running(75, 100) }
         assertEquals(0.75f, overlay.fetchSemanticsNode().config[SemanticsProperties.ProgressBarRangeInfo].current)

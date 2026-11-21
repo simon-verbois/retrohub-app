@@ -3,6 +3,7 @@
 #   scripts/test.sh unit           JVM tests (API contract, sync, emulation, UI), no emulator
 #   scripts/test.sh instrumented   Room, WorkManager, controller navigation (emulator running)
 #   scripts/test.sh e2e            full flow against the real RetroHub backend (emulator running)
+#   scripts/test.sh performance  real-clock home performance and rapid input, optimized build
 #   scripts/test.sh all            all three, in this order (default)
 # Start the emulator with scripts/emulator.sh up && scripts/emulator.sh wait.
 # The e2e level starts the disposable backend (../retrohub/scripts/e2e-backend.py) itself if it does not respond.
@@ -17,13 +18,19 @@ server_port=8011
 app_id="ovh.verbois.retrohub.debug"
 abis="${RETROHUB_TEST_ABIS:-x86_64}"
 variant="${RETROHUB_TEST_VARIANT:-debug}"
+if [[ "$level" == performance && -z "${RETROHUB_TEST_VARIANT:-}" ]]; then variant=benchmark; fi
 case "$variant" in debug|benchmark) ;; *) echo "Invalid test variant: $variant" >&2; exit 2 ;; esac
 variant_task="${variant^}"
 gradle=(./gradlew --console=plain "-Pretrohub.abis=$abis" "-Pretrohub.testVariant=$variant")
 export ANDROID_SERIAL="${ANDROID_SERIAL:-$(scripts/emulator.sh serial)}"
 backend_pid=""
+animation_settings=()
 
 cleanup() {
+  for setting in "${animation_settings[@]}"; do
+    local key="${setting%%=*}" value="${setting#*=}"
+    if [[ "$value" == null ]]; then adb shell settings delete global "$key" >/dev/null; else adb shell settings put global "$key" "$value"; fi
+  done
   if [[ -n "$backend_pid" ]]; then
     kill "$backend_pid" 2>/dev/null || true
     wait "$backend_pid" 2>/dev/null || true
@@ -55,9 +62,9 @@ instrumented() {
   local group="${RETROHUB_INSTRUMENTED_GROUP:-all}"
   local selection=()
   case "$group" in
-    all) selection=(-Pandroid.testInstrumentationRunnerArguments.notPackage=ovh.verbois.retrohub.e2e) ;;
+    all) selection=(-Pandroid.testInstrumentationRunnerArguments.notPackage=ovh.verbois.retrohub.e2e,ovh.verbois.retrohub.performance) ;;
     native) selection=(-Pandroid.testInstrumentationRunnerArguments.package=ovh.verbois.retrohub.game) ;;
-    interface) selection=(-Pandroid.testInstrumentationRunnerArguments.notPackage=ovh.verbois.retrohub.e2e,ovh.verbois.retrohub.game -Pandroid.testInstrumentationRunnerArguments.notClass=ovh.verbois.retrohub.ui.NavigationTreeTest) ;;
+    interface) selection=(-Pandroid.testInstrumentationRunnerArguments.notPackage=ovh.verbois.retrohub.e2e,ovh.verbois.retrohub.game,ovh.verbois.retrohub.performance -Pandroid.testInstrumentationRunnerArguments.notClass=ovh.verbois.retrohub.ui.NavigationTreeTest) ;;
     navigation) selection=(-Pandroid.testInstrumentationRunnerArguments.class=ovh.verbois.retrohub.ui.NavigationTreeTest) ;;
     *) echo "Invalid instrumented test group: $group" >&2; return 2 ;;
   esac
@@ -134,10 +141,32 @@ e2e() {
   echo "$output" | grep -Eq '^OK \([1-9][0-9]* tests?\)' || { echo "End-to-end flow failed." >&2; exit 1; }
 }
 
+performance() {
+  echo "== Home performance with normal animations ($variant)"
+  need_device
+  ensure_cores
+  "${gradle[@]}" :app:install${variant_task} :app:install${variant_task}AndroidTest
+  for key in window_animation_scale transition_animation_scale animator_duration_scale; do
+    animation_settings+=("$key=$(adb shell settings get global "$key" | tr -d '\r')")
+    adb shell settings put global "$key" 1
+  done
+  local output result=0
+  output="$(timeout 240s adb shell am instrument -w -r \
+    -e class ovh.verbois.retrohub.performance.HomePerformanceTest \
+    "$app_id.test/androidx.test.runner.AndroidJUnitRunner" | tr -d '\r')" || result=$?
+  echo "$output"
+  mkdir -p "build/performance/$variant"
+  adb pull "/sdcard/Android/data/$app_id/files/performance/." "build/performance/$variant/" >/dev/null 2>&1 || true
+  adb logcat -d -s RetroHubPerformance:I > "build/performance/$variant/logcat.txt"
+  echo "$output" > "build/performance/$variant/instrumentation.txt"
+  ((result == 0)) && echo "$output" | grep -Eq '^OK \([1-9][0-9]* tests?\)' || { echo "Home performance regression." >&2; return 1; }
+}
+
 case "$level" in
   unit) unit ;;
   instrumented) instrumented ;;
   e2e) e2e ;;
+  performance) performance ;;
   all) unit; instrumented; e2e ;;
-  *) echo "Usage: $0 [unit|instrumented|e2e|all]" >&2; exit 2 ;;
+  *) echo "Usage: $0 [unit|instrumented|e2e|performance|all]" >&2; exit 2 ;;
 esac

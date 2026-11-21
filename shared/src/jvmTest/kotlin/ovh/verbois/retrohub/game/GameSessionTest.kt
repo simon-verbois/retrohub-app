@@ -29,6 +29,40 @@ class GameSessionTest {
     private val plan = LaunchPlan("game", "play", "Jeu", "nes", "fceumm", "/rom.nes", "local-rom", "/system", "/core", "/sram", false)
 
     @Test
+    fun fatalErrorsPreserveTheLastCheckpointAndDisableFurtherEngineActions() = runTest {
+        val saves = MemorySaveStore()
+        val original = byteArrayOf(9, 8, 7)
+        saves.write("play", "state", 0, original)
+        val engine = FakeEngine()
+        val api = TestApi()
+        try {
+            val session =
+                GameSession(plan, engine, saves.fs, saves, SaveSync(api.api, saves), MemorySessionStore(), {
+                }, backgroundScope, io = StandardTestDispatcher(testScheduler))
+            session.onFirstFrame()
+            val gate = CompletableDeferred<Unit>()
+            engine.beforeSnapshot = { gate.await() }
+            val snapshot = async { session.autoSave() }
+            runCurrent()
+            session.reportError("Erreur de jeu", fatal = true)
+            gate.complete(Unit)
+            snapshot.await()
+            session.resume()
+            session.reset()
+            assertFalse(session.saveState(1))
+            assertFalse(session.loadState(0))
+            session.finish()
+            assertTrue(session.ui.value.failed)
+            assertTrue(session.ui.value.paused)
+            assertEquals(0, engine.resets)
+            assertEquals(0, engine.loaded)
+            assertContentEquals(original, saves.read("play", "state", 0))
+        } finally {
+            api.close()
+        }
+    }
+
+    @Test
     fun nativeStatesRequireTheExactConsoleCoreBuildAndRom() = runTest {
         val saves = MemorySaveStore()
         val engine = FakeEngine()

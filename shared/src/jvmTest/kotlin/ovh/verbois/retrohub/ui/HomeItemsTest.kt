@@ -7,9 +7,7 @@ import ovh.verbois.retrohub.emulation.AppSettings
 import ovh.verbois.retrohub.emulation.HomeFolder
 import ovh.verbois.retrohub.library.Game
 import ovh.verbois.retrohub.ui.components.gridVerticalTarget
-import ovh.verbois.retrohub.ui.home.HomeEntry
 import ovh.verbois.retrohub.ui.home.homeColumns
-import ovh.verbois.retrohub.ui.home.homeEntries
 import ovh.verbois.retrohub.ui.home.homeOrder
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -54,10 +52,9 @@ class HomeItemsTest {
         )
         val settings = AppSettings(homeActivity = mapOf("offline" to "2026-11-13T13:00:00Z"))
         assertEquals(listOf("offline", "download", "web"), homeOrder(games, activity = settings.homeActivity).take(3).map { it.id })
-        val folder = homeEntries(games, settings, null).filterIsInstance<HomeEntry.FolderItem>().single()
-        assertEquals("nes", folder.folder.consoleId)
-        assertTrue("download" in folder.folder.gameIds)
-        assertEquals(games.size, folder.folder.gameIds.size)
+        val console = homeColumns(games, settings).first { it.console == "nes" }
+        assertTrue("download" in console.indices)
+        assertEquals(games.size, console.games.size)
     }
 
     @Test
@@ -65,11 +62,9 @@ class HomeItemsTest {
         val folder = HomeFolder("collection", "Mes jeux", listOf("game-1"), favorite = true)
         val games = (0..25).map { game("game-$it") }
         val settings = AppSettings(homePins = listOf("game-25", folder.key, "game-2"), homeFolders = listOf(folder))
-        val entries = homeEntries(games, settings, null)
-        assertEquals(listOf("catalogue", "game-25", "game-2", "folder:console:nes"), entries.take(4).map { it.key })
+        val entries = homeColumns(games, settings)
+        assertEquals(listOf("catalogue", "favorites", "console:nes"), entries.map { it.key })
         assertEquals(entries.size, entries.distinctBy { it.key }.size)
-        assertEquals(listOf("game-25", "game-2", folder.key), settings.moveHomePin(folder.key, 1).homePins)
-        assertEquals(listOf("game-25", "game-2"), settings.toggleHomePin(folder.key).homePins)
     }
 
     @Test
@@ -78,7 +73,27 @@ class HomeItemsTest {
         val settings = AppSettings(homeFolders = listOf(folder), homePins = listOf(folder.key))
         assertEquals(settings, ApiJson.decodeFromString(AppSettings.serializer(), ApiJson.encodeToString(AppSettings.serializer(), settings)))
         assertTrue(ApiJson.decodeFromString(AppSettings.serializer(), "{}").homeFolders.isEmpty())
-        assertFalse(homeEntries(emptyList(), settings, null).any { it is HomeEntry.FolderItem })
+        assertEquals(listOf("catalogue", "favorites"), homeColumns(emptyList(), settings).map { it.key })
+    }
+
+    @Test
+    fun unrelatedSettingsDoNotInvalidateTheHomeModel() {
+        val settings = AppSettings(homeActivity = mapOf("game" to "2026-11-13T13:00:00Z"))
+        assertEquals(
+            ovh.verbois.retrohub.ui.home.HomePreferences(settings),
+            ovh.verbois.retrohub.ui.home.HomePreferences(settings.copy(audio = false, reduceMotion = true)),
+        )
+    }
+
+    @Test
+    fun flatPortraitAndConsoleLibrariesShareDownloadedFilteringAndOrdering() {
+        val remote = game("remote", played = "2026-11-14T12:00:00Z")
+        val local = game("local", downloaded = "2026-11-13T12:00:00Z")
+        val model = ovh.verbois.retrohub.ui.home.homeLibrary(listOf(remote, local), ovh.verbois.retrohub.ui.home.HomePreferences(downloadedOnly = true))
+        assertEquals(listOf(local), model.games)
+        assertEquals(model.games, model.byColumn.getValue("console:nes").games)
+        assertEquals(0, model.byColumn.getValue("console:nes").indices[local.id])
+        assertFalse(remote.id in model.byId)
     }
 
     @Test

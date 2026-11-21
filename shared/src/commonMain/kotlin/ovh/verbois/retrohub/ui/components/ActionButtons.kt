@@ -79,7 +79,7 @@ fun ActionButtons(
         )
         val otherModifier = secondaryModifier.then(secondaryNavigation)
             .then(if (entryFocus != null && horizontal) Modifier.focusRequester(entryFocus) else Modifier)
-        if (horizontal && secondary != null) {
+        if (horizontal) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
                 GlassButton(secondary, onSecondary, otherModifier, icon = secondaryIcon)
                 PrimaryButton(primary, onPrimary, Modifier.weight(1f).then(mainModifier), icon = primaryIcon, loading = loading)

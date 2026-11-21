@@ -188,7 +188,7 @@ data class ConsoleSettings(
     val optionsByCore: Map<String, Map<String, String>> = emptyMap(),
 )
 
-/** Manual collections and their order belong to this device's library. */
+/** Legacy collections remain decodable without changing older local preferences. */
 @Serializable
 data class HomeFolder(val id: String, val name: String, val gameIds: List<String> = emptyList(), val favorite: Boolean = false, val onHome: Boolean = true) {
     val key: String get() = "folder:$id"
@@ -261,19 +261,6 @@ data class AppSettings(
     val gameRotations: Map<String, GameRotation> = emptyMap(),
     val consoles: Map<String, ConsoleSettings> = emptyMap(),
 ) {
-    fun toggleHomePin(key: String): AppSettings = copy(homePins = if (key in homePins) homePins - key else homePins + key)
-
-    fun moveHomePin(key: String, step: Int): AppSettings {
-        val from = homePins.indexOf(key)
-        if (from < 0) return this
-        val to = (from + step).coerceIn(0, homePins.lastIndex)
-        val pins = homePins.toMutableList().apply {
-            removeAt(from)
-            add(to, key)
-        }
-        return copy(homePins = pins)
-    }
-
     fun console(id: String): ConsoleSettings = consoles[id] ?: ConsoleSettings()
 
     fun withConsole(id: String, update: (ConsoleSettings) -> ConsoleSettings): AppSettings = copy(consoles = consoles + (id to update(console(id))))

@@ -73,85 +73,77 @@ enum class Sort(val label: String) {
     RECENT("Récents"),
     TITLE("A → Z"),
     CONSOLE("Console"),
+    FAVORITES("Favoris"),
 }
+
+private val consoleOrder = Consoles.all.mapIndexed { index, console -> console.id to index }.toMap()
 
 fun sortGames(games: List<Game>, sort: Sort): List<Game> = when (sort) {
     Sort.RECENT -> ovh.verbois.retrohub.ui.home.homeOrder(games)
-
     Sort.TITLE -> games.sortedBy { it.sortTitle }
-
-    Sort.CONSOLE -> games.sortedWith(
-        compareBy<Game> {
-            Consoles.all.indexOfFirst { s -> s.id == it.console }.let { i ->
-                if (i <
-                    0
-                ) {
-                    99
-                } else {
-                    i
-                }
-            }
-        }.thenBy { it.sortTitle },
-    )
+    Sort.FAVORITES -> ovh.verbois.retrohub.ui.home.homeOrder(games, ovh.verbois.retrohub.emulation.HomeOrder.FAVORITES)
+    Sort.CONSOLE -> games.sortedWith(compareBy<Game> { consoleOrder[it.console] ?: Int.MAX_VALUE }.thenBy { it.sortTitle })
 }
 
 /** Library games use one grid and the same directional navigation. */
 @Composable
-fun LibraryScreen(controller: UiController, console: String?, favoritesOnly: Boolean, folderId: String? = null) {
+fun LibraryScreen(controller: UiController, console: String?, favoritesOnly: Boolean) {
     val tree = LocalNavigationFocus.current
-    val games by controller.container.library.games.collectAsState()
+    val model by controller.home.collectAsState()
     val downloads by controller.container.downloads.states.collectAsState()
     val settings by controller.container.settings.settings.collectAsState()
     var filter by rememberSaveable(console) { mutableStateOf(console) }
-    var sort by rememberSaveable { mutableStateOf(Sort.RECENT) }
+    var sort by rememberSaveable(settings.homeOrder) {
+        mutableStateOf(
+            when (settings.homeOrder) {
+                ovh.verbois.retrohub.emulation.HomeOrder.TITLE -> Sort.TITLE
+                ovh.verbois.retrohub.emulation.HomeOrder.FAVORITES -> Sort.FAVORITES
+                else -> Sort.RECENT
+            },
+        )
+    }
     var focusedGame by rememberSaveable { mutableStateOf<String?>(null) }
-    val folder = settings.homeFolders.firstOrNull { it.id == folderId }
-    val base = remember(games, favoritesOnly, settings.hiddenConsoles, folder) {
-        games.filter {
-            (!favoritesOnly || it.favorite) && it.console !in settings.hiddenConsoles &&
-                (folderId == null || it.id in (folder?.gameIds ?: emptyList()))
-        }
+    val base = if (favoritesOnly) model.byColumn.getValue("favorites").games else model.games
+    val consoles = remember(base) {
+        val present = base.map { it.console }.toSet()
+        Consoles.all.filter { it.id in present }
     }
-    val consoles = remember(base) { Consoles.all.filter { spec -> base.any { it.console == spec.id } } }
-    val sorted by produceState<List<ovh.verbois.retrohub.ui.home.HomeEntry>?>(null, base, filter, sort, settings.homeFolders, settings.homeConsoleFavorites) {
+    val shown by produceState<List<Game>>(emptyList(), base, filter, sort, settings.homeActivity) {
         value = withContext(Dispatchers.Default) {
-            val folders = if (folderId == null &&
-                filter == null
-            ) {
-                val consoles = if (favoritesOnly) {
-                    ovh.verbois.retrohub.ui.home.homeEntries(games, settings, null).filterIsInstance<ovh.verbois.retrohub.ui.home.HomeEntry.FolderItem>()
-                        .filter { it.folder.consoleId != null && it.folder.favorite }
-                } else {
-                    emptyList()
-                }
-                consoles
-            } else {
-                emptyList()
+            val filtered = base.filter { filter == null || it.console == filter }
+            when (sort) {
+                Sort.RECENT -> ovh.verbois.retrohub.ui.home.homeOrder(filtered, activity = settings.homeActivity)
+
+                Sort.FAVORITES -> ovh.verbois.retrohub.ui.home.homeOrder(
+                    filtered,
+                    ovh.verbois.retrohub.emulation.HomeOrder.FAVORITES,
+                    activity = settings.homeActivity,
+                )
+
+                else -> sortGames(filtered, sort)
             }
-            folders + sortGames(base.filter { filter == null || it.console == filter }, sort).map { ovh.verbois.retrohub.ui.home.HomeEntry.GameItem(it) }
         }
     }
-    val shown = sorted ?: return
-    if (favoritesOnly && base.isEmpty() && shown.isEmpty()) {
+    if (favoritesOnly && base.isEmpty()) {
         SideEffect { tree.content = tree.header }
         AutoFocus(tree.header)
         CenteredMessage("Aucun favori pour l’instant", "", Lucide.Heart)
         return
     }
     val grid = rememberLazyGridState()
-    val requesters = remember { mutableMapOf<String, FocusRequester>() }
-    shown.forEach { requesters.getOrPut(it.key) { FocusRequester() } }
+    val selectedFocus = remember { FocusRequester() }
     val filtersFocus = remember { FocusRequester() }
-    val selected = shown.firstOrNull { it.key == focusedGame } ?: shown.firstOrNull()
-    val contentFocus = selected?.let { requesters.getValue(it.key) } ?: filtersFocus
+    val indices = remember(shown) { shown.mapIndexed { index, game -> game.id to index }.toMap() }
+    val selected = shown.getOrNull(indices[focusedGame] ?: 0)
+    val contentFocus = if (selected != null) selectedFocus else filtersFocus
     SideEffect { tree.content = contentFocus }
     AutoFocus(contentFocus)
-    LaunchedEffect(shown.map { it.key }) {
-        val index = shown.indexOfFirst { it.key == focusedGame }
-        if (index >= 0) {
+    LaunchedEffect(shown) {
+        val index = indices[focusedGame]
+        if (index != null) {
             if (grid.layoutInfo.visibleItemsInfo.none { it.key == focusedGame }) grid.scrollToItem(index)
             snapshotFlow { grid.layoutInfo.visibleItemsInfo.any { it.key == focusedGame } }.first { it }
-            requesters[focusedGame]?.requestFocus()
+            selectedFocus.requestFocus()
         }
     }
     LaunchedEffect(filter) { controller.backdrop = Backdrop(null, filter ?: base.firstOrNull()?.console) }
@@ -185,11 +177,11 @@ fun LibraryScreen(controller: UiController, console: String?, favoritesOnly: Boo
         androidx.compose.foundation.layout.BoxWithConstraints(
             Modifier.fillMaxSize().padding(start = if (portrait) 8.dp else 68.dp, top = if (portrait) 64.dp else 0.dp),
         ) {
-            val minimum = if (controller.portrait) 116.dp else 128.dp
+            val minimum = if (portrait) 116.dp else 128.dp
             val columns = ((maxWidth - 32.dp + 12.dp) / (minimum + 12.dp)).toInt().coerceAtLeast(1)
             val navigation = ovh.verbois.retrohub.ui.components.gridNavigation(grid, shown.size, columns)
             if (shown.isEmpty()) {
-                CenteredMessage(if (favoritesOnly) "Aucun favori pour l’instant" else "Aucun jeu", "", if (favoritesOnly) Lucide.Heart else Lucide.FolderOpen)
+                CenteredMessage("Aucun jeu", "", Lucide.FolderOpen)
             } else {
                 LazyVerticalGrid(
                     state = grid,
@@ -199,86 +191,26 @@ fun LibraryScreen(controller: UiController, console: String?, favoritesOnly: Boo
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp),
                 ) {
-                    itemsIndexed(shown, key = { _, entry -> entry.key }) { index, entry ->
-                        val modifier = navigation(index).focusRequester(requesters.getValue(entry.key)).focusProperties {
+                    itemsIndexed(shown, key = { _, game -> game.id }) { index, game ->
+                        val modifier = navigation(index).then(
+                            if (game.id ==
+                                selected?.id
+                            ) {
+                                Modifier.focusRequester(selectedFocus)
+                            } else {
+                                Modifier
+                            },
+                        ).focusProperties {
                             if (index < columns) up = tree.header
                             if (index % columns == 0) left = filtersFocus
                             if (index % columns == columns - 1 || index == shown.lastIndex) right = FocusRequester.Cancel
                             if (index / columns == shown.lastIndex / columns) down = FocusRequester.Cancel
-                        }.onFocusChanged { if (it.isFocused) focusedGame = entry.key }
-                        when (entry) {
-                            is ovh.verbois.retrohub.ui.home.HomeEntry.GameItem -> GameCard(entry.game, {
-                                controller.showGame(entry.key)
-                            }, modifier.testTag("library-game-${entry.key}"), downloads[entry.game.playGameId])
-
-                            is ovh.verbois.retrohub.ui.home.HomeEntry.FolderItem -> ovh.verbois.retrohub.ui.home.FolderCard(entry.folder, {
-                                controller.nav.go(
-                                    entry.folder.consoleId?.let { ovh.verbois.retrohub.ui.nav.Route.Library(it) }
-                                        ?: ovh.verbois.retrohub.ui.nav.Route.Folder(entry.folder.id),
-                                )
-                            }, modifier.testTag("library-${entry.key}"), onLongClick = {
-                                if (entry.folder.consoleId == null) controller.folderEditor = entry.folder
-                            })
-
-                            else -> Unit
-                        }
+                        }.onFocusChanged { if (it.isFocused) focusedGame = game.id }
+                        GameCard(game, { controller.showGame(game.id) }, modifier.testTag("library-game-${game.id}"), downloads[game.playGameId])
                     }
                 }
             }
         }
-    }
-}
-
-@Composable
-fun FolderScreen(controller: UiController, id: String) {
-    val settings by controller.container.settings.settings.collectAsState()
-    val folder = settings.homeFolders.firstOrNull { it.id == id } ?: return
-    Column(Modifier.fillMaxSize()) {
-        Row(
-            Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                folder.name,
-                Modifier.weight(1f),
-                style = MaterialTheme.typography.headlineSmall,
-                maxLines = 1,
-                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-            )
-            RoundButton(if (folder.favorite) Lucide.HeartFilled else Lucide.Heart, "Favori", {
-                controller.container.settings.update { current ->
-                    current.copy(
-                        homeFolders = current.homeFolders.map {
-                            if (it.id ==
-                                id
-                            ) {
-                                it.copy(favorite = !it.favorite)
-                            } else {
-                                it
-                            }
-                        },
-                    )
-                }
-            }, size = 48.dp, selected = folder.favorite, selectedSurface = false)
-            RoundButton(Lucide.Pin, "Épingler à l’accueil", {
-                controller.container.settings.update { current ->
-                    current.toggleHomePin(folder.key).copy(
-                        homeFolders = current.homeFolders.map {
-                            if (it.id ==
-                                id
-                            ) {
-                                it.copy(onHome = true)
-                            } else {
-                                it
-                            }
-                        },
-                    )
-                }
-            }, size = 48.dp, selected = folder.key in settings.homePins)
-            RoundButton(Lucide.SlidersHorizontal, "Modifier le dossier", { controller.folderEditor = folder }, size = 48.dp)
-        }
-        Box(Modifier.weight(1f)) { LibraryScreen(controller, null, false, id) }
     }
 }
 

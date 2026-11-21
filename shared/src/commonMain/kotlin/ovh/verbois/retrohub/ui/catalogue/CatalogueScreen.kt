@@ -243,7 +243,7 @@ fun CatalogueScreen(controller: UiController) {
             BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
                 val columns = ((maxWidth + 16.dp) / 160.dp).toInt().coerceAtLeast(1)
                 val grid = rememberLazyGridState()
-                val navigation = ovh.verbois.retrohub.ui.components.gridNavigation(grid, result!!.items.size, columns)
+                val navigation = ovh.verbois.retrohub.ui.components.gridNavigation(grid, result.items.size, columns)
                 LazyVerticalGrid(
                     GridCells.Fixed(columns),
                     Modifier.fillMaxSize(),
@@ -252,7 +252,7 @@ fun CatalogueScreen(controller: UiController) {
                     horizontalArrangement = Arrangement.spacedBy(16.dp),
                     verticalArrangement = Arrangement.spacedBy(20.dp),
                 ) {
-                    itemsIndexed(result!!.items, key = { _, game -> game.id }) { index, entry ->
+                    itemsIndexed(result.items, key = { _, game -> game.id }) { index, entry ->
                         val known = library.firstOrNull { it.id == entry.id }
                         val game =
                             Game(

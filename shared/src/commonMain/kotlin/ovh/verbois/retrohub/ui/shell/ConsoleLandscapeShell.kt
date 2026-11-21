@@ -1,5 +1,8 @@
 package ovh.verbois.retrohub.ui.shell
 
+import androidx.compose.animation.*
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
@@ -19,6 +22,7 @@ import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.boundsInWindow
@@ -28,13 +32,13 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.unit.sp
 import org.jetbrains.compose.resources.stringResource
 import ovh.verbois.retrohub.account.Account
 import ovh.verbois.retrohub.core.formatBytes
@@ -42,7 +46,7 @@ import ovh.verbois.retrohub.emulation.HintsMode
 import ovh.verbois.retrohub.resources.*
 import ovh.verbois.retrohub.ui.UiController
 import ovh.verbois.retrohub.ui.components.*
-import ovh.verbois.retrohub.ui.home.FolderEditor
+import ovh.verbois.retrohub.ui.game.LaunchChoiceDialog
 import ovh.verbois.retrohub.ui.icons.Lucide
 import ovh.verbois.retrohub.ui.nav.Route
 import ovh.verbois.retrohub.ui.nav.Section
@@ -51,6 +55,11 @@ import ovh.verbois.retrohub.ui.theme.Palette
 /** Landscape has one permanent home. Tools and decisions open above it. */
 @Composable
 internal fun ConsoleLandscapeShell(controller: UiController, account: Account, content: @Composable (Route) -> Unit) {
+    XmbTheme { LandscapeContent(controller, account, content) }
+}
+
+@Composable
+private fun LandscapeContent(controller: UiController, account: Account, content: @Composable (Route) -> Unit) {
     val settings by controller.container.settings.settings.collectAsState()
     val online by controller.container.platform.online.collectAsState()
     val sync by controller.container.sync.status.collectAsState()
@@ -67,7 +76,13 @@ internal fun ConsoleLandscapeShell(controller: UiController, account: Account, c
     val browsing =
         route == Route.Home || route is Route.Library || route is Route.Folder || route is Route.Game || route == Route.Favorites || route == Route.Downloads
     val overlay = !browsing
-    val active = !overlay && !controller.searching && !controller.menuOpen && controller.folderEditor == null
+    val active = !overlay && !controller.searching && !controller.menuOpen && !controller.gameMenu
+    val reduced = settings.reduceMotion || controller.container.platform.reducedMotion
+    val parentOpacity by animateFloatAsState(if (overlay || controller.gameMenu) 0.55f else 1f, tween(if (reduced) 0 else 160))
+    var lastTool by remember { mutableStateOf<Route>(Route.Settings()) }
+    SideEffect { if (overlay) lastTool = route }
+    val tool = if (overlay) route else lastTool
+    val toolPresentation = rememberUpdatedState(tool to overlay)
     val showHints = settings.hints == HintsMode.ALWAYS || (settings.hints == HintsMode.AUTO && gamepad)
     val closeSearch = {
         keyboard?.hide()
@@ -138,14 +153,14 @@ internal fun ConsoleLandscapeShell(controller: UiController, account: Account, c
             },
         ) {
             CompositionLocalProvider(LocalScreenActive provides (!overlay && !controller.menuOpen)) {
-                Column(Modifier.fillMaxSize()) {
+                Column(Modifier.fillMaxSize().graphicsLayer { alpha = parentOpacity }) {
                     Row(
                         Modifier.fillMaxWidth().height(48.dp).padding(horizontal = 20.dp).focusProperties { down = navigation.content },
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
                         if (!controller.searching) {
-                            Text("RetroHub", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Light)
+                            Text("RetroHub", style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp), fontWeight = FontWeight.Light)
                             if (!online) {
                                 Icon(Lucide.WifiOff, "Hors connexion", Modifier.size(16.dp), tint = Palette.TextDim)
                             }
@@ -154,7 +169,7 @@ internal fun ConsoleLandscapeShell(controller: UiController, account: Account, c
                             HeaderSearch(
                                 controller,
                                 search,
-                                40.dp,
+                                28.dp,
                                 closeSearch,
                                 Modifier.align(Alignment.CenterEnd)
                                     .widthIn(max = 520.dp).fillMaxWidth().height(48.dp).focusRequester(navigation.header),
@@ -171,12 +186,12 @@ internal fun ConsoleLandscapeShell(controller: UiController, account: Account, c
                                 account.username,
                                 account.server,
                                 account.avatar,
-                                Modifier.size(28.dp).testTag("header-profile-avatar"),
+                                Modifier.size(20.dp).testTag("header-profile-avatar"),
                                 showBackground = false,
                             )
                             Box(Modifier.align(Alignment.TopEnd).padding(6.dp).size(6.dp).clip(CircleShape).background(statusTint))
                         }
-                        StatusPill(controller.container.platform, transparent = true)
+                        StatusPill(controller.container.platform, transparent = true, compact = true)
                     }
                     Box(Modifier.fillMaxWidth().weight(1f)) {
                         CompositionLocalProvider(LocalScreenActive provides active) { content(Route.Home) }
@@ -190,7 +205,7 @@ internal fun ConsoleLandscapeShell(controller: UiController, account: Account, c
                             listOf(
                                 "A" to "Choisir",
                                 "Y" to "Rechercher",
-                                "LB / RB" to "Dossiers",
+                                "LB / RB" to "Consoles",
                                 "Options" to "Actions du jeu",
                             ).forEach { (key, label) ->
                                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -229,21 +244,32 @@ internal fun ConsoleLandscapeShell(controller: UiController, account: Account, c
                     style = MaterialTheme.typography.bodyMedium,
                 )
             }
-            if (overlay) {
-                Dialog(onDismissRequest = { controller.back() }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-                    val panelNavigation = remember { NavigationFocus() }
-                    Box(
-                        Modifier.fillMaxWidth(0.9f).fillMaxHeight(0.92f).widthIn(max = 1200.dp).testTag("home-overlay")
-                            .clip(RoundedCornerShape(20.dp)).background(Palette.Deep).controllerDialog({ controller.back() }),
-                    ) {
-                        CompositionLocalProvider(LocalNavigationFocus provides panelNavigation, LocalScreenActive provides true) {
-                            overlayStates.SaveableStateProvider(route.toString()) { key(route) { content(route) } }
+            XmbSidePanel(overlay, { controller.back() }, wide = true, tag = "home-overlay") {
+                val panelNavigation = remember { NavigationFocus() }
+                AnimatedContent(
+                    targetState = toolPresentation.value.first,
+                    modifier = Modifier.fillMaxSize(),
+                    transitionSpec = {
+                        val direction = if (controller.nav.forward.value) 1 else -1
+                        (fadeIn(tween(if (reduced) 0 else 160)) + slideInHorizontally(tween(if (reduced) 0 else 180)) { it / 12 * direction })
+                            .togetherWith(
+                                fadeOut(tween(if (reduced) 0 else 100)) + slideOutHorizontally(tween(if (reduced) 0 else 140)) {
+                                    -it / 16 * direction
+                                },
+                            )
+                    },
+                    label = "xmb-tool-depth",
+                ) { displayed ->
+                    val live = toolPresentation.value
+                    val current = live.second && displayed == live.first
+                    Box(Modifier.fillMaxSize().then(if (current) Modifier else Modifier.clearAndSetSemantics { })) {
+                        CompositionLocalProvider(LocalNavigationFocus provides panelNavigation, LocalScreenActive provides current) {
+                            overlayStates.SaveableStateProvider(displayed.toString()) { key(displayed) { content(displayed) } }
                         }
                     }
                 }
             }
         }
-        controller.folderEditor?.let { FolderEditor(controller, it) }
         controller.downloadRequest?.let { game ->
             ConfirmDialog(
                 stringResource(Res.string.download_confirm_title),
@@ -254,18 +280,6 @@ internal fun ConsoleLandscapeShell(controller: UiController, account: Account, c
                 dismiss = stringResource(Res.string.action_cancel),
             )
         }
-        controller.launchIssue?.let { issue ->
-            ConfirmDialog(
-                "Quelle partie reprendre ?",
-                "Plusieurs progressions sont disponibles. Choisissez celle à garder pour continuer.",
-                "Choisir",
-                onConfirm = {
-                    controller.launchIssue = null
-                    controller.nav.go(issue)
-                },
-                onDismiss = { controller.launchIssue = null },
-                focusDismiss = true,
-            )
-        }
+        LaunchChoiceDialog(controller)
     }
 }

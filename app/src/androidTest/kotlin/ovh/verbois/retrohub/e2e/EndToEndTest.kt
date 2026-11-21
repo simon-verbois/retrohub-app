@@ -18,7 +18,6 @@ import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
-import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -116,7 +115,7 @@ class EndToEndTest {
         waitFocused("Console")
         pad(KeyEvent.KEYCODE_BUTTON_A)
         pad(KeyEvent.KEYCODE_BUTTON_B)
-        rule.onNodeWithText("Console").assertIsFocused()
+        waitFocused("Console")
         pad(KeyEvent.KEYCODE_BUTTON_B)
         waitFocused("Filtres")
         waitText("Chercher dans le catalogue")
@@ -196,12 +195,14 @@ class EndToEndTest {
         click("Ajouter aux favoris")
         waitUntil(10_000, "favori enregistré") { backend.game(gameId)["favorite"]!!.jsonPrimitive.content == "true" }
         rule.onNodeWithTag("home-favorite").assertDoesNotExist()
-        click("Favoris")
+        rule.onNodeWithTag("home-category-favorites").performClick()
         rule.onNodeWithTag("home-game-$gameId").assertIsDisplayed()
         pad(KeyEvent.KEYCODE_BUTTON_START)
         click("Retirer des favoris")
         waitUntil(10_000, "favori retiré") { backend.game(gameId)["favorite"]!!.jsonPrimitive.content == "false" }
         waitText("Aucun favori")
+        // The server update can arrive while the modal is still animating out.
+        rule.waitUntil(5_000) { rule.activity.hasWindowFocus() }
         pad(KeyEvent.KEYCODE_BUTTON_R1)
         rule.onNodeWithTag("home-game-$gameId").assertIsDisplayed()
         screenshot("downloads-landscape")
@@ -334,7 +335,7 @@ class EndToEndTest {
         waitText("Sur ce téléphone")
         waitText("Sur le serveur")
         screenshot("conflict-landscape")
-        rule.onAllNodesWithText("Garder celle-ci")[0].performClick()
+        rule.onAllNodesWithText("Garder celle-ci")[0].performScrollTo().performClick()
         waitUntil(30_000, "choix envoyé") {
             runBlocking {
                 container.saveStore.find(gameId, "state", 1)?.let {

@@ -203,7 +203,62 @@ nothing required otherwise.
   APIs reached from the separate instrumentation APK and their package boundaries. Production builds
   only keep JNI entry points.
   This is a functional regression check, not a hardware performance benchmark.
+- Home derives one indexed library model on `Dispatchers.Default`, invalidated only by library
+  data and ordering/filter preferences. Rendering, category changes and confirmation share that
+  model; per-game progress does not invalidate the entire home. Initial model loading retains a
+  requested game or category instead of replacing it with the empty placeholder selection.
+- Logical selection and focus do not wait for presentation animations. Render layers interpolate
+  item positions and sizes around the fixed cross. The navigation plane resolves
+  confirmation against the latest selection, including several commands delivered in the same frame.
+  Longer touch drags advance continuously, and directional repeat accelerates while remaining
+  interruptible. Background movement briefly yields to navigation without resetting its phase.
+- `scripts/test.sh performance` restores normal Android animation scales for a real-clock optimized
+  instrumentation run and restores the previous scales on exit. It checks rapid Down+A (including a
+  100 ms gap), large-library loading and coarse emulator latency/sort budgets. Results and screenshots
+  are kept under `build/performance/benchmark/`. These diagnose regressions; GPU timing, power use and
+  refresh-rate targets still require representative physical devices.
 
+
+- Landscape XMB presentation keeps a fixed cross and composes only a bounded window around the
+  selected game. A pure `HomeCrossLayout` leaves a gap for the category band and places previous
+  items above it. The selected ID remains authoritative during every transition; outgoing columns
+  have neither interactive targets nor accessible labels.
+- The cross geometry uses the actual home viewport after header, hints and safe insets, rather
+  than physical display dimensions. Covers, category spacing and neighbor pitch scale with it;
+  bounded sizes preserve touch targets on small windows and keep tablet covers restrained.
+  Preview width is limited by both available height and the title's text scale. It yields to text
+  below a useful size, and its reserved lane prevents artwork from overlapping the title.
+  Edge fading only changes individual icon opacity, without a full-screen offscreen mask.
+- Category translation, cover scale and row position are read in render layers. Selection halos use
+  cached brushes, and background sheets use cached alpha masks. Small cover-only blur is limited to
+  movement and disabled with reduced motion. No screen-sized live blur or continuous particle loop
+  is needed. This follows Compose's [deferred state reads](https://developer.android.com/develop/ui/compose/performance/bestpractices)
+  and [graphics modifier guidance](https://developer.android.com/develop/ui/compose/graphics/draw/modifiers).
+- Landscape actions and tools share a modal side-panel boundary. Nested tools retain their parent
+  canvas, transition in navigation-stack order, and preserve saved page state. Dismissal is guarded
+  against repeated input while the closing transition finishes. Portrait keeps its existing layout.
+- Selected-game details and artwork appear after 420 ms without another selection. An ID-keyed,
+  cancellable effect prevents stale previews, while artwork always comes from the current library
+  record. The existing native contract supplies screenshots and covers; those are resolved through
+  the authenticated artwork client and its offline cache, with the usual silent local fallback.
+  No video endpoint or upstream metadata URL is assumed.
+
+
+## Save-conflict notification entry
+
+- Conflict notifications use their own immutable pending intent and an explicit review action.
+  Download notifications have separate request identities. The main activity consumes the action
+  once on creation or new-intent delivery; it suppresses automatic last-game launch and reuses the
+  existing choice prompt after account/setup loading.
+- The same comparison screen serves a single game's launch check or all pending games from the
+  summary notification. Save-store observation combines Room and account-scoped native saves, so
+  resolving one conflict reveals the next. Neither opening nor dismissing the prompt writes a save.
+  An already resolved notification shows the current up-to-date state.
+- Version cards use the actual pane width and text scale to choose columns or a vertical stack,
+  rather than relying on physical screen orientation inside a narrower landscape side panel.
+- Active XMB category labels can extend beneath neighboring icons and wrap to two lines. Selected
+  titles and actions also have two lines, with height reserved in the cross geometry. Games without
+  artwork give the remaining width back to text, keeping the compact large-text view readable.
 
 ## Safe DS restart and Android pause ownership
 

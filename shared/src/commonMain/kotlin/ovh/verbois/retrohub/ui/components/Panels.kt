@@ -49,7 +49,6 @@ import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
-import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
@@ -188,14 +187,16 @@ fun <T> ChoiceRow(
     var open by remember { mutableStateOf(false) }
     val rowFocus = remember { FocusRequester() }
     val optionFocus = remember { FocusRequester() }
+    val active = LocalScreenActive.current
     val close = {
         open = false
         rowFocus.requestFocus()
     }
-    LaunchedEffect(open) {
-        if (open) {
+    LaunchedEffect(open, active) {
+        if (open && active) {
             withFrameNanos { }
-            optionFocus.requestFocus()
+            // A quick Back can close the choice before this deferred request resumes.
+            if (open && active) optionFocus.requestFocus()
         }
     }
     Column(

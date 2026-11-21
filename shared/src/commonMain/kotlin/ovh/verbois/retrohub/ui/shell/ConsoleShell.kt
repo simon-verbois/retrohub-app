@@ -63,7 +63,6 @@ import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
-import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.boundsInWindow
@@ -86,6 +85,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.delay
 import kotlinx.datetime.TimeZone
+import kotlinx.datetime.number
 import kotlinx.datetime.toLocalDateTime
 import org.jetbrains.compose.resources.stringResource
 import ovh.verbois.retrohub.account.Account
@@ -109,6 +109,7 @@ import ovh.verbois.retrohub.ui.components.ProfileAvatar
 import ovh.verbois.retrohub.ui.components.consoleButtonSurface
 import ovh.verbois.retrohub.ui.components.consoleFocus
 import ovh.verbois.retrohub.ui.components.controllerDialog
+import ovh.verbois.retrohub.ui.game.LaunchChoiceDialog
 import ovh.verbois.retrohub.ui.icons.Lucide
 import ovh.verbois.retrohub.ui.nav.Route
 import ovh.verbois.retrohub.ui.nav.Section
@@ -119,6 +120,14 @@ private val Pill = RoundedCornerShape(percent = 50)
 
 @Composable
 fun ConsoleShell(controller: UiController, account: Account, content: @Composable (Route) -> Unit) {
+    val settings by controller.container.settings.settings.collectAsState()
+    androidx.compose.runtime.CompositionLocalProvider(
+        ovh.verbois.retrohub.ui.components.LocalReducedMotion provides (settings.reduceMotion || controller.container.platform.reducedMotion),
+    ) { ConsoleShellContent(controller, account, content) }
+}
+
+@Composable
+private fun ConsoleShellContent(controller: UiController, account: Account, content: @Composable (Route) -> Unit) {
     if (!controller.portrait) {
         ConsoleLandscapeShell(controller, account, content)
         return
@@ -157,7 +166,6 @@ fun ConsoleShell(controller: UiController, account: Account, content: @Composabl
             searchState.hasResults = false
         }
     }
-    controller.folderEditor?.let { ovh.verbois.retrohub.ui.home.FolderEditor(controller, it) }
     controller.downloadRequest?.let { game ->
         ConfirmDialog(
             stringResource(Res.string.download_confirm_title),
@@ -168,19 +176,7 @@ fun ConsoleShell(controller: UiController, account: Account, content: @Composabl
             dismiss = stringResource(Res.string.action_cancel),
         )
     }
-    controller.launchIssue?.let { issue ->
-        ConfirmDialog(
-            "Quelle partie reprendre ?",
-            "Plusieurs progressions sont disponibles. Choisissez celle à garder pour continuer.",
-            "Choisir",
-            onConfirm = {
-                controller.launchIssue = null
-                controller.nav.go(issue)
-            },
-            onDismiss = { controller.launchIssue = null },
-            focusDismiss = true,
-        )
-    }
+    LaunchChoiceDialog(controller)
     val showHints = when (settings.hints) {
         HintsMode.ALWAYS -> true
         HintsMode.NEVER -> false
@@ -499,8 +495,13 @@ private fun SectionTab(title: String, active: Boolean, modifier: Modifier = Modi
 private fun statusBubbleSize() = with(LocalDensity.current) { 16.sp.toDp() }.plus(10.dp).coerceAtLeast(30.dp)
 
 @Composable
-internal fun StatusPill(platform: Platform, transparent: Boolean = false) {
-    val textStyle = MaterialTheme.typography.labelLarge.copy(fontSize = 12.sp, lineHeight = 16.sp, fontFeatureSettings = "tnum")
+internal fun StatusPill(platform: Platform, transparent: Boolean = false, compact: Boolean = false) {
+    val textStyle = MaterialTheme.typography.labelLarge.copy(
+        fontSize = if (compact) 11.sp else 12.sp,
+        lineHeight = 16.sp,
+        fontFeatureSettings = "tnum",
+        fontWeight = if (compact) FontWeight.Normal else FontWeight.Bold,
+    )
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val power by produceState(PowerStatus(), platform, lifecycle) {
         lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
@@ -527,6 +528,7 @@ internal fun StatusPill(platform: Platform, transparent: Boolean = false) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(5.dp),
     ) {
+        if (compact) Text("${local.day}/${local.month.number}", style = textStyle, maxLines = 1)
         Text("${local.hour.toString().padStart(2, '0')}:${local.minute.toString().padStart(2, '0')}", style = textStyle, maxLines = 1)
         power.phone?.let { level ->
             Box(Modifier.width(1.dp).height(14.dp).background(Palette.Line))
@@ -548,7 +550,7 @@ internal fun StatusPill(platform: Platform, transparent: Boolean = false) {
                     contentDescription =
                         "Batterie du téléphone : ${level.percent} %" + if (level.charging) ", en charge" else ""
                 },
-                style = MaterialTheme.typography.labelMedium,
+                style = if (compact) textStyle else MaterialTheme.typography.labelMedium,
                 maxLines = 1,
             )
         }
@@ -560,7 +562,7 @@ internal fun StatusPill(platform: Platform, transparent: Boolean = false) {
                 Modifier.semantics {
                     contentDescription = "Batterie de ${controller.name} : ${controller.level.percent} %"
                 },
-                style = MaterialTheme.typography.labelMedium,
+                style = if (compact) textStyle else MaterialTheme.typography.labelMedium,
                 maxLines = 1,
             )
         }

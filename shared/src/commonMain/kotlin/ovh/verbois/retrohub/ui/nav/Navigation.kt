@@ -24,7 +24,8 @@ sealed interface Route {
 
     data object User : Route
 
-    data class Conflict(val gameId: String) : Route
+    /** Null reviews all pending games, as requested by the summary notification. */
+    data class Conflict(val gameId: String? = null) : Route
 
     data class Progression(val gameId: String) : Route
 

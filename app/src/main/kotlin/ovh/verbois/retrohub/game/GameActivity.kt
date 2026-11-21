@@ -63,6 +63,7 @@ class GameActivity : ComponentActivity() {
     private var returnToHome = false
     private var inspectingControls = false
     private val controllerInput = MutableStateFlow(ControllerInput())
+    private val preparationError = MutableStateFlow<String?>(null)
     private val guide by lazy {
         GuideButton(
             lifecycleScope,
@@ -106,11 +107,19 @@ class GameActivity : ComponentActivity() {
             }
         setContent {
             val settings by container.settings.settings.collectAsState()
-            RetroHubTheme(settings.theme) {
+            RetroHubTheme(settings.theme, reducedMotion = settings.reduceMotion || app.platform.reducedMotion) {
                 androidx.compose.foundation.layout.Box(
                     androidx.compose.ui.Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Color.Black),
                     contentAlignment = androidx.compose.ui.Alignment.Center,
-                ) { androidx.compose.material3.Text("Préparation du jeu…") }
+                ) {
+                    val error by preparationError.collectAsState()
+                    if (error == null) {
+                        androidx.compose.material3.Text("Préparation du jeu…")
+                    } else {
+                        ovh.verbois.retrohub.ui.play.GameFailurePanel(error, { finish() }, { container.openReport() })
+                    }
+                }
+                ovh.verbois.retrohub.ui.components.ReportDialogs(container)
             }
         }
         lifecycleScope.launch {
@@ -126,11 +135,18 @@ class GameActivity : ComponentActivity() {
                 finish()
                 return@launch
             }
-            val sram = withContext(Dispatchers.IO) {
-                prepareSystem(plan)
-                if (plan.loadSram) File(plan.sramPath).takeIf { it.exists() }?.readBytes() else null
+            try {
+                val sram = withContext(Dispatchers.IO) {
+                    runCatching { app.platform.reportCapture.beginGame(plan, container.reportOwner(), app.platform.coreBuild(plan.core)) }
+                    prepareSystem(plan)
+                    if (plan.loadSram) File(plan.sramPath).takeIf { it.exists() }?.readBytes() else null
+                }
+                if (!isFinishing) createGame(app, sram)
+            } catch (error: Exception) {
+                if (error is kotlinx.coroutines.CancellationException) throw error
+                withContext(Dispatchers.IO) { runCatching { app.platform.reportCapture.failure("startup_failure", error.javaClass.simpleName) } }
+                preparationError.value = "Le jeu n’a pas pu démarrer. Votre dernière sauvegarde est conservée."
             }
-            if (!isFinishing) createGame(app, sram)
         }
     }
 
@@ -157,7 +173,27 @@ class GameActivity : ComponentActivity() {
             }
         retroView = GLRetroView(this, data)
         lifecycle.addObserver(retroView)
-        engine = LibretroEngine(retroView, app.platform.corePath(plan.core), restoreOnReset = plan.core == "melonds").also { it.bind(this) }
+        engine = LibretroEngine(
+            retroView,
+            app.platform.corePath(plan.core),
+            restoreOnReset = plan.core == "melonds",
+            onFirstFrame = { runCatching { app.platform.reportCapture.firstFrame() } },
+            onFatalError = { code ->
+                val outcome = if (code == GLRetroView.ERROR_GL_NOT_COMPATIBLE ||
+                    (::engine.isInitialized && engine.frames.value > 0L)
+                ) {
+                    "render_failure"
+                } else {
+                    "startup_failure"
+                }
+                if (::session.isInitialized) {
+                    session.reportError("Le jeu s’est arrêté. Votre dernière sauvegarde valide est conservée.", fatal = true)
+                } else {
+                    preparationError.value = "Le jeu n’a pas pu démarrer. Votre dernière sauvegarde est conservée."
+                }
+                container.scope.launch(Dispatchers.IO) { runCatching { app.platform.reportCapture.failure(outcome, "libretro_$code") } }
+            },
+        ).also { it.bind(this) }
         current = java.lang.ref.WeakReference(this)
         engine.setAudio(plan.audio)
         router =
@@ -173,6 +209,11 @@ class GameActivity : ComponentActivity() {
         lifecycleScope.launch {
             session.ui.map { it.paused }.distinctUntilChanged().collect { if (it) releaseInputs() }
         }
+        lifecycleScope.launch {
+            session.ui.map {
+                it.started
+            }.distinctUntilChanged().collect { if (it) withContext(Dispatchers.IO) { runCatching { app.platform.reportCapture.stage("playing") } } }
+        }
         lifecycleScope.launch { engine.errors.collect { session.reportError(it) } }
         onBackPressedDispatcher.addCallback(
             this,
@@ -184,7 +225,7 @@ class GameActivity : ComponentActivity() {
         )
         setContent {
             val settings by container.settings.settings.collectAsState()
-            RetroHubTheme(settings.theme) {
+            RetroHubTheme(settings.theme, reducedMotion = settings.reduceMotion || app.platform.reducedMotion) {
                 androidx.compose.runtime.CompositionLocalProvider(
                     ovh.verbois.retrohub.ui.components.LocalReturnHome provides {
                         returnToHome = true
@@ -206,11 +247,16 @@ class GameActivity : ComponentActivity() {
                             backRequests = backRequests,
                             haptic = { app.platform.vibrate(10) },
                             onQuit = { finish() },
+                            onReport = {
+                                session.pause()
+                                container.openReport()
+                            },
                             onConsoleSettings = { change -> container.settings.update { it.withConsole(plan.console, change) } },
                             onCheats = { cheats -> container.scope.launch { container.cheats.put(plan.playGameId, cheats) } },
                             onRumble = { app.platform.rumble(it) },
                             onRotation = { value -> container.settings.update { it.copy(gameRotations = it.gameRotations + (plan.playGameId to value)) } },
                         ) { AndroidView({ retroView }) }
+                        ovh.verbois.retrohub.ui.components.ReportDialogs(container)
                     }
                 }
             }
@@ -376,6 +422,9 @@ class GameActivity : ComponentActivity() {
 
     override fun finish() {
         if (!::session.isInitialized) {
+            (application as RetroHubApp).container.scope.launch(Dispatchers.IO) {
+                runCatching { (application as RetroHubApp).platform.reportCapture.closeGame() }
+            }
             super.finish()
             return
         }
@@ -384,6 +433,7 @@ class GameActivity : ComponentActivity() {
         session.pause()
         lifecycleScope.launch {
             session.finish()
+            withContext(Dispatchers.IO) { runCatching { (application as RetroHubApp).platform.reportCapture.closeGame() } }
             if (returnToHome) {
                 startActivity(
                     Intent(this@GameActivity, ovh.verbois.retrohub.MainActivity::class.java)

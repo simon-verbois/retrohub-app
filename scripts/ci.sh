@@ -54,3 +54,6 @@ fi
 step "Optimized build: native cores, interface, navigation and end-to-end"
 RETROHUB_TEST_VARIANT=benchmark RETROHUB_INSTRUMENTED_GROUP=all scripts/test.sh instrumented
 RETROHUB_TEST_VARIANT=benchmark scripts/test.sh e2e
+
+step "Home performance: real animations, rapid commands and large libraries"
+RETROHUB_TEST_VARIANT=benchmark scripts/test.sh performance

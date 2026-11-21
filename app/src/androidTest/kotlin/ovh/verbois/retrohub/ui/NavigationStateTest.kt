@@ -19,6 +19,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -73,6 +74,11 @@ class NavigationStateTest {
         val before = rule.onNodeWithTag("home-game-nav-150").fetchSemanticsNode().boundsInRoot
         rule.runOnIdle { controller.nav.go(Route.Settings()) }
         rule.onNodeWithText("Outil ouvert").assertIsDisplayed()
+        val parentCover = rule.onNodeWithTag("home-cover-nav-150", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+        val panel = rule.onNodeWithTag("home-overlay").fetchSemanticsNode().boundsInRoot
+        val home = rule.onNodeWithTag("home-content").fetchSemanticsNode().boundsInRoot
+        // Dialog and activity coordinates have different origins; compare widths in pixels.
+        assertTrue("Parent=$parentCover, panel=$panel, home=$home", panel.width <= home.right - parentCover.right)
         rule.onNodeWithTag("home-content").assertIsDisplayed()
         rule.runOnIdle { controller.back() }
         waitFocused("home-game-nav-150")

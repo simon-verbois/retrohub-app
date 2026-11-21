@@ -27,7 +27,13 @@ import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
 /** Le moteur LibretroDroid derrière l’interface partagée [EmulatorEngine]. */
-class LibretroEngine(private val view: GLRetroView, private val corePath: String, private val restoreOnReset: Boolean = false) : EmulatorEngine {
+class LibretroEngine(
+    private val view: GLRetroView,
+    private val corePath: String,
+    private val restoreOnReset: Boolean = false,
+    private val onFirstFrame: () -> Unit = {},
+    private val onFatalError: (Int) -> Unit = {},
+) : EmulatorEngine {
     private val frameCount = MutableStateFlow(0L)
     override val frames: StateFlow<Long> = frameCount
     private val errorFlow = MutableSharedFlow<String>(extraBufferCapacity = 4)
@@ -39,11 +45,15 @@ class LibretroEngine(private val view: GLRetroView, private val corePath: String
     fun bind(owner: LifecycleOwner) {
         owner.lifecycleScope.launch {
             view.getGLRetroEvents().collect { event ->
-                if (event is GLRetroView.GLRetroEvents.FrameRendered) frameCount.value++
+                if (event is GLRetroView.GLRetroEvents.FrameRendered) {
+                    if (frameCount.value == 0L) view.queueEvent { onFirstFrame() }
+                    frameCount.value++
+                }
             }
         }
         owner.lifecycleScope.launch {
             view.getGLRetroErrors().collect { code ->
+                onFatalError(code)
                 errorFlow.emit(
                     when (code) {
                         GLRetroView.ERROR_LOAD_LIBRARY -> "L’émulateur de cette console ne se charge pas sur ce téléphone."

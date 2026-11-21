@@ -41,38 +41,6 @@ import ovh.verbois.retrohub.ui.components.consoleFocus
 import ovh.verbois.retrohub.ui.icons.Lucide
 import ovh.verbois.retrohub.ui.theme.Palette
 
-/** Tuile de la rangée d’accueil : carrée, agrandie et cerclée de blanc quand elle est choisie. */
-@Composable
-fun GameTile(
-    game: Game,
-    selected: Boolean,
-    size: Dp,
-    selectedSize: Dp,
-    onFocus: () -> Unit,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    download: DownloadState? = null,
-    onLongClick: (() -> Unit)? = null,
-    reduceMotion: Boolean = false,
-) {
-    val side by animateDpAsState(if (selected) selectedSize else size, androidx.compose.animation.core.tween(if (reduceMotion) 0 else 260))
-    val shape = RoundedCornerShape(14.dp)
-    Box(
-        modifier
-            .size(side)
-            .semantics { contentDescription = game.title }
-            .consoleFocus(shape, onClick, focusScale = 1f, onFocus = { if (it) onFocus() }, onLongClick = onLongClick)
-            .shadow(if (selected) 12.dp else 6.dp, shape)
-            .clip(shape)
-            .border(1.dp, Palette.Line, shape),
-    ) {
-        GameArt(game.remote.coverUrl, game.console, game.title, Modifier.fillMaxSize(), muted = !game.downloaded)
-        if (download is DownloadState.Running) {
-            DownloadOverlay(download.fraction, Modifier.align(Alignment.BottomCenter))
-        }
-    }
-}
-
 /** Carte de grille (bibliothèque, accueil en portrait) : jaquette, titre, console et dernière partie. */
 @Composable
 fun GameCard(game: Game, onClick: () -> Unit, modifier: Modifier = Modifier, download: DownloadState? = null, onLongClick: (() -> Unit)? = null) {

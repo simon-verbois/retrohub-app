@@ -164,13 +164,12 @@ object Palette {
     val PadY = Color(0xFFE3B341)
 }
 
-@Immutable
-data class RetroHubFonts(val display: FontFamily, val body: FontFamily)
-
-val LocalFonts = staticCompositionLocalOf { RetroHubFonts(FontFamily.Default, FontFamily.Default) }
-
 @Composable
-fun RetroHubTheme(mode: ThemeMode = ThemeMode.SYSTEM, content: @Composable () -> Unit) {
+fun RetroHubTheme(
+    mode: ThemeMode = ThemeMode.SYSTEM,
+    reducedMotion: Boolean = ovh.verbois.retrohub.ui.components.LocalReducedMotion.current,
+    content: @Composable () -> Unit,
+) {
     val dark =
         when (mode) {
             ThemeMode.SYSTEM -> isSystemInDarkTheme()
@@ -223,7 +222,7 @@ fun RetroHubTheme(mode: ThemeMode = ThemeMode.SYSTEM, content: @Composable () ->
             outline = scheme.line,
             error = scheme.danger,
         )
-    CompositionLocalProvider(LocalFonts provides RetroHubFonts(body, body), LocalContentColor provides scheme.text) {
+    CompositionLocalProvider(LocalContentColor provides scheme.text, ovh.verbois.retrohub.ui.components.LocalReducedMotion provides reducedMotion) {
         MaterialTheme(colorScheme = colors, typography = typography, content = content)
     }
 }

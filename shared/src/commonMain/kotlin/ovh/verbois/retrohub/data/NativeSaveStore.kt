@@ -155,6 +155,8 @@ class NativeSaveStore(
 
     override fun observe(gameId: String) = combine(legacy.observe(gameId), changes) { _, _ -> forGame(gameId) }.flowOn(Dispatchers.IO)
 
+    override fun observeAll() = combine(legacy.observeAll(), changes) { _, _ -> all() }.flowOn(Dispatchers.IO)
+
     companion object {
         val privateConsoles = setOf("3ds", "ps2")
     }

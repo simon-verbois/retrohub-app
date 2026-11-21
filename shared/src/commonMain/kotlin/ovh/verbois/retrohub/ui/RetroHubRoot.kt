@@ -80,7 +80,7 @@ fun RetroHubRoot(container: AppContainer, onExit: () -> Unit = {}, onController:
             }
         }
     }
-    RetroHubTheme(settings.theme) {
+    RetroHubTheme(settings.theme, reducedMotion = settings.reduceMotion || container.platform.reducedMotion) {
         val sound = if (settings.navigationSounds) ({ container.platform.playClick() }) else null
         val density = LocalDensity.current
         ProvideHaptics(settings.haptics, { container.platform.vibrate() }, sound) {
@@ -97,7 +97,8 @@ fun RetroHubRoot(container: AppContainer, onExit: () -> Unit = {}, onController:
                         controller.backdrop.console,
                         controller.backdrop.console?.let { consoleColor(it) } ?: ovh.verbois.retrohub.ui.theme.Palette.SkyTop,
                         animated = settings.animatedBackground && !settings.reduceMotion && !container.platform.reducedMotion,
-                        hero = controller.backdrop.hero,
+                        reducedMotion = settings.reduceMotion || container.platform.reducedMotion,
+                        paused = controller.homeMoving,
                     )
                     if (controller.exitRequested) {
                         ovh.verbois.retrohub.ui.components.ConfirmDialog(
@@ -135,6 +136,7 @@ fun RetroHubRoot(container: AppContainer, onExit: () -> Unit = {}, onController:
                                 }
                             }
                     }
+                    ovh.verbois.retrohub.ui.components.ReportDialogs(container)
                 }
             }
         }
