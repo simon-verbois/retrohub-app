@@ -62,6 +62,12 @@ fun GameMenu(controller: UiController, game: Game) {
             close()
             controller.nav.go(Route.Settings(SettingsPage.GAME, game.id))
         }
+        if (game.console == "3ds") {
+            Item(Lucide.Layers, "Mods") {
+                close()
+                controller.nav.go(Route.Settings(SettingsPage.MODS, game.id))
+            }
+        }
         if (download is DownloadState.Failed && download.retryable) {
             Item(Lucide.RefreshCw, "Réessayer le téléchargement") {
                 close()

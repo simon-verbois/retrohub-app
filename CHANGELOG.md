@@ -10,6 +10,23 @@ change, in plain text. Never rewrite the notes of a published version.
 
 ## [Unreleased]
 
+## [2026.47.3] - 2026-11-22
+
+### Added
+
+- Manage server-hosted 3DS mods from each game's menu: install textures, RomFS replacements, ExeFS code replacements and IPS/BPS patches, and native Azahar cheat packs with compatibility checks, dependencies and conflict detection.
+- Keep installed mods playable offline, choose texture quality per device, repair damaged installations, disable mods, remove unused downloads and return to previous profiles without changing the original ROM.
+- Isolate gameplay-mod progress from the original game and bind instant saves to the exact mod profile; synchronize profile choices with revision checks and retain incompatible local checkpoints.
+
+### Fixed
+
+- Dismiss the pairing keyboard before opening the QR camera so it does not compete with the permission prompt.
+
+### Internal
+
+- Define the additive game_mods_v1 server contract and migration requirements; mod catalogue and profile synchronization activate only when the server advertises support.
+- Share large texture manifests across the local catalogue, installed packs and profile history to reduce storage and memory use.
+
 ## [2026.47.2] - 2026-11-22
 
 ### Added

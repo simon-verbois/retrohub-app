@@ -89,6 +89,8 @@ data class LibraryGame(
     val bios: BiosInfo? = null,
     @SerialName("system_resources") val systemResources: List<SystemResource> = emptyList(),
     val saves: List<RemoteSave> = emptyList(),
+    @SerialName("mod_save_contexts") val modSaveContexts: List<ModSaveContext> = emptyList(),
+    @SerialName("mod_profile") val modProfile: ModProfile? = null,
 )
 
 @Serializable
@@ -131,6 +133,7 @@ data class RemoteSave(
     val size: Long = 0,
     val core: String = "",
     @SerialName("core_build") val coreBuild: String? = null,
+    @SerialName("mod_fingerprint") val modFingerprint: String? = null,
     @SerialName("rom_sha256") val romSha256: String = "",
     @SerialName("created_at") val createdAt: String? = null,
     @SerialName("played_at") val playedAt: String? = null,

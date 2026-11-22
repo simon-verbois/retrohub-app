@@ -54,6 +54,7 @@ enum class SettingsPage(val title: String) {
     CONSOLE("Console"),
     REMAP("Boutons de la manette"),
     GAME("Options du jeu"),
+    MODS("Mods"),
 
     ABOUT("À propos"),
     CHANGELOG("Nouveautés"),

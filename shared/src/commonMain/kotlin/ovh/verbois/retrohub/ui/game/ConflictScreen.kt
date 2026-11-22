@@ -63,7 +63,9 @@ fun ConflictScreen(controller: UiController, gameId: String?) {
     val conflicts = saves?.filter { it.inConflict }?.sortedWith(compareBy({ it.gameId }, { it.kind }, { it.slot }))
     val save = conflicts?.firstOrNull()
     val currentGameId = save?.gameId ?: gameId
-    val game = games.firstOrNull { it.playGameId == currentGameId || it.id == currentGameId }
+    val game = games.firstOrNull {
+        it.playGameId == currentGameId || it.id == currentGameId || it.remote.modSaveContexts.any { c -> c.gameId == currentGameId }
+    }
     var busy by remember(gameId) { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     if (conflicts == null) {

@@ -53,6 +53,8 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextRange
@@ -323,6 +325,8 @@ private fun LoginStep(container: AppContainer, server: String, message: String?,
     var device by remember { mutableStateOf(container.settings.settings.value.deviceName.ifBlank { container.platform.defaultDeviceName }) }
     var busy by remember { mutableStateOf(false) }
     var scanning by remember { mutableStateOf(false) }
+    val focusManager = LocalFocusManager.current
+    val keyboard = LocalSoftwareKeyboardController.current
     var error by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
     val focus = remember { FocusRequester() }
@@ -382,6 +386,8 @@ private fun LoginStep(container: AppContainer, server: String, message: String?,
                     stringResource(if (scanning) Res.string.qr_opening else Res.string.qr_scan),
                     {
                         if (!scanning) {
+                            focusManager.clearFocus()
+                            keyboard?.hide()
                             scope.launch {
                                 scanning = true
                                 error = null

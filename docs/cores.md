@@ -32,6 +32,12 @@ server ROM checksum changes. The original archive checksum remains the save comp
 
 3DS/PS2 are integrated for Android ARM64; their cores are not published for the x86 test emulator.
 Actual rendering, audio and controller behavior require validation on a physical ARM64 device.
+The optional `game_mods_v1` contract adds immutable 3DS texture packs, RomFS overlays, ExeFS
+replacements/IPS/BPS patches and native Gateway cheat files. The app stages complete private
+load trees before activation, keeps original ROMs unchanged, and separates gameplay-mod save
+contexts. Texture variants can stay local to each device; instant saves require the exact full
+mod fingerprint in addition to the core build and ROM. Unsupported installer kinds are rejected.
+The complete pending server/API contract is recorded in `docs/server-requests.md`.
 The selected renderer is OpenGL ES, matching LibretroDroid's context. Sources and option values:
 [Azahar](https://github.com/JohnDoe6345789/azahar_libretro/tree/dc62d51a8b1c0c0db1ee368d244de420a385b2cc/src/citra_libretro)
 and [ARMSX2](https://github.com/ARMSX2/ARMSX2/blob/37ed35b88fe9a0164369c8042f2c9aa707e33667/pcsx2-libretro/Main.cpp).

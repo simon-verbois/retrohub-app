@@ -427,7 +427,10 @@ class EndToEndTest {
             5_000,
         )
         if (deny != null) {
-            deny.click()
+            // The system permission window and IME can still be changing bounds when its
+            // accessibility node first appears. Wait, then resolve the button's current bounds.
+            device.waitForIdle()
+            checkNotNull(device.findObject(androidx.test.uiautomator.By.res("com.android.permissioncontroller:id/permission_deny_button"))).click()
             waitText("Autorisez la caméra", substring = true)
         }
         instrumentation.uiAutomation.grantRuntimePermission(instrumentation.targetContext.packageName, android.Manifest.permission.CAMERA)

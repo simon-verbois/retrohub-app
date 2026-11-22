@@ -116,6 +116,7 @@ fun SettingsScreen(controller: UiController, page: SettingsPage, console: String
                 SettingsPage.CONSOLE -> ConsolePage(controller, console ?: "nes")
                 SettingsPage.REMAP -> RemapPage(controller, console ?: "nes")
                 SettingsPage.GAME -> GameOptionsPage(controller, console.orEmpty())
+                SettingsPage.MODS -> ModsPage(controller, console.orEmpty())
                 SettingsPage.ABOUT -> AboutPage(controller)
                 SettingsPage.CHANGELOG -> ChangelogPage()
             }

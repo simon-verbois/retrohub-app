@@ -7,6 +7,7 @@ import ovh.verbois.retrohub.api.LibraryGame
 import ovh.verbois.retrohub.api.LibraryManifest
 import ovh.verbois.retrohub.api.RemoteSave
 import ovh.verbois.retrohub.api.RetroHubApi
+import ovh.verbois.retrohub.api.withModProgressions
 import ovh.verbois.retrohub.core.AppClock
 import ovh.verbois.retrohub.core.sha256
 import ovh.verbois.retrohub.data.LocalSave
@@ -92,7 +93,7 @@ class SaveSync(private val api: RetroHubApi, private val store: SaveStore, priva
             local == null || !local.changedLocally -> adopt(game.console, remote, local)
 
             // Même contenu des deux côtés : pas de conflit, la base avance simplement.
-            local.localSha.equals(remote.sha256, ignoreCase = true) -> {
+            local.localSha.equals(remote.sha256, ignoreCase = true) && local.modFingerprint == remote.modFingerprint -> {
                 local.copy(baseRevision = remote.revision, baseSha = remote.sha256, conflictRevision = null).also { store.put(it) }
             }
 
@@ -113,6 +114,7 @@ class SaveSync(private val api: RetroHubApi, private val store: SaveStore, priva
                 localPlayedAt = remote.playedAt,
                 core = remote.core,
                 coreBuild = remote.coreBuild,
+                modFingerprint = remote.modFingerprint,
                 romSha = remote.romSha256,
                 conflictRevision = null,
                 conflictSha = null,
@@ -139,6 +141,7 @@ class SaveSync(private val api: RetroHubApi, private val store: SaveStore, priva
                 conflictCore = remote.core,
                 conflictCoreBuild = remote.coreBuild,
                 conflictRomSha = remote.romSha256,
+                conflictModFingerprint = remote.modFingerprint,
                 lastError = null,
             )
         store.put(save)
@@ -155,22 +158,25 @@ class SaveSync(private val api: RetroHubApi, private val store: SaveStore, priva
         romSha: String,
         digest: String? = null,
         coreBuild: String? = null,
+        modFingerprint: String? = null,
     ): LocalSave? {
         val path = store.file(gameId, kind, slot)
         if (!fs.exists(path) || (fs.metadata(path).size ?: 0L) == 0L) return store.find(gameId, kind, slot)
         val digest = digest ?: fs.sha256(path)
         val existing = store.find(gameId, kind, slot)
         if (existing != null && existing.localSha == digest && existing.core == core && existing.romSha == romSha &&
-            existing.coreBuild == coreBuild
+            existing.coreBuild == coreBuild && existing.modFingerprint == modFingerprint
         ) {
             return existing
         }
         val save =
             (existing ?: LocalSave(gameId = gameId, kind = kind, slot = slot, console = console)).copy(
+                baseSha = if (existing != null && existing.modFingerprint != modFingerprint) null else existing?.baseSha,
                 localSha = digest,
                 localPlayedAt = clock.now().toString(),
                 core = core,
                 coreBuild = coreBuild,
+                modFingerprint = modFingerprint,
                 romSha = romSha,
                 lastError = null,
             )
@@ -195,6 +201,7 @@ class SaveSync(private val api: RetroHubApi, private val store: SaveStore, priva
                         romSha256 = save.romSha,
                         core = save.core,
                         coreBuild = save.coreBuild,
+                        modFingerprint = save.modFingerprint,
                         playedAt = save.localPlayedAt,
                     ),
                     fs,
@@ -202,7 +209,13 @@ class SaveSync(private val api: RetroHubApi, private val store: SaveStore, priva
                 )
             // La copie a pu changer pendant l’envoi : la base devient ce qui a été envoyé.
             val current = store.find(save.gameId, save.kind, save.slot) ?: save
-            store.put(current.copy(baseRevision = uploaded.revision, baseSha = uploaded.sha256, lastError = null))
+            store.put(
+                current.copy(
+                    baseRevision = uploaded.revision,
+                    baseSha = if (current.modFingerprint == save.modFingerprint) uploaded.sha256 else null,
+                    lastError = null,
+                ),
+            )
             PushResult.Uploaded
         } catch (conflict: ApiException.SaveConflict) {
             onConflict(save, conflict.currentRevision)
@@ -222,7 +235,7 @@ class SaveSync(private val api: RetroHubApi, private val store: SaveStore, priva
 
     private suspend fun onConflict(save: LocalSave, currentRevision: Int): PushResult {
         val remote = api.saveVersions(save.gameId, save.kind, save.slot).firstOrNull { it.revision == currentRevision }
-        if (remote != null && remote.sha256.equals(save.localSha, ignoreCase = true)) {
+        if (remote != null && remote.sha256.equals(save.localSha, ignoreCase = true) && remote.modFingerprint == save.modFingerprint) {
             // Même contenu déjà sur le serveur (envoyé depuis ailleurs) : la base avance, rien à choisir.
             store.put(save.copy(baseRevision = currentRevision, baseSha = remote.sha256))
             return PushResult.Uploaded
@@ -263,6 +276,7 @@ class SaveSync(private val api: RetroHubApi, private val store: SaveStore, priva
                 localPlayedAt = clock.now().toString(),
                 core = version.core.ifEmpty { current.core },
                 coreBuild = version.coreBuild,
+                modFingerprint = version.modFingerprint,
                 romSha = version.romSha256.ifEmpty { current.romSha },
                 conflictRevision = null,
                 lastError = null,
@@ -286,6 +300,7 @@ class SaveSync(private val api: RetroHubApi, private val store: SaveStore, priva
                     localPlayedAt = save.conflictPlayedAt,
                     core = save.conflictCore ?: save.core,
                     coreBuild = save.conflictCoreBuild,
+                    modFingerprint = save.conflictModFingerprint,
                     romSha = save.conflictRomSha ?: save.romSha,
                 ).clearConflict(),
         )
@@ -297,10 +312,11 @@ class SaveSync(private val api: RetroHubApi, private val store: SaveStore, priva
      * inchangée prend la version restaurée, ou repart de zéro pour être renvoyée.
      */
     suspend fun onServerRestored(manifest: LibraryManifest) {
-        manifest.games.forEach { store.prepareGame(it.playGameId, it.console) }
+        val games = manifest.games.flatMap { it.withModProgressions() }
+        games.forEach { store.prepareGame(it.playGameId, it.console) }
         checkpoint { store.checkpointAll() }
-        val remotes = manifest.games.flatMap { it.saves.map { save -> save.copy(gameId = save.gameId.ifEmpty { it.playGameId }) } }
-        val consoles = manifest.games.associate { it.playGameId to it.console }
+        val remotes = games.flatMap { it.saves.map { save -> save.copy(gameId = save.gameId.ifEmpty { it.playGameId }) } }
+        val consoles = games.associate { it.playGameId to it.console }
         for (local in store.all()) {
             if (store.isGameActive(local.gameId)) {
                 // No files are replaced while the core runs. An old epoch must never reuse a
@@ -342,6 +358,7 @@ class SaveSync(private val api: RetroHubApi, private val store: SaveStore, priva
         conflictCore = null,
         conflictCoreBuild = null,
         conflictRomSha = null,
+        conflictModFingerprint = null,
     )
 
     companion object {

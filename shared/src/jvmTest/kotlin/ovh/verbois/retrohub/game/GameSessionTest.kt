@@ -82,6 +82,7 @@ class GameSessionTest {
                 save.copy(coreBuild = "build-b"),
                 save.copy(romSha = ""),
                 save.copy(romSha = "other"),
+                save.copy(modFingerprint = "other-mod-profile"),
             )) {
                 saves.put(incompatible)
                 assertFalse(session.loadState(1))

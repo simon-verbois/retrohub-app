@@ -21,6 +21,36 @@ import kotlin.time.Instant
 
 /** Révision de base, conflits sans écrasement, restauration du serveur (save_epoch). */
 class SaveSyncTest {
+    @Test
+    fun completingAnOlderUploadDoesNotClearANewerModIdentity() = runTest {
+        store.write("jeu", "state", 0, local)
+        val digest = sha256(local)
+        val uploading = LocalSave("jeu", "state", 0, "3ds", baseRevision = 1, baseSha = "previous", localSha = digest, modFingerprint = "old")
+        store.put(uploading.copy(baseSha = null, modFingerprint = "new"))
+        t.enqueue(json("""{"game_id":"jeu","kind":"state","slot":0,"revision":2,"sha256":"$digest","mod_fingerprint":"old"}"""))
+        sync.push(uploading, "epoch")
+        val current = store.find("jeu", "state", 0)!!
+        assertEquals(2, current.baseRevision)
+        assertEquals("new", current.modFingerprint)
+        assertTrue(current.pendingUpload)
+    }
+
+    @Test
+    fun identicalStateBytesStillUploadANewModFingerprint() = runTest {
+        store.write("jeu", "state", 0, local)
+        val digest = sha256(local)
+        store.put(
+            LocalSave(
+                "jeu", "state", 0, "3ds", baseRevision = 1, baseSha = digest, localSha = digest,
+                core = "azahar", coreBuild = "build", romSha = "rom", modFingerprint = "old-profile",
+            ),
+        )
+        val recorded = sync.recordLocal("jeu", "3ds", "state", 0, "azahar", "rom", coreBuild = "build", modFingerprint = "new-profile")!!
+        assertTrue(recorded.pendingUpload)
+        assertEquals("new-profile", recorded.modFingerprint)
+        assertEquals(1, recorded.baseRevision)
+    }
+
     private val t = TestApi()
     private val store = MemorySaveStore()
     private val clock = AppClock { Instant.parse("2026-11-10T10:00:00Z") }
@@ -70,27 +100,33 @@ class SaveSyncTest {
 
     @Test
     fun nativeStateBuildSurvivesDownloadConflictAndUpload() = runTest {
-        val state = remote(1).copy(kind = "state", core = "azahar", coreBuild = "build-a")
+        val state = remote(1).copy(kind = "state", core = "azahar", coreBuild = "build-a", modFingerprint = "profile-a")
         serveBody(server, 1)
         sync.pull(game(state).copy(console = "3ds"))
         assertEquals("build-a", store.find("jeu", "state", 0)?.coreBuild)
+        assertEquals("profile-a", store.find("jeu", "state", 0)?.modFingerprint)
         store.write("jeu", "state", 0, local)
-        sync.recordLocal("jeu", "3ds", "state", 0, "azahar", "rom", coreBuild = "build-local")
+        sync.recordLocal("jeu", "3ds", "state", 0, "azahar", "rom", coreBuild = "build-local", modFingerprint = "profile-local")
         serveBody(server, 2)
         sync.pull(game(state.copy(revision = 2, coreBuild = "build-server", romSha256 = "remote-rom")).copy(console = "3ds"))
         val conflict = store.find("jeu", "state", 0)!!
         assertEquals("build-local", conflict.coreBuild)
         assertEquals("build-server", conflict.conflictCoreBuild)
+        assertEquals("profile-local", conflict.modFingerprint)
+        assertEquals("profile-a", conflict.conflictModFingerprint)
         sync.keepServer(conflict)
         assertEquals("remote-rom", store.find("jeu", "state", 0)?.romSha)
         assertEquals("build-server", store.find("jeu", "state", 0)?.coreBuild)
+        assertEquals("profile-a", store.find("jeu", "state", 0)?.modFingerprint)
         store.write("jeu", "state", 0, local)
-        val recorded = sync.recordLocal("jeu", "3ds", "state", 0, "azahar", "rom", coreBuild = "build-server")!!
+        val recorded = sync.recordLocal("jeu", "3ds", "state", 0, "azahar", "rom", coreBuild = "build-server", modFingerprint = "profile-a")!!
         t.enqueue(json("""{"kind":"state","slot":0,"revision":3,"sha256":"${sha256(local)}","core_build":"build-server"}"""))
         sync.push(recorded, "epoch")
         t.take()
         t.take()
-        assertEquals("build-server", t.take().headers["X-Emulator-Build"])
+        val upload = t.take()
+        assertEquals("build-server", upload.headers["X-Emulator-Build"])
+        assertEquals("profile-a", upload.headers["X-Mod-Fingerprint"])
     }
 
     @Test

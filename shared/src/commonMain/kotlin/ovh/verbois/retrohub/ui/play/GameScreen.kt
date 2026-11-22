@@ -873,7 +873,7 @@ private fun optionCategory(key: String): MenuPage = when {
 private fun CoreOptionChoices(engine: EmulatorEngine, core: String, category: MenuPage, onOption: (String, String) -> Unit) {
     var variables by remember(core) { mutableStateOf(engine.variables()) }
     val shown = variables.filter {
-        it.key !in setOf("citra_use_libretro_save_path", "citra_graphics_api", "armsx2_renderer") &&
+        it.key !in setOf("citra_use_libretro_save_path", "citra_graphics_api", "citra_custom_textures", "armsx2_renderer") &&
             it.values.size > 1 && optionCategory(it.key) == category
     }
     if (shown.isEmpty()) Text("Aucun réglage supplémentaire.", style = MaterialTheme.typography.bodySmall, color = Palette.TextDim)

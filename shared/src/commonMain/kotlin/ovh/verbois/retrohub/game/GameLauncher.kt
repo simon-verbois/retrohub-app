@@ -28,7 +28,7 @@ sealed interface LaunchCheck {
 
     data object NeedsProgressionChoice : LaunchCheck
 
-    data class Conflicts(val saves: List<LocalSave>) : LaunchCheck
+    data class Conflicts(val saves: List<LocalSave>, val gameId: String? = saves.firstOrNull()?.gameId) : LaunchCheck
 
     /** Lancement impossible pour l’instant ; [message] dit au joueur quoi faire. */
     data class Blocked(val message: String) : LaunchCheck
@@ -52,6 +52,7 @@ class GameLauncher(
     private val coreBuild: (String) -> String? = { null },
     private val saveOwner: () -> String = { "local" },
     private val resources: SystemResources? = null,
+    private val mods: ovh.verbois.retrohub.mods.ModRepository? = null,
 ) {
     suspend fun prepare(start: Game, chosen: AppSettings, online: Boolean, portrait: Boolean, fresh: Boolean = false): LaunchCheck =
         withContext(Dispatchers.IO) {
@@ -82,6 +83,32 @@ class GameLauncher(
                 )
             }
 
+            val native = spec.id in setOf("3ds", "ps2", "psp")
+            val launchOwner = if (native) saveOwner() else null
+            val titleId = rom.nativeTitleId ?: game.remote.rom?.takeIf { it.sha256.equals(rom.sha256, true) }?.nativeTitleId
+            val build = if (native) coreBuild(core) else null
+            val sourceGame = game
+            val modRuntime = try {
+                if (spec.id == "3ds") mods?.runtime(game, ovh.verbois.retrohub.mods.ModEnvironment(spec.id, core, build, titleId, rom.sha256), online) else null
+            } catch (error: ovh.verbois.retrohub.mods.ModProblem) {
+                return@withContext LaunchCheck.Blocked(error.message!!)
+            }
+            if (modRuntime != null) {
+                game = game.copy(remote = game.remote.copy(playGameId = modRuntime.saveGameId, saves = modRuntime.saves))
+                saves.prepareGame(game.playGameId, spec.id)
+            }
+
+            // Recover a stopped core's flushed progress before changing runtime directories,
+            // including when offline after an interrupted session.
+            if (native) {
+                try {
+                    saves.checkpointGame(game.playGameId)
+                } catch (error: Exception) {
+                    if (error is kotlinx.coroutines.CancellationException) throw error
+                    return@withContext LaunchCheck.Blocked("Vos données sont conservées. Libérez de l’espace puis relancez le jeu.")
+                }
+            }
+
             if (online) {
                 try {
                     val conflicts = saveSync.pull(game.remote)
@@ -108,15 +135,12 @@ class GameLauncher(
                 }
             }
 
-            val native = spec.id in setOf("3ds", "ps2", "psp")
-            val titleId = rom.nativeTitleId ?: game.remote.rom?.takeIf { it.sha256.equals(rom.sha256, true) }?.nativeTitleId
-            val build = if (native) coreBuild(core) else null
             if (native &&
                 build == null
             ) {
                 return@withContext LaunchCheck.Blocked("L’émulateur n’est pas complet. Installez la dernière version de l’application.")
             }
-            val owner = if (native) saveOwner() else null
+            val owner = launchOwner
             val local = saves.forGame(game.playGameId)
             val sram = local.firstOrNull { it.kind == "sram" && it.slot == 0 && fs.exists(saves.file(it)) }
             val sramCompatible = sram == null || sram.romSha.isEmpty() || sram.romSha.equals(rom.sha256, ignoreCase = true)
@@ -126,7 +150,7 @@ class GameLauncher(
                 } else {
                     local
                         .filter {
-                            it.kind == "state" && it.core == core &&
+                            it.kind == "state" && it.core == core && it.modFingerprint == modRuntime?.plan?.fingerprint &&
                                 (!native || (it.coreBuild == build && it.console == spec.id && it.romSha.equals(rom.sha256, true))) &&
                                 (it.romSha.isEmpty() || it.romSha.equals(rom.sha256, true)) &&
                                 fs.exists(saves.file(it))
@@ -135,7 +159,8 @@ class GameLauncher(
                 }
             val consoleSettings = settings.console(spec.id)
             val coreSaves = if (native) {
-                paths.coreSaves / owner!! / spec.id / ovh.verbois.retrohub.core.sha256(game.playGameId.encodeToByteArray()) / rom.sha256
+                val base = paths.coreSaves / owner!! / spec.id / ovh.verbois.retrohub.core.sha256(game.playGameId.encodeToByteArray()) / rom.sha256
+                modRuntime?.plan?.fingerprint?.let { base / "mod-profiles" / it } ?: base
             } else {
                 paths.coreSaves /
                     spec.id
@@ -149,10 +174,13 @@ class GameLauncher(
                     ) {
                         NativeGameSaves.install(fs, saves.file(sram), coreSaves, spec.id, game.playGameId, rom.sha256, titleId)
                     }
+                    if (modRuntime != null) mods?.prepare(modRuntime, coreSaves)
                 } catch (error: Exception) {
                     if (error is kotlinx.coroutines.CancellationException) throw error
                     return@withContext LaunchCheck.Blocked(
-                        if (error is IllegalArgumentException && error.message?.startsWith("Importez") == true) {
+                        if (error is ovh.verbois.retrohub.mods.ModProblem) {
+                            error.message!!
+                        } else if (error is IllegalArgumentException && error.message?.startsWith("Importez") == true) {
                             error.message!!
                         } else {
                             "Les fichiers ou la sauvegarde de cette console ne se préparent pas. Synchronisez la bibliothèque et vérifiez ses ressources dans les réglages du serveur."
@@ -192,7 +220,22 @@ class GameLauncher(
                     // La SRAM GameCube n’est pas chargée par le cœur : ce sont les fichiers GCI ci-dessus.
                     loadSram = sram != null && sramCompatible && spec.id != "gamecube" && !native,
                     statePath = state?.let { saves.file(it).toString() },
-                    options = CoreOptions.build(spec, core, settings, deviceClass, portrait),
+                    options = CoreOptions.build(spec, core, settings, deviceClass, portrait) + if (spec.id == "3ds") {
+                        mapOf(
+                            "citra_custom_textures" to
+                                if (modRuntime?.plan?.releases?.any { r ->
+                                        r.components.any { it.installer == ovh.verbois.retrohub.mods.ModPlanner.TEXTURES }
+                                    } ==
+                                    true
+                                ) {
+                                    "enabled"
+                                } else {
+                                    "disabled"
+                                },
+                        )
+                    } else {
+                        emptyMap()
+                    },
                     shader = CoreOptions.shader(spec, settings),
                     dsLayoutPortrait = consoleSettings.dsLayoutPortrait ?: GameLayouts.defaultDsLayout(portrait = true),
                     dsLayoutLandscape = consoleSettings.dsLayoutLandscape ?: GameLayouts.defaultDsLayout(portrait = false),
@@ -222,7 +265,7 @@ class GameLauncher(
                         else -> null
                     },
                     integerScale = consoleSettings.integerScale == true && Consoles.nativeSize(spec.id) != null,
-                    rotation = settings.gameRotations[game.playGameId] ?: ovh.verbois.retrohub.emulation.GameRotation.NORMAL,
+                    rotation = settings.gameRotations[sourceGame.playGameId] ?: ovh.verbois.retrohub.emulation.GameRotation.NORMAL,
                     displayAspect = when {
                         consoleSettings.widescreen == true && CoreOptions.supportsWidescreen(spec.id, core) -> 16f / 9f
 
@@ -246,8 +289,10 @@ class GameLauncher(
                     analog = CoreOptions.supportsAnalog(spec.id) && consoleSettings.analog == true,
                     confirmOverwrite = settings.confirmOverwrite,
                     touchLayout = consoleSettings.touchLayout,
-                    cheats = cheats(game.playGameId),
+                    cheats = cheats(sourceGame.playGameId),
+                    modFingerprint = modRuntime?.plan?.fingerprint,
                 )
+            if (native && saveOwner() != launchOwner) return@withContext LaunchCheck.Blocked("Le compte a changé. Rouvrez le jeu depuis votre bibliothèque.")
             saves.registerNativeRuntime(game.playGameId, spec.id, core, coreSaves.toString(), rom.sha256, titleId)
             return@withContext LaunchCheck.Ready(plan)
         }

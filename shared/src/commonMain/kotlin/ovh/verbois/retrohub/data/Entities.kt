@@ -60,6 +60,8 @@ data class LocalSave(
     val coreBuild: String? = null,
     val conflictCoreBuild: String? = null,
     val conflictRomSha: String? = null,
+    val modFingerprint: String? = null,
+    val conflictModFingerprint: String? = null,
 ) {
     val changedLocally: Boolean get() = localSha != null && localSha != baseSha
     val inConflict: Boolean get() = conflictRevision != null

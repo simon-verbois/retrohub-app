@@ -63,8 +63,10 @@ class RoomDaoTest {
                 assertEquals("unchanged", save.localSha)
                 assertEquals(4, save.baseRevision)
                 assertNull(save.coreBuild)
-                migrated.saves().upsert(save.copy(coreBuild = "new-build"))
+                assertNull(save.modFingerprint)
+                migrated.saves().upsert(save.copy(coreBuild = "new-build", modFingerprint = "mod-profile"))
                 assertEquals("new-build", migrated.saves().find("legacy", "state", 1)?.coreBuild)
+                assertEquals("mod-profile", migrated.saves().find("legacy", "state", 1)?.modFingerprint)
             } finally {
                 migrated.close()
             }

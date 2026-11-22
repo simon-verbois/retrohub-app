@@ -339,7 +339,7 @@ class UiController(val container: AppContainer, private val scope: CoroutineScop
 
                     LaunchCheck.NeedsProgressionChoice -> launchIssue = Route.Progression(game.id)
 
-                    is LaunchCheck.Conflicts -> launchIssue = Route.Conflict(game.playGameId)
+                    is LaunchCheck.Conflicts -> launchIssue = Route.Conflict(check.gameId ?: game.playGameId)
 
                     is LaunchCheck.Blocked -> show(check.message)
                 }

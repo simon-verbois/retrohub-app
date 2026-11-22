@@ -11,8 +11,8 @@ import kotlinx.coroutines.IO
 
 @Database(
     entities = [GameEntity::class, LocalRomEntity::class, LocalSave::class, PlaySessionEntity::class, KeyValueEntity::class],
-    version = 2,
-    autoMigrations = [AutoMigration(from = 1, to = 2)],
+    version = 3,
+    autoMigrations = [AutoMigration(from = 1, to = 2), AutoMigration(from = 2, to = 3)],
     exportSchema = true,
 )
 @ConstructedBy(AppDatabaseConstructor::class)

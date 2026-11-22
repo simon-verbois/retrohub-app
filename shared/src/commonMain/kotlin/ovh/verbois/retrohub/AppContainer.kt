@@ -92,11 +92,29 @@ class AppContainer(val platform: Platform, val database: AppDatabase, val clock:
         events = ovh.verbois.retrohub.api.LibraryEventSource { cursor, receive -> api.libraryEvents(cursor, receive) },
     ) { sync.refreshLibrary() }
     val cheats = CheatsRepository(keyValues)
+    val mods = ovh.verbois.retrohub.mods.ModRepository(
+        api, fs, paths.root / "mods", ::nativeOwner,
+        { serverStatus.value?.features?.contains(ovh.verbois.retrohub.api.FEATURE_GAME_MODS) == true },
+        { platform.freeBytes() },
+        { game ->
+            ovh.verbois.retrohub.mods.ModEnvironment(
+                game.console,
+                if ("azahar" in platform.availableCores()) "azahar" else "",
+                platform.coreBuild("azahar"),
+                game.local?.nativeTitleId ?: game.remote.rom?.nativeTitleId,
+                game.local?.sha256 ?: game.remote.rom?.sha256.orEmpty(),
+            )
+        },
+        saveStore::isGameActive,
+        { !platform.meteredNetwork() || settings.settings.value.cellularDownloads },
+        { library.invalidate() },
+    )
     val launcher =
         GameLauncher(
             library, downloads, saveSync, saveStore, fs, paths, platform::availableCores, platform.deviceClass,
             cheats::get, platform::batteryLow, platform::coreBuild, ::nativeOwner,
             ovh.verbois.retrohub.game.SystemResources(api, fs),
+            mods,
         )
 
     private val startLock = Mutex()
@@ -128,6 +146,11 @@ class AppContainer(val platform: Platform, val database: AppDatabase, val clock:
         } catch (error: ovh.verbois.retrohub.api.ApiException) { /* Preserve the cached profile until the next sync. */ }
         val current = settings.settings.value
         val games = library.games.value
+        try {
+            mods.synchronize(games)
+        } catch (error: ovh.verbois.retrohub.api.ApiException) {
+            /* Preserve queued profiles until the next sync. */
+        } catch (error: ovh.verbois.retrohub.mods.ModProblem) { /* Review profile conflicts from the game's Mods page. */ }
         if (current.autoDownloadFavorites) {
             games.filter { it.favorite && !it.downloaded && it.downloadable && it.playGameId !in downloads.states.value }.forEach { downloads.start(it) }
         }

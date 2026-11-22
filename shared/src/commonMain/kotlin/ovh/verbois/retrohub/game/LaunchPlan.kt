@@ -66,6 +66,7 @@ data class LaunchPlan(
     val confirmOverwrite: Boolean = true,
     val touchLayout: Map<String, ControlPlacement> = emptyMap(),
     val cheats: List<Cheat> = emptyList(),
+    val modFingerprint: String? = null,
 )
 
 /** Un code de triche d’un jeu (format du cœur : Game Genie, Action Replay…). */

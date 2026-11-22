@@ -1,5 +1,201 @@
 # Requests to the RetroHub server
 
+## Central mod catalogue and 3DS profiles (2026-11-22; server implementation pending)
+
+The Android/KMP client implements the additive contract below. Implement it on the server and
+in its administration UI before advertising `game_mods_v1` in `/native/status.features`.
+No server files were changed by the app implementation. Existing clients and existing game,
+ROM, system-resource and save contracts must continue to work unchanged.
+
+### Scope and administration
+
+- [ ] Add an administrator-facing **game → Mods → Import archive** flow. Inspect the archive,
+  propose its type/game/region, let the administrator confirm metadata and compatible editions,
+  validate completely, then publish an immutable release. Support progress, failure, cancellation,
+  replacement by a **new** version, unpublishing and restoring previous published versions.
+- [ ] Store mod identity, name, author, source URL, redistribution/license information, access
+  scope (shared library or private owner), versions, variants, compatibility, dependencies,
+  conflicts and normalized components. Only authorized imports become available to other users.
+- [ ] Keep package payloads separate from BIOS/system resources and saves. Use content-addressed
+  immutable storage, reference counting, configurable quotas and complete backup/restore coverage.
+  Default capacity must accommodate multi-gigabyte texture packs; the existing 64 MiB system
+  resource limit must not apply. Never include ROMs, keys or external installers in normalized packs.
+- [ ] First acceptance pack: an administrator-supplied Henriko Ocarina of Time 3D texture ZIP.
+  Strip wrapper directories such as `user/load/textures/<title-id>/`, retain all relative texture
+  directories and `pack.json`, and publish 1080p/4K variants separately. Record explicitly verified
+  compatible title IDs, including European `0004000000033600` where applicable. Do not infer
+  compatibility from a game name alone. Windows/ReShade files are not Android components.
+
+### Discovery and catalogue
+
+All routes below are relative to `/api/v1`, require a device token (or the equivalent web session
+with CSRF protection for writes), and enforce library ownership and package access on every request.
+
+- [ ] `GET /native/games/{library_game_id}/mods` returns `ModCatalogue` from the app's
+  `shared/.../api/ModModels.kt`. The path ID is the library entry ID, not a mod save-context ID.
+  Client sends `X-Mod-Installers` as a sorted comma-separated list. This is capability discovery,
+  never authorization. Return unsupported releases too, so clients can explain incompatibility.
+  `schema_version` is 1; incompatible future schemas must not masquerade as version 1.
+
+```json
+{
+  "schema_version": 1,
+  "game_id": "library-entry-id",
+  "releases": [{
+    "selection": {"id": "oot-hd", "version": "1", "variant": "1080p"},
+    "name": "Ocarina of Time HD", "author": "Pack author",
+    "source_url": "https://author.example/pack", "license": "Imported with permission",
+    "variant_label": "1080p", "console": "3ds", "core": "azahar",
+    "title_ids": ["0004000000033600"], "rom_sha256": [], "core_builds": [],
+    "requires": [], "conflicts": [],
+    "components": [{
+      "installer": "azahar_textures_v1",
+      "artifact": {
+        "sha256": "<archive-sha256>", "size": 12345,
+        "url": "/api/v1/native/mods/objects/<archive-sha256>",
+        "files": [{"path": "UI/texture.png", "size": 123, "sha256": "<file-sha256>"}]
+      },
+      "cheats": []
+    }]
+  }],
+  "profile": {
+    "revision": 0, "selections": [], "gameplay_fingerprint": null,
+    "save_context_id": null, "saves": []
+  }
+}
+```
+
+`selection` uniquely identifies an immutable `(id, version, variant)` tuple. Each field uses
+ASCII letters, digits, `.`, `_`, `:`, `+` or `-` (1–200 characters per token). `requires` contains
+exact selection tuples; `conflicts` contains mod IDs. Every release has 1–16 components, matching
+console/core, and explicit supported 16-digit application title IDs. `rom_sha256` may be empty
+for textures; it is mandatory for every release with a gameplay component. `core_builds`, when
+nonempty, lists compatible core binary SHA-256 values, not marketing versions. Never mark a core
+or pack as device-tested without evidence. Metadata labels may change; component bytes, paths,
+file hashes, compatibility, requirements and conflicts of a published tuple must not change.
+
+### Normalized 3DS installers
+
+The app owns destinations under its private per-game Azahar directory. The API never supplies
+arbitrary target paths. All artifact containers are ZIPs, including ZIP64 when needed.
+
+| Installer | Archive paths | Installed destination |
+|---|---|---|
+| `azahar_textures_v1` | Relative PNG/DDS/KTX/JSON files, including pack configuration | `Azahar/load/textures/<actual-title-id>/` |
+| `azahar_romfs_v1` | Relative files of the replacement RomFS tree | `Azahar/load/mods/<actual-title-id>/romfs/` |
+| `azahar_exefs_v1` | `code.ips`, `code.bps`, `code.bin`, `icon.bin`, `banner.bin`, `logo.bin` | `Azahar/load/mods/<actual-title-id>/exefs/` |
+| `azahar_cheats_v1` | No artifact; `cheats` is an array of `{name,code,enabled}` | Generated `Azahar/cheats/<actual-title-id>.txt` |
+
+IPS/BPS here patch the loaded executable through Azahar, not the original ROM. Full-ROM patching,
+ExHeader overrides, RomFS images/extensions, external programs and shader bundles require
+additional versioned installers. Do not reinterpret them as a supported installer. Other consoles
+can use the same catalogue/profile architecture with separate adapters and capability names.
+
+Cheats use Gateway lines: exactly eight hexadecimal digits, one space and eight hexadecimal
+digits per line. Names cannot contain control characters or brackets. Limits: 256 cheats per
+component, 200 characters per name and 16,384 characters per code. Azahar's libretro cheat callbacks
+are empty in the referenced core; the app writes native files with `*citra_enabled` markers instead.
+
+- [ ] Reject dependency cycles, missing/ambiguous dependencies, duplicate selected mod IDs,
+  explicit conflicts and case-insensitive destination collisions. At most one `code.bin`,
+  `code.ips` or `code.bps` may be active across the entire profile. Do not silently overwrite a
+  conflicting file or guess which executable takes precedence. Profiles contain at most 64 mods.
+- [ ] Normalize archives once on import. Validate original ZIP entry names, duplicate/case-folded
+  names, symlinks, special files, encrypted entries, archive integrity and exact file manifests.
+  Reject absolute paths, backslashes, colons, controls, empty segments, `.` and `..`; paths are
+  at most 512 characters and `.complete` is reserved. Only expected ancestor directories may
+  appear. Each object is at most 8 GiB; each complete profile expands to at most 16 GiB with at
+  most 100,000 installed files. Enforce quotas before publication, with serialized accounting.
+- [ ] `GET /native/mods/objects/{lowercase_sha256}` serves only complete immutable authorized
+  objects. Catalogue URLs must be exactly `/api/v1/native/mods/objects/{lowercase_sha256}`;
+  the client deliberately rejects external download hosts to protect device credentials.
+  Implement Range/206/Content-Range, ETag/If-Range and 416 using the ROM download semantics.
+  Missing/unpublished-for-download objects return an actionable 404; revoke access independently
+  of immutable identity. Avoid logging user filenames, payloads, credentials or private URLs.
+
+### Profiles, fingerprints and revision conflicts
+
+- [ ] `PUT /native/games/{library_game_id}/mods/profile` accepts
+  `{"base_revision":0,"selections":[...],"gameplay_fingerprint":null}`. Resolve and validate
+  selections and their access, recompute fingerprints, enforce `base_revision` transactionally,
+  and return the complete `ModProfile` with a strictly increased revision. A stale revision
+  returns 409 with `detail.current_revision`; never use last-writer-wins. Include the selected
+  gameplay context's latest `saves` in both GET and PUT profile responses.
+- [ ] Profiles are private per account and library entry. Initial revision 0 is empty. Every
+  profile change retains immutable history. Return up to 100 previous `ModProfile` records in
+  catalogue `profile_history`, newest first, and keep their release descriptors available to
+  authorized clients. This enables rollback on another client as well as on the original device.
+  A texture variant may be chosen locally without a profile PUT; other clients keep their own quality.
+  Version/enable/disable choices are synchronized. Remote changes are offered for installation;
+  they do not silently change an installed runtime or download gigabytes. Offline choices retain
+  their known base revision and publish on reconnect only if that revision still matches.
+- [ ] Validate the same deterministic fingerprints as `ModPlanner.fingerprint`. Dependency-sort
+  selected releases by visiting roots in ascending mod-ID order and each `requires` array in its
+  stored order, appending each release after its dependencies. Remove textures for the gameplay
+  fingerprint and omit releases left without components. Empty input yields JSON null.
+  Encode every following record as a four-byte **big-endian UTF-8 byte length** then its UTF-8
+  bytes; finally SHA-256 the concatenation and lowercase the hex result:
+  1. `retrohub-mods-v1` or `retrohub-gameplay-v1`, then decimal release count.
+  2. For each release: mod ID, version, variant (full fingerprint only), decimal component count.
+  3. For each component in manifest order: installer, lowercase artifact SHA-256 or empty string,
+     decimal cheat count; for each cheat in order: exact code, then `true` or `false`.
+  Names, URLs and labels are not fingerprint inputs. The gameplay fingerprint intentionally
+  excludes texture-only components and variant labels; identical gameplay can use different HD
+  textures. Preserve array order where specified. Share app test vectors with backend tests.
+  The vector in `ModPlanTest.fingerprintHasAStableCrossClientContractVector` selects mod
+  `camera`, version `1`, variant `default`, with one `azahar_cheats_v1` component, no artifact,
+  and one enabled code `12345678 00000001`. Its full fingerprint is
+  `0c6174b7f240db2ed1e2d468c0638d868302d4d0ca629830484c3cbfccd8176f` and its gameplay
+  fingerprint is `9ccaf6429016ae7609f8499b2ff2f5fd272b06cb941d672465c0e3a8433e560b`.
+
+### Progression and compatibility
+
+- [ ] Texture-only profiles return null `gameplay_fingerprint` and `save_context_id`; their SRAM
+  stays with the original play-game ID. Every nonvisual profile receives a stable opaque
+  `save_context_id` distinct from the original game's play-game ID. Scope its identity to the
+  owner, base play-game/ROM identity and computed gameplay fingerprint. IDs contain only
+  ASCII letters, digits, `.`, `_`, `:`, `-`, are 1–200 characters, and are neither `.` nor `..`.
+  A new context starts with independent progress. Never automatically copy, merge or migrate
+  original-game progress into a gameplay mod. Future explicit migrations must snapshot first.
+- [ ] Extend `games[].mod_save_contexts` in the library with **all retained contexts**, active or
+  inactive: `[{"game_id":"context-id","gameplay_fingerprint":"<hash>","saves":[...]}]`.
+  Every nested save must carry that context's game ID. Continue exposing original saves in
+  `games[].saves`. Contexts participate in library ETag/SSE and save-epoch restoration.
+  Include the current account profile as `games[].mod_profile` (the same `ModProfile` structure).
+  This lets a new device detect required mods before its first catalogue fetch. Without an
+  explicitly installed local profile, the app asks the player to install the server profile or
+  explicitly select the original game; it must not silently fall back to unmodified gameplay.
+- [ ] Accept context IDs on existing save/history/session routes with the same ownership,
+  revision, checksum, conflict, maintenance, backup and epoch rules as ordinary play-game IDs.
+  Aggregate play time under the parent library game. Native save archive manifests use the
+  context ID and original ROM checksum; validate both against the context. Never accept a
+  gameplay-context archive into the original game's namespace.
+- [ ] Add nullable `mod_fingerprint` to state descriptors/history. Accept and retain
+  `X-Mod-Fingerprint` on state upload; return it on downloads. States require exact console,
+  core, binary build, ROM and full mod fingerprint. SRAM does not need a full texture fingerprint.
+  Existing states have null fingerprints and must not load into a modified runtime. Do not fake
+  the emulator build or ROM checksum to encode a mod profile. Retain immutable state history.
+- [ ] Removing a mod or a publication never deletes progression. Installed payloads work offline;
+  uninstalling an inactive local pack removes only unreferenced downloads. Previous profile
+  descriptors remain available for rollback, which may need redownloading removed files. The app
+  retains up to 20 prior local profiles and preserves incompatible native local checkpoints.
+
+### Server acceptance requirements
+
+- [ ] Test administrator import and shared/private visibility; normalized Henriko wrappers and
+  region matching; version/variant selection; immutable content; malicious ZIPs and ZIP64;
+  interrupted uploads; checksum errors; quotas and concurrent imports; ranged/resumed downloads;
+  dependency cycles, overlaps, executable aliases and unknown installers.
+- [ ] Test two devices editing a profile concurrently, offline disable/reconnect, a stale revision
+  returning 409, local texture quality, missing packs, rollback and unpublish without save loss.
+- [ ] Test independent original/gameplay progress, inactive contexts in the manifest, context
+  ownership on every save/session route, exact state fingerprints including history/conflicts,
+  restored-server epochs and old clients without the feature.
+- [ ] Validate real Azahar rendering on Android ARM64 for textures, RomFS, executable patches and
+  native cheats before marking packs supported. The app's x86 CI cannot certify 3DS rendering.
+  Enable `game_mods_v1` only when catalogue, objects, profiles **and context save contracts** work.
+
+
 Needs found on the app side. Checked items are implemented and tested in the `../retrohub`
 server as of **2026-11-12**, deployed to production in **2026.46.5** (requests 1–6 first shipped
 in **2026.46.2**, request 7 in **2026.46.3**, request 8 in **2026.46.4**; the avatar

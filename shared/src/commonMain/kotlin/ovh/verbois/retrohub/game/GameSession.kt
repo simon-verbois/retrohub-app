@@ -187,6 +187,10 @@ class GameSession(
             val file = saves.file(plan.playGameId, "state", slot)
             val save = saves.find(plan.playGameId, "state", slot)
             if (!fs.exists(file)) return@withLock false
+            if (save?.modFingerprint != plan.modFingerprint) {
+                flash("Rétablissez les mods de cette sauvegarde avant de la charger.")
+                return@withLock false
+            }
             if (save != null && save.core.isNotEmpty() && save.core != plan.core) {
                 flash("Cette sauvegarde vient d’un autre émulateur (${save.core}) et ne peut pas être chargée ici.")
                 return@withLock false
@@ -259,7 +263,7 @@ class GameSession(
         val digest = sha256(data)
         val previous = saves.find(plan.playGameId, kind, slot)
         if (fs.exists(target) && previous?.localSha == digest && previous.core == plan.core && previous.coreBuild == plan.coreBuild &&
-            previous.romSha == plan.romSha
+            previous.romSha == plan.romSha && previous.modFingerprint == plan.modFingerprint
         ) {
             return true
         }
@@ -271,7 +275,16 @@ class GameSession(
             return false
         }
         fs.atomicMove(temporary, target)
-        saveSync.recordLocal(plan.playGameId, plan.console, kind, slot, plan.core, plan.romSha, digest, plan.coreBuild)
+        saveSync.recordLocal(
+            plan.playGameId, plan.console, kind, slot, plan.core, plan.romSha, digest, plan.coreBuild,
+            if (kind ==
+                "state"
+            ) {
+                plan.modFingerprint
+            } else {
+                null
+            },
+        )
         return true
     }
 
@@ -279,10 +292,14 @@ class GameSession(
     private suspend fun preservePrevious(kind: String, slot: Int) {
         if (plan.console !in setOf("3ds", "ps2", "psp")) return
         val previous = saves.find(plan.playGameId, kind, slot) ?: return
-        if (previous.romSha == plan.romSha && (kind != "state" || previous.coreBuild == plan.coreBuild)) return
+        if (previous.romSha == plan.romSha &&
+            (kind != "state" || (previous.coreBuild == plan.coreBuild && previous.modFingerprint == plan.modFingerprint))
+        ) {
+            return
+        }
         val source = saves.file(previous)
         if (!fs.exists(source)) return
-        val identity = sha256("${previous.romSha}/${previous.coreBuild}/${previous.localSha}".encodeToByteArray())
+        val identity = sha256("${previous.romSha}/${previous.coreBuild}/${previous.modFingerprint}/${previous.localSha}".encodeToByteArray())
         val retained = source.parent!! / "retained" / "$identity-${source.name}"
         if (!fs.exists(retained)) {
             fs.createDirectories(retained.parent!!)

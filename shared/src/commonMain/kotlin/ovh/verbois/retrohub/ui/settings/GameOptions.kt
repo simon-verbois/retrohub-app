@@ -66,6 +66,13 @@ internal fun GameOptionsPage(controller: UiController, gameId: String) {
         scope.launch { container.cheats.put(game.playGameId, list) }
     }
     SettingsColumns(primary = {
+        if (game.console == "3ds") {
+            SettingsGroup {
+                SettingRow("Mods", icon = Lucide.Layers, onClick = {
+                    controller.nav.go(ovh.verbois.retrohub.ui.nav.Route.Settings(ovh.verbois.retrohub.ui.nav.SettingsPage.MODS, game.id))
+                })
+            }
+        }
         SectionLabel("Image")
         SettingsGroup {
             Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {

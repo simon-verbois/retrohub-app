@@ -211,6 +211,22 @@ class RetroHubApi(
 
     suspend fun consoles(): List<ConsoleCapabilities> = get("/native/consoles", kotlinx.serialization.builtins.ListSerializer(ConsoleCapabilities.serializer()))
 
+    suspend fun gameMods(gameId: String, installers: Set<String> = emptySet()): ModCatalogue = request(
+        HttpMethod.Get,
+        api("/native/games/${modGameId(gameId)}/mods"),
+        headers = listOf("X-Mod-Installers" to installers.sorted().joinToString(",")),
+    ) { decode(it.bodyAsText(), ModCatalogue.serializer()) }
+
+    suspend fun updateModProfile(gameId: String, update: ModProfileUpdate): ModProfile = request(
+        HttpMethod.Put,
+        api("/native/games/${modGameId(gameId)}/mods/profile"),
+        json = encode(ModProfileUpdate.serializer(), update),
+    ) { decode(it.bodyAsText(), ModProfile.serializer()) }
+
+    private fun modGameId(id: String): String = id.also {
+        require(Regex("[A-Za-z0-9_.:-]{1,200}").matches(it) && it != "." && it != "..")
+    }
+
     suspend fun catalogue(query: CatalogueQuery): CataloguePage {
         val parameters = listOfNotNull(
             "q" to query.search.take(250), "page" to query.page.coerceAtLeast(1).toString(), "limit" to "24",
@@ -326,6 +342,7 @@ class RetroHubApi(
         val core: String,
         val playedAt: String?,
         val coreBuild: String? = null,
+        val modFingerprint: String? = null,
     )
 
     /** Envoie le fichier [source] ; renvoie la nouvelle révision, ou lève SaveConflict sur 409. */
@@ -345,6 +362,7 @@ class RetroHubApi(
                             "X-ROM-SHA256" to upload.romSha256,
                             "X-Emulator-Core" to upload.core,
                             upload.coreBuild?.let { "X-Emulator-Build" to it },
+                            upload.modFingerprint?.let { "X-Mod-Fingerprint" to it },
                             upload.playedAt?.let { "X-Played-At" to it },
                             "X-Content-SHA256" to digest,
                         ),

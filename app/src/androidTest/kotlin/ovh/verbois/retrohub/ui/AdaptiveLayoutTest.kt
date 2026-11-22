@@ -55,12 +55,22 @@ import org.junit.runner.RunWith
 import ovh.verbois.retrohub.RetroHubApp
 import ovh.verbois.retrohub.api.ApiJson
 import ovh.verbois.retrohub.api.LibraryGame
+import ovh.verbois.retrohub.api.ModCatalogue
+import ovh.verbois.retrohub.api.ModComponent
+import ovh.verbois.retrohub.api.ModProfile
+import ovh.verbois.retrohub.api.ModRelease
+import ovh.verbois.retrohub.api.ModSelection
+import ovh.verbois.retrohub.api.RomInfo
+import ovh.verbois.retrohub.core.sha256
 import ovh.verbois.retrohub.data.GameEntity
 import ovh.verbois.retrohub.data.LocalRomEntity
 import ovh.verbois.retrohub.emulation.GameRotation
 import ovh.verbois.retrohub.emulation.ThemeMode
+import ovh.verbois.retrohub.game.Cheat
 import ovh.verbois.retrohub.library.DownloadState
 import ovh.verbois.retrohub.library.Game
+import ovh.verbois.retrohub.mods.ModLocalState
+import ovh.verbois.retrohub.mods.ModPlanner
 import ovh.verbois.retrohub.ui.components.ActionButtons
 import ovh.verbois.retrohub.ui.components.ChoiceRow
 import ovh.verbois.retrohub.ui.components.SettingsGroup
@@ -88,9 +98,72 @@ class AdaptiveLayoutTest {
             val keep = container.database.games().all().filter { it.id != "options-layout" }.map { it.id }
             container.database.games().deleteOthers(keep)
             container.settings.updateNow { it.copy(gameRotations = it.gameRotations - "options-layout") }
+            container.fs.delete(modStatePath(), mustExist = false)
         }
         rule.settleOrientation(portrait = false)
         instrumentation.waitForIdleSync()
+    }
+
+    private fun modStatePath(): okio.Path {
+        val account = container.account.account
+        val owner = sha256((account?.let { "${it.server}\u0000${it.userId}" } ?: "signed-out").encodeToByteArray())
+        return container.paths.root / "mods" / owner / "profiles" / (sha256("options-layout".encodeToByteArray()) + ".json")
+    }
+
+    @Test
+    fun modsKeepUnsupportedPacksVisibleAndExplainCompatibilityInLandscape() {
+        rule.settleOrientation(portrait = false)
+        mods(840f)
+        rule.onNodeWithTag("mod-camera-default").performScrollTo().performClick()
+        rule.onNodeWithText("Ce mod ne fonctionne pas avec l’émulateur de cet appareil.").performScrollTo().assertIsDisplayed()
+        assertNoClippedText()
+        screenshot("mods-landscape")
+    }
+
+    @Test
+    fun modsRemainReadableOnSmallDarkPortraitPhonesWithLargeText() {
+        rule.settleOrientation(portrait = true)
+        mods(320f, fontScale = 1.5f, dark = true)
+        rule.onNodeWithTag("mod-camera-default").performScrollTo().assertIsDisplayed()
+        assertNoClippedText()
+        screenshot("mods-small-portrait-dark")
+    }
+
+    private fun mods(width: Float, fontScale: Float = 1f, dark: Boolean = false) {
+        runBlocking {
+            val game = LibraryGame(
+                "options-layout",
+                "options-layout",
+                title = "Les aventures du voyageur des étoiles",
+                console = "3ds",
+                rom = RomInfo("a".repeat(64), 1, "3ds", "fixture.3ds", "/fixture", "0004000000033600"),
+            )
+            container.database.games().upsert(
+                listOf(
+                    GameEntity(
+                        game.id, game.playGameId, game.title, game.console, false, null, 0, 0, ApiJson.encodeToString(LibraryGame.serializer(), game),
+                    ),
+                ),
+            )
+            val release = ModRelease(
+                ModSelection("camera", "1"),
+                "Caméra libre et commandes améliorées",
+                author = "Créateur du pack",
+                titleIds = listOf("0004000000033600"),
+                romSha256 = listOf("a".repeat(64)),
+                components = listOf(ModComponent(ModPlanner.CHEATS, cheats = listOf(Cheat("Caméra", "12345678 00000001")))),
+            )
+            val state = ModLocalState(catalogue = ModCatalogue(gameId = game.id, releases = listOf(release), profile = ModProfile()))
+            val path = modStatePath()
+            container.fs.createDirectories(path.parent!!)
+            container.fs.write(path) { writeUtf8(ApiJson.encodeToString(ModLocalState.serializer(), state)) }
+        }
+        show(width, fontScale = fontScale, dark = dark) {
+            val scope = rememberCoroutineScope()
+            val controller = remember { UiController(container, scope) }
+            SettingsScreen(controller, SettingsPage.MODS, "options-layout")
+        }
+        rule.waitUntil(5000) { rule.onAllNodesWithText("Caméra libre et commandes améliorées").fetchSemanticsNodes().isNotEmpty() }
     }
 
     @Test

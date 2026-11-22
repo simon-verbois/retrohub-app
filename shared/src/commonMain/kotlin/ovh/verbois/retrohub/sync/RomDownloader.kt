@@ -23,6 +23,10 @@ class CorruptedDownloadException : Exception("Le téléchargement est arrivé ab
  * Le fichier final n’apparaît qu’une fois son SHA-256 vérifié.
  */
 class FileDownloader(private val api: RetroHubApi, private val fs: FileSystem) {
+    suspend fun downloadVerified(url: String, sha256: String, size: Long, target: Path, onProgress: (Long, Long) -> Unit = { _, _ -> }): Path {
+        require(size > 0 && Regex("[a-fA-F0-9]{64}").matches(sha256))
+        return download(url, sha256, size, target, onProgress)
+    }
     suspend fun downloadRom(rom: RomInfo, target: Path, onProgress: (received: Long, total: Long) -> Unit = { _, _ -> }): Path =
         download(rom.url, rom.sha256, rom.size, target, onProgress)
 
@@ -39,12 +43,12 @@ class FileDownloader(private val api: RetroHubApi, private val fs: FileSystem) {
                 have = 0
             }
             if (size == null || have < size) fetch(url, partial, have, size ?: 0, onProgress)
-            if (fs.sha256(partial).equals(sha256, ignoreCase = true)) {
+            if (fs.exists(partial) && (size == null || fs.metadata(partial).size == size) && fs.sha256(partial).equals(sha256, ignoreCase = true)) {
                 fs.atomicMove(partial, target)
                 return target
             }
             // Fichier partiel incohérent : on repart de zéro une fois.
-            fs.delete(partial)
+            fs.delete(partial, mustExist = false)
         }
         throw CorruptedDownloadException()
     }
@@ -54,12 +58,21 @@ class FileDownloader(private val api: RetroHubApi, private val fs: FileSystem) {
             api.download(url, rangeStart = have) { status, contentRange, body ->
                 // Seul un 206 qui reprend exactement à nos octets s’ajoute ; sinon on réécrit tout.
                 val append = status == 206 && have > 0 && contentRange?.startsWith("bytes $have-") == true
+                if (status == 206) {
+                    require(contentRange != null && Regex("bytes ${if (append) have else 0}-[0-9]+/[0-9]+").matches(contentRange))
+                    require(size <= 0 || contentRange.substringAfterLast('/').toLongOrNull() == size)
+                }
                 val total = contentRange?.substringAfterLast('/')?.toLongOrNull() ?: size
                 var received = if (append) have else 0L
                 (if (append) fs.appendingSink(partial) else fs.sink(partial)).buffer().use { sink ->
                     copy(body) { buffer, count ->
-                        sink.write(buffer, 0, count)
                         received += count
+                        if (size > 0 &&
+                            received > size
+                        ) {
+                            throw ApiException.Http(422, "Le téléchargement dépasse la taille annoncée. Actualisez la liste puis réessayez.")
+                        }
+                        sink.write(buffer, 0, count)
                         onProgress(received, total)
                     }
                 }
