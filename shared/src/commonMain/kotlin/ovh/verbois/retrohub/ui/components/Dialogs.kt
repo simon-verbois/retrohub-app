@@ -1,15 +1,8 @@
 package ovh.verbois.retrohub.ui.components
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -19,16 +12,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import ovh.verbois.retrohub.ui.onboarding.FieldColors
 import ovh.verbois.retrohub.ui.theme.Palette
 
@@ -52,40 +41,37 @@ fun FormDialog(title: String, text: String?, fields: List<DialogField>, confirm:
         error = onConfirm(values.map { it.value })
         busy = false
     }
-    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        GlassPanel(Modifier.widthIn(max = 460.dp).padding(24.dp).controllerDialog(onDismiss)) {
-            Column(
-                Modifier.background(Palette.SkyLow).verticalScroll(rememberScrollState()).padding(24.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                Text(title, style = MaterialTheme.typography.headlineMedium)
-                text?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = Palette.TextDim) }
-                fields.forEachIndexed { index, field ->
-                    OutlinedTextField(
-                        values[index].value,
-                        { values[index].value = if (field.digits) it.filter(Char::isDigit).take(8) else it },
-                        Modifier.fillMaxWidth().then(if (index == 0) Modifier.focusRequester(first) else Modifier),
-                        label = { Text(field.label) },
-                        singleLine = field.singleLine,
-                        visualTransformation = if (field.secret) PasswordVisualTransformation() else androidx.compose.ui.text.input.VisualTransformation.None,
-                        keyboardOptions =
-                        KeyboardOptions(
-                            keyboardType =
-                            when {
-                                field.digits -> KeyboardType.NumberPassword
-                                field.secret -> KeyboardType.Password
-                                else -> KeyboardType.Text
-                            },
-                            imeAction = if (index == fields.lastIndex) ImeAction.Done else ImeAction.Next,
-                        ),
-                        keyboardActions = KeyboardActions(onDone = { if (!busy) submit++ }),
-                        colors = FieldColors(),
-                    )
-                }
-                error?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = Palette.Danger) }
-                ActionButtons(confirm, { if (!busy) submit++ }, Modifier.padding(top = 4.dp), secondary = "Annuler", onSecondary = onDismiss, loading = busy)
-            }
+    ModalPanel(
+        title,
+        onDismiss,
+        footer = {
+            ActionButtons(confirm, { if (!busy) submit++ }, secondary = "Annuler", onSecondary = onDismiss, loading = busy)
+        },
+    ) {
+        text?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = Palette.TextDim) }
+        fields.forEachIndexed { index, field ->
+            OutlinedTextField(
+                values[index].value,
+                { values[index].value = if (field.digits) it.filter(Char::isDigit).take(8) else it },
+                Modifier.fillMaxWidth().then(if (index == 0) Modifier.focusRequester(first) else Modifier),
+                label = { Text(field.label) },
+                singleLine = field.singleLine,
+                visualTransformation = if (field.secret) PasswordVisualTransformation() else androidx.compose.ui.text.input.VisualTransformation.None,
+                keyboardOptions =
+                KeyboardOptions(
+                    keyboardType =
+                    when {
+                        field.digits -> KeyboardType.NumberPassword
+                        field.secret -> KeyboardType.Password
+                        else -> KeyboardType.Text
+                    },
+                    imeAction = if (index == fields.lastIndex) ImeAction.Done else ImeAction.Next,
+                ),
+                keyboardActions = KeyboardActions(onDone = { if (!busy) submit++ }),
+                colors = FieldColors(),
+            )
         }
+        error?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = Palette.Danger) }
     }
     LaunchedEffect(Unit) {
         kotlinx.coroutines.delay(100)

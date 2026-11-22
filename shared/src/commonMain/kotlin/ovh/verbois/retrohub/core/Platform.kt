@@ -1,6 +1,8 @@
 package ovh.verbois.retrohub.core
 
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.emptyFlow
 import okio.FileSystem
 import okio.Path
 import ovh.verbois.retrohub.game.LaunchPlan
@@ -85,6 +87,9 @@ interface Platform {
 
     /** Only batteries and levels actually reported by the operating system. */
     fun powerStatus(): PowerStatus = PowerStatus()
+
+    /** Refresh hints for device connections and changes; foreground polling remains a fallback. */
+    val powerStatusChanges: Flow<Unit> get() = emptyFlow()
 
     /** Partage d’un rapport (journal de l’application et état) pour signaler un problème. */
     fun shareLogs(summary: String)

@@ -541,11 +541,11 @@ class EndToEndTest {
             runCatching {
                 val resume = rule.onNodeWithText("Reprendre").fetchSemanticsNode().boundsInRoot
                 val save = rule.onNodeWithText("Sauvegarder la partie").fetchSemanticsNode().boundsInRoot
-                if (portrait) {
-                    save.top > resume.bottom && kotlin.math.abs(save.center.x - resume.center.x) < 6f
-                } else {
-                    save.left > resume.right && kotlin.math.abs(save.top - resume.top) < 6f
-                }
+                val load = rule.onNodeWithText("Charger une partie").fetchSemanticsNode().boundsInRoot
+                val quit = rule.onNodeWithText("Quitter").fetchSemanticsNode().boundsInRoot
+                val panel = rule.onNodeWithTag("pause-menu").fetchSemanticsNode().boundsInRoot
+                val fits = quit.bottom <= panel.bottom && save.left > resume.right && kotlin.math.abs(save.top - resume.top) < 6f
+                fits && if (portrait) load.top > resume.bottom else load.left > save.right
             }.getOrDefault(false)
         }
     }
@@ -692,14 +692,13 @@ class EndToEndTest {
     }
 
     private fun focusDownTo(text: String) {
-        repeat(14) {
-            if (runCatching { rule.onNodeWithText(text).fetchSemanticsNode().config[SemanticsProperties.Focused] }.getOrDefault(false)) return
-            pad(KeyEvent.KEYCODE_DPAD_DOWN)
-        }
-        pad(KeyEvent.KEYCODE_DPAD_RIGHT)
-        repeat(14) {
-            if (runCatching { rule.onNodeWithText(text).fetchSemanticsNode().config[SemanticsProperties.Focused] }.getOrDefault(false)) return
-            pad(KeyEvent.KEYCODE_DPAD_UP)
+        // Scan each column in both directions, including the pause menu's three-column grid.
+        repeat(4) { column ->
+            repeat(14) {
+                if (runCatching { rule.onNodeWithText(text).fetchSemanticsNode().config[SemanticsProperties.Focused] }.getOrDefault(false)) return
+                pad(if (column % 2 == 0) KeyEvent.KEYCODE_DPAD_DOWN else KeyEvent.KEYCODE_DPAD_UP)
+            }
+            pad(KeyEvent.KEYCODE_DPAD_RIGHT)
         }
         rule.onNodeWithText(text).assertIsFocused()
     }

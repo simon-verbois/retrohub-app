@@ -19,10 +19,8 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -59,8 +57,6 @@ import androidx.compose.ui.semantics.toggleableState
 import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import ovh.verbois.retrohub.ui.icons.Lucide
 import ovh.verbois.retrohub.ui.theme.Palette
 
@@ -340,28 +336,22 @@ fun ConfirmDialog(
 ) {
     val dismissFocus = remember { FocusRequester() }
     val confirmFocus = remember { FocusRequester() }
-    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        GlassPanel(
-            Modifier.widthIn(max = 460.dp).padding(24.dp).controllerDialog(onDismiss),
-        ) {
-            Column(
-                Modifier.background(Palette.SkyLow).verticalScroll(rememberScrollState()).padding(24.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp),
-            ) {
-                Text(title, style = MaterialTheme.typography.headlineMedium)
-                Text(text, style = MaterialTheme.typography.bodyLarge, color = Palette.TextDim)
-                ActionButtons(
-                    confirm,
-                    onConfirm,
-                    Modifier.padding(top = 8.dp),
-                    secondary = dismiss,
-                    onSecondary = onDismiss,
-                    secondaryModifier = Modifier.focusRequester(dismissFocus),
-                    primaryModifier = Modifier.focusRequester(confirmFocus),
-                )
-            }
-        }
-        AutoFocus(if (focusDismiss || destructive) dismissFocus else confirmFocus)
+    ModalPanel(
+        title,
+        onDismiss,
+        initialFocus = if (focusDismiss || destructive) dismissFocus else confirmFocus,
+        footer = {
+            ActionButtons(
+                confirm,
+                onConfirm,
+                secondary = dismiss,
+                onSecondary = onDismiss,
+                secondaryModifier = Modifier.focusRequester(dismissFocus),
+                primaryModifier = Modifier.focusRequester(confirmFocus),
+            )
+        },
+    ) {
+        Text(text, style = MaterialTheme.typography.bodyMedium, color = Palette.TextDim)
     }
 }
 

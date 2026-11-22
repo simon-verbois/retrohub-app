@@ -89,6 +89,14 @@ class HomeCrossLayoutTest {
         assertTrue(fitted.categoryLabelWidth > fitted.categoryPitch * 2)
     }
 
+    @Test fun neighboringCoversRecedeBehindTheHeader() {
+        assertEquals(0f, layout.verticalEdgeAlpha(0f))
+        assertTrue(layout.verticalEdgeAlpha(8f) < layout.verticalEdgeAlpha(24f))
+        assertTrue(layout.verticalEdgeAlpha(layout.center(-1)) < 0.5f)
+        assertTrue(layout.categoryCenter - layout.categoryHeight / 2 >= 48f)
+        assertTrue(layout.selectedCenter < layout.height * 0.6f)
+    }
+
     @Test fun edgeFadesAreBoundedAndLeaveTheSelectionVisible() {
         assertEquals(0f, layout.horizontalEdgeAlpha(-10f))
         assertEquals(0f, layout.verticalEdgeAlpha(layout.height + 10f))

@@ -159,14 +159,14 @@ fun AccountMenu(controller: UiController, account: Account, anchor: Rect? = null
                     AnimatedVisibility(
                         visibleState = visible,
                         enter =
-                        fadeIn(tween(if (reducedMotion) 0 else 160)) +
-                            scaleIn(tween(if (reducedMotion) 0 else 160), initialScale = 0.96f, transformOrigin = TransformOrigin(1f, 0f)),
+                        fadeIn(tween(if (reducedMotion) 0 else 100)) +
+                            scaleIn(tween(if (reducedMotion) 0 else 100), initialScale = 0.96f, transformOrigin = TransformOrigin(1f, 0f)),
                         exit = fadeOut(tween(if (reducedMotion) 0 else 100)),
                     ) {
                         Box(
                             Modifier.width(panelWidth).heightIn(max = panelHeight).testTag("profile-menu")
                                 .shadow(10.dp, shape, clip = false).clip(shape)
-                                .background(Brush.verticalGradient(listOf(lerp(Palette.Deep, Palette.SkyTop, 0.28f), Palette.Deep)))
+                                .background(Palette.Deep)
                                 .border(1.dp, Palette.Line, shape).padding(top = pointerHeight * fit),
                         ) {
                             Column(
@@ -249,7 +249,10 @@ fun AccountMenu(controller: UiController, account: Account, anchor: Rect? = null
                                         .consoleFocus(RoundedCornerShape(24.dp), {
                                             if (sync.phase != SyncPhase.SYNCING) controller.syncNow()
                                         }, focusScale = 1f)
-                                        .consoleButtonSurface(RoundedCornerShape(24.dp)).padding(horizontal = 12.dp * fit, vertical = actionPadding * fit),
+                                        .background(
+                                            Palette.Raised,
+                                            RoundedCornerShape(12.dp),
+                                        ).padding(horizontal = 12.dp * fit, vertical = actionPadding * fit),
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                                 ) {
@@ -295,15 +298,16 @@ private fun ProfileShortcut(
     iconSize: Dp = 28.dp,
     gap: Dp = 6.dp,
 ) {
-    val shape = RoundedCornerShape(16.dp)
-    var focused by remember { mutableStateOf(false) }
-    val keyboard = LocalInputModeManager.current.inputMode == InputMode.Keyboard
-    val emphasis by animateFloatAsState(if (focused && keyboard) 1f else 0f, tween(if (reducedMotion) 0 else 140))
+    val shape = RoundedCornerShape(12.dp)
     Column(
-        modifier.height(height).consoleFocus(shape, onClick, focusScale = 1f, highlightFocus = false, onFocus = {
-            focused = it
-            onFocus(it)
-        }).consoleButtonSurface(shape, emphasis = emphasis).padding(horizontal = 8.dp),
+        modifier.height(
+            height,
+        ).consoleFocus(
+            shape,
+            onClick,
+            focusScale = 1f,
+            onFocus = onFocus,
+        ).background(Palette.Raised, shape).border(1.dp, Palette.Line, shape).padding(horizontal = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(gap, Alignment.CenterVertically),
     ) {

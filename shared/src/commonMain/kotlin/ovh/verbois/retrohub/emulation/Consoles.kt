@@ -10,6 +10,7 @@ enum class PadLayout {
     MEGA_DRIVE,
     PLAYSTATION,
     PLAYSTATION_2,
+    PSP,
     NINTENDO_3DS,
     NINTENDO_64,
     NINTENDO_DS,
@@ -50,7 +51,7 @@ data class ConsoleSpec(
         "snes", "megadrive", "gb", "gbc" -> 4
         "psx", "n64" -> 5
         "dreamcast", "gamecube", "gba", "ps2" -> 6
-        "nds" -> 7
+        "nds", "psp" -> 7
         else -> 8
     }
 }
@@ -128,6 +129,10 @@ object Consoles {
             ConsoleSpec(
                 "ps2", "PlayStation 2", "PS2", "Sony", 2000, 0xFF9BA7E8, Artwork.ORBITAL_LOUNGE, listOf("armsx2"), PadLayout.PLAYSTATION_2,
                 4f / 3f, analog = true, demanding = true, needsBios = true, supportedAbis = setOf("arm64-v8a"),
+            ),
+            ConsoleSpec(
+                "psp", "PlayStation Portable", "PSP", "Sony", 2004, 0xFFA7B7D4, Artwork.ORBITAL_LOUNGE, listOf("ppsspp"), PadLayout.PSP,
+                480f / 272f, handheld = true, analog = true, demanding = true,
             ),
             ConsoleSpec(
                 "atari2600", "Atari 2600", "Atari 2600", "Atari", 1977, 0xFFE8B98A, Artwork.STAR_CANYON,

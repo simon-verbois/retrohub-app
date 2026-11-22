@@ -18,7 +18,15 @@ object NativeGameSaves {
     private const val LIMIT = 256L * 1024 * 1024
 
     private fun manifest(console: String, gameId: String, sha: String, titleId: String?): JsonObject = buildJsonObject {
-        put("format", if (console == "ps2") "ps2_card_zip_v1" else "azahar_game_zip_v1")
+        put(
+            "format",
+            when (console) {
+                "ps2" -> "ps2_card_zip_v1"
+                "psp" -> "ppsspp_savedata_zip_v1"
+                "3ds" -> "azahar_game_zip_v1"
+                else -> error("Unsupported native save console")
+            },
+        )
         put("game_id", gameId)
         put("rom_sha256", sha)
         if (console == "3ds") put("title_id", requireNotNull(titleId).lowercase())
@@ -53,6 +61,15 @@ object NativeGameSaves {
                 val card = root / "pcsx2/memcards/Mcd00$slot.ps2"
                 if (fs.exists(card) && validCard(fs, card)) files["cards/slot$slot.ps2"] = card
             }
+        } else if (console == "psp") {
+            val savedata = root / "PSP/SAVEDATA"
+            if (fs.exists(savedata)) {
+                fs.listRecursively(savedata).filter { fs.metadata(it).isRegularFile }.forEach { file ->
+                    val name = file.relativeTo(root).toString()
+                    require(name.removePrefix("PSP/SAVEDATA/").contains('/'))
+                    files[name] = file
+                }
+            }
         } else {
             if (titleId == null || !Regex("00040000[0-9a-fA-F]{8}").matches(titleId) || !fs.exists(root / "Azahar")) return false
             val roots = titleRoots(titleId)
@@ -85,7 +102,11 @@ object NativeGameSaves {
     }
 
     fun install(fs: FileSystem, zip: Path, root: Path, console: String, gameId: String, sha: String, titleId: String?) {
-        val roots = if (console == "3ds") titleRoots(requireNotNull(titleId)) else listOf("cards")
+        val roots = when (console) {
+            "3ds" -> titleRoots(requireNotNull(titleId))
+            "psp" -> listOf("PSP/SAVEDATA")
+            else -> listOf("cards")
+        }
         recover(fs, root)
         val digest = fs.sha256(zip)
         val marker = root / ".restored-archive"
@@ -103,6 +124,7 @@ object NativeGameSaves {
             require(ApiJson.decodeFromString(JsonObject.serializer(), descriptor) == manifest(console, gameId, sha, titleId))
             val payloads = fs.listRecursively(staging).filter { fs.metadata(it).isRegularFile && it != staging / "manifest.json" }.toList()
             require(payloads.isNotEmpty())
+            if (console == "psp") require(payloads.all { it.relativeTo(staging).segments.size >= 4 })
             fs.createDirectories(candidate)
             if (fs.exists(root)) {
                 fs.listRecursively(root).forEach { source ->

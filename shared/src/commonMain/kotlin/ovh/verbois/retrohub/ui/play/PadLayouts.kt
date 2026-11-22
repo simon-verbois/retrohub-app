@@ -72,6 +72,11 @@ fun padSpec(layout: PadLayout): PadSpec = when (layout) {
 
     PadLayout.PLAYSTATION_2 -> padSpec(PadLayout.PLAYSTATION).copy(leftStick = true, rightStick = true)
 
+    PadLayout.PSP -> padSpec(PadLayout.PLAYSTATION).copy(
+        leftStick = true,
+        shoulders = listOf(Shoulder(PadKey.L, "L", true), Shoulder(PadKey.R, "R", false)),
+    )
+
     PadLayout.MASTER_SYSTEM ->
         PadSpec(
             face = listOf(FaceButton(PadKey.B, "1", -0.5f, 0.15f), FaceButton(PadKey.A, "2", 0.5f, -0.15f)),

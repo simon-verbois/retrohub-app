@@ -1,14 +1,7 @@
 package ovh.verbois.retrohub.ui.components
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -24,8 +17,6 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import kotlinx.coroutines.Dispatchers
@@ -56,24 +47,19 @@ fun ReportDialogs(container: AppContainer) {
     var message by remember { mutableStateOf<String?>(null) }
     if (request == "history") {
         val close = { container.reportRequest.value = null }
-        Dialog(close, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-            GlassPanel(Modifier.widthIn(max = 560.dp).padding(16.dp).controllerDialog(close)) {
-                Column(
-                    Modifier.background(Palette.SkyLow).verticalScroll(rememberScrollState()).padding(20.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    Text("Rapports sur cet appareil", style = MaterialTheme.typography.headlineSmall)
-                    visible.reversed().forEach { report ->
-                        GlassButton(
-                            "${reportLabel(report)} · ${reportStatus(report)}",
-                            { container.reportRequest.value = report.id },
-                            Modifier.fillMaxWidth(),
-                        )
-                    }
-                    if (visible.isEmpty()) Text("Aucun rapport enregistré.")
-                    GlassButton("Fermer", close, Modifier.fillMaxWidth())
-                }
+        ModalPanel(
+            "Rapports sur cet appareil",
+            close,
+            maxWidth = 560.dp,
+            footer = { GlassButton("Fermer", close) },
+        ) {
+            visible.reversed().forEach { report ->
+                ConsoleMenuItem(
+                    "${reportLabel(report)} · ${reportStatus(report)}",
+                    { container.reportRequest.value = report.id },
+                )
             }
+            if (visible.isEmpty()) Text("Aucun rapport enregistré.")
         }
         return
     }
@@ -162,88 +148,94 @@ private fun ReportDialog(
     val first = remember { FocusRequester() }
     val full = FEATURE_BUG_REPORTS in features
     val canSend = signedIn && (full || (FEATURE_DIAGNOSTICS in features && report.diagnostic != null))
-    Dialog(onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        GlassPanel(Modifier.widthIn(max = 600.dp).padding(16.dp).controllerDialog(onDismiss).testTag("report-dialog")) {
-            Column(
-                Modifier.background(Palette.SkyLow).verticalScroll(rememberScrollState()).padding(20.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                Text(reportLabel(report), style = MaterialTheme.typography.headlineSmall)
-                Text(
-                    if (report.prompt) {
-                        "Un arrêt inattendu a été détecté. Envoyer un rapport ?"
-                    } else {
-                        "${reportStatus(report).replaceFirstChar {
-                            it.uppercase()
-                        }}."
-                    },
-                    style = MaterialTheme.typography.bodyLarge,
-                )
-                if (!report.sent && report.approved == null) {
-                    Text(
-                        when {
-                            !canSend -> "Ce serveur ne reçoit pas encore ce rapport. Vous pouvez le partager."
-
-                            full -> "Envoi à votre serveur : informations techniques, journal filtré et description. Aucun envoi sans votre accord."
-
-                            else ->
-                                "Seules les informations techniques de l’émulateur seront envoyées à votre serveur. " +
-                                    "Le journal et la description restent dans le rapport à partager."
-                        },
-                        color = Palette.TextDim,
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                    OutlinedTextField(
-                        description,
-                        { description = it.take(MAX_DESCRIPTION_CHARS) },
-                        Modifier.fillMaxWidth(),
-                        label = { Text("Que s’est-il passé ? (facultatif)") },
-                        minLines = 2,
-                        maxLines = 4,
-                    )
+    val send: () -> Unit = {
+        if (!busy) {
+            scope.launch {
+                busy = true
+                try {
+                    error = onSend(description)
+                } finally {
+                    busy = false
                 }
-                GlassButton(if (preview) "Masquer le rapport" else "Voir le rapport", { preview = !preview }, Modifier.fillMaxWidth().focusRequester(first))
-                if (preview) {
-                    SelectionContainer {
-                        Text(report.copy(description = sanitizeLog(description)).export(), style = MaterialTheme.typography.bodySmall)
-                    }
-                }
-                (error ?: message)?.let { Text(it, color = Palette.Danger, style = MaterialTheme.typography.bodyMedium) }
-                if (!report.sent && report.approved == null && canSend) {
-                    PrimaryButton(
-                        if (full) "Envoyer le rapport" else "Envoyer le diagnostic",
-                        {
-                            if (!busy) {
-                                scope.launch {
-                                    busy = true
-                                    try {
-                                        error = onSend(description)
-                                    } finally {
-                                        busy = false
-                                    }
-                                }
-                            }
-                        },
-                        Modifier.fillMaxWidth(),
-                        loading = busy,
-                    )
-                }
-                if (report.approved != null) {
-                    Text(
-                        when {
-                            report.sent -> "Réception confirmée par le serveur."
-                            report.deliveryError -> "Le serveur a refusé l’envoi. Utilisez Partager."
-                            else -> "Rapport autorisé. L’envoi reprendra avec la connexion."
-                        },
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = Palette.TextDim,
-                    )
-                }
-                GlassButton("Partager le rapport complet", { onShare(description) }, Modifier.fillMaxWidth(), enabled = !busy)
-                GlassButton("Supprimer de l’appareil", onDelete, Modifier.fillMaxWidth(), enabled = !busy)
-                GlassButton(if (report.prompt) "Ignorer" else "Fermer", onDismiss, Modifier.fillMaxWidth(), enabled = !busy)
             }
         }
-        AutoFocus(first)
+    }
+    val dismissLabel = if (report.prompt) "Ignorer" else "Fermer"
+    val sendAction = !report.sent && report.approved == null && canSend
+    ModalPanel(
+        reportLabel(report),
+        onDismiss,
+        Modifier.testTag("report-dialog"),
+        maxWidth = 600.dp,
+        initialFocus = first,
+        footer = {
+            if (sendAction) {
+                ActionButtons(
+                    if (full) "Envoyer le rapport" else "Envoyer le diagnostic",
+                    send,
+                    secondary = dismissLabel,
+                    onSecondary = { if (!busy) onDismiss() },
+                    loading = busy,
+                )
+            } else {
+                GlassButton(dismissLabel, onDismiss, enabled = !busy)
+            }
+        },
+    ) {
+        Text(
+            if (report.prompt) {
+                "Un arrêt inattendu a été détecté. Envoyer un rapport ?"
+            } else {
+                "${reportStatus(report).replaceFirstChar {
+                    it.uppercase()
+                }}."
+            },
+            style = MaterialTheme.typography.bodyLarge,
+        )
+        if (!report.sent && report.approved == null) {
+            Text(
+                when {
+                    !canSend -> "Ce serveur ne reçoit pas encore ce rapport. Vous pouvez le partager."
+
+                    full -> "Envoi à votre serveur : informations techniques, journal filtré et description. Aucun envoi sans votre accord."
+
+                    else ->
+                        "Seules les informations techniques de l’émulateur seront envoyées à votre serveur. " +
+                            "Le journal et la description restent dans le rapport à partager."
+                },
+                color = Palette.TextDim,
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            OutlinedTextField(
+                description,
+                { description = it.take(MAX_DESCRIPTION_CHARS) },
+                Modifier.fillMaxWidth(),
+                label = { Text("Que s’est-il passé ? (facultatif)") },
+                minLines = 2,
+                maxLines = 4,
+            )
+        }
+        ConsoleMenuItem(if (preview) "Masquer le rapport" else "Voir le rapport", { preview = !preview }, Modifier.focusRequester(first))
+        if (preview) {
+            SelectionContainer {
+                Text(report.copy(description = sanitizeLog(description)).export(), style = MaterialTheme.typography.bodySmall)
+            }
+        }
+        (error ?: message)?.let { Text(it, color = Palette.Danger, style = MaterialTheme.typography.bodyMedium) }
+        if (report.approved != null) {
+            Text(
+                when {
+                    report.sent -> "Réception confirmée par le serveur."
+                    report.deliveryError -> "Le serveur a refusé l’envoi. Utilisez Partager."
+                    else -> "Rapport autorisé. L’envoi reprendra avec la connexion."
+                },
+                style = MaterialTheme.typography.bodyMedium,
+                color = Palette.TextDim,
+            )
+        }
+        ConsoleMenuItem("Partager le rapport complet", { if (!busy) onShare(description) }, icon = ovh.verbois.retrohub.ui.icons.Lucide.Share2, enabled = !busy)
+        ConsoleMenuItem("Supprimer de l’appareil", {
+            if (!busy) onDelete()
+        }, icon = ovh.verbois.retrohub.ui.icons.Lucide.Trash2, tint = Palette.Danger, enabled = !busy)
     }
 }

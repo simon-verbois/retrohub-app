@@ -195,6 +195,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        (application as RetroHubApp).platform.refreshControllers()
         immersive()
         // Retour au premier plan : un 304 coûte peu, la bibliothèque reste à jour.
         val container = (application as RetroHubApp).container

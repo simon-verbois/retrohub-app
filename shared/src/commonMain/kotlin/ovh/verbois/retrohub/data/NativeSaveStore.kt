@@ -158,6 +158,6 @@ class NativeSaveStore(
     override fun observeAll() = combine(legacy.observeAll(), changes) { _, _ -> all() }.flowOn(Dispatchers.IO)
 
     companion object {
-        val privateConsoles = setOf("3ds", "ps2")
+        val privateConsoles = setOf("3ds", "ps2", "psp")
     }
 }

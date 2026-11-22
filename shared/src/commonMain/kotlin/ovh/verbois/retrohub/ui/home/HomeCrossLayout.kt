@@ -37,7 +37,11 @@ internal class HomeCrossLayout private constructor(
 
     fun horizontalEdgeAlpha(center: Float): Float = edgeAlpha(center, width, (width * 0.04f).coerceIn(12f, 40f))
 
-    fun verticalEdgeAlpha(center: Float): Float = edgeAlpha(center, height, (height * 0.05f).coerceIn(8f, 24f))
+    // Lower the whole cover opacity as it recedes beneath the header mask.
+    fun verticalEdgeAlpha(center: Float): Float {
+        val fade = (height * 0.16f).coerceIn(32f, 72f)
+        return edgeAlpha(center, height, fade)
+    }
 
     fun center(relativeIndex: Int): Float = when {
         relativeIndex < 0 -> categoryCenter - categoryHeight / 2 - itemHeight / 2 - gap + (relativeIndex + 1) * pitch
@@ -71,12 +75,13 @@ internal class HomeCrossLayout private constructor(
                 .coerceAtMost((height - categoryHeight - gap).coerceAtLeast(48f))
             val coverBox = preferredCoverBox.coerceAtMost(fittedHeight)
             val itemHeight = (coverBox * 0.58f).coerceAtLeast(48f)
-            val minimum = categoryHeight / 2
+            val headerClearance = minOf(48f, (height - categoryHeight - fittedHeight - gap).coerceAtLeast(0f))
+            val minimum = categoryHeight / 2 + headerClearance
             val maximum = (height - categoryHeight / 2 - fittedHeight - gap).coerceAtLeast(minimum)
             return HomeCrossLayout(
                 width = width,
                 height = height,
-                categoryCenter = (height * 0.28f).coerceIn(minimum, maximum),
+                categoryCenter = (height * 0.12f + 40f).coerceIn(minimum, maximum),
                 categoryHeight = categoryHeight,
                 selectedHeight = fittedHeight,
                 itemHeight = itemHeight,

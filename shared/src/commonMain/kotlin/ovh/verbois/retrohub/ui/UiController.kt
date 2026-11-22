@@ -107,6 +107,8 @@ class UiController(val container: AppContainer, private val scope: CoroutineScop
     /** Jeu choisi sur l’accueil : la bibliothèque et la recherche y renvoient (plus de page de fiche). */
     var homeGame by mutableStateOf<String?>(null)
 
+    var homeCategoryLane by mutableStateOf(false)
+
     var homeColumn by mutableStateOf<String?>(null)
     private val homeSelections = mutableMapOf<String, String>()
 
@@ -114,6 +116,7 @@ class UiController(val container: AppContainer, private val scope: CoroutineScop
         if (key == homeColumn) return
         homeMoved()
         homeColumn?.let { column -> homeGame?.let { homeSelections[column] = it } }
+        homeCategoryLane = false
         homeColumn = key
         val column = home.value.byColumn[key]
         homeGame = homeSelections[key]?.takeIf { column?.indices?.containsKey(it) == true } ?: column?.games?.firstOrNull()?.id
@@ -172,6 +175,7 @@ class UiController(val container: AppContainer, private val scope: CoroutineScop
     }
 
     fun showGame(id: String) {
+        homeCategoryLane = false
         if (!portrait) {
             val game = home.value.byId[id]
             val column = home.value.byColumn[homeColumn]

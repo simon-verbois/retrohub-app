@@ -83,7 +83,13 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.IO
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.merge
+import kotlinx.coroutines.withContext
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.number
 import kotlinx.datetime.toLocalDateTime
@@ -349,7 +355,7 @@ private fun TopBar(
             )
                 .focusProperties { right = FocusRequester.Cancel }
                 .semantics { contentDescription = "Compte et menu · $label" }
-                .consoleFocus(CircleShape, { controller.menuOpen = true }, focusScale = 1.08f, highlightFocus = false),
+                .consoleFocus(CircleShape, { controller.menuOpen = true }, focusScale = 1.08f),
             contentAlignment = Alignment.Center,
         ) {
             Box(Modifier.size(diameter)) {
@@ -440,12 +446,10 @@ private fun CompactSectionMenu(controller: UiController, section: Section?, modi
             )
             Icon(Lucide.ChevronDown, null, Modifier.size(16.dp), tint = Palette.Text)
         }
-        androidx.compose.material3.DropdownMenu(
+        ovh.verbois.retrohub.ui.components.ConsoleDropdownMenu(
             expanded = open,
             onDismissRequest = { open = false },
             modifier = Modifier.controllerDialog({ open = false }, dismissOnStart = true),
-            containerColor = Palette.Deep,
-            shape = RoundedCornerShape(18.dp),
         ) {
             Section.entries.filter { it.tab }.forEach { item ->
                 ConsoleMenuItem(
@@ -494,8 +498,9 @@ private fun SectionTab(title: String, active: Boolean, modifier: Modifier = Modi
 @Composable
 private fun statusBubbleSize() = with(LocalDensity.current) { 16.sp.toDp() }.plus(10.dp).coerceAtLeast(30.dp)
 
+/** Foreground clock and power state, including controllers attached after launch. */
 @Composable
-internal fun StatusPill(platform: Platform, transparent: Boolean = false, compact: Boolean = false) {
+fun StatusPill(platform: Platform, transparent: Boolean = false, compact: Boolean = false) {
     val textStyle = MaterialTheme.typography.labelLarge.copy(
         fontSize = if (compact) 11.sp else 12.sp,
         lineHeight = 16.sp,
@@ -503,11 +508,17 @@ internal fun StatusPill(platform: Platform, transparent: Boolean = false, compac
         fontWeight = if (compact) FontWeight.Normal else FontWeight.Bold,
     )
     val lifecycle = LocalLifecycleOwner.current.lifecycle
+    val gamepad by platform.gamepadConnected.collectAsState()
     val power by produceState(PowerStatus(), platform, lifecycle) {
         lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
-            while (true) {
-                value = platform.powerStatus()
-                delay(15_000)
+            val polling = flow {
+                while (true) {
+                    emit(Unit)
+                    delay(5_000)
+                }
+            }
+            merge(polling, platform.powerStatusChanges).collectLatest {
+                value = withContext(Dispatchers.IO) { platform.powerStatus() }
             }
         }
     }
@@ -554,17 +565,36 @@ internal fun StatusPill(platform: Platform, transparent: Boolean = false, compac
                 maxLines = 1,
             )
         }
-        power.controllers.take(1).forEach { controller ->
+        if (gamepad) {
+            val controller = power.controllers.firstOrNull()
             Box(Modifier.width(1.dp).height(14.dp).background(Palette.Line))
-            Icon(Lucide.Gamepad2, null, Modifier.size(14.dp), tint = Palette.Text)
-            Text(
-                "${controller.level.percent} %",
-                Modifier.semantics {
-                    contentDescription = "Batterie de ${controller.name} : ${controller.level.percent} %"
+            Row(
+                Modifier.testTag("header-controller").semantics(mergeDescendants = true) {
+                    contentDescription = if (controller == null) {
+                        "Manette connectée"
+                    } else {
+                        "Batterie de ${controller.name} : ${controller.level.percent} %" + if (controller.level.charging) ", en charge" else ""
+                    }
                 },
-                style = if (compact) textStyle else MaterialTheme.typography.labelMedium,
-                maxLines = 1,
-            )
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(5.dp),
+            ) {
+                Icon(
+                    Lucide.Gamepad2,
+                    null,
+                    Modifier.size(14.dp),
+                    tint = if (controller != null &&
+                        controller.level.percent <= 20
+                    ) {
+                        Palette.Warning
+                    } else {
+                        Palette.Text
+                    },
+                )
+                if (controller != null) {
+                    Text("${controller.level.percent} %", style = if (compact) textStyle else MaterialTheme.typography.labelMedium, maxLines = 1)
+                }
+            }
         }
     }
 }

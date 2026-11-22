@@ -212,6 +212,13 @@ class NavigationTreeTest {
         if (code == KeyEvent.KEYCODE_BUTTON_B) UiDevice.getInstance(instrumentation).waitForIdle()
     }
 
+    private fun assertCoverStaysNearTheConsoleLabel() {
+        val label = rule.onNodeWithText("NES / Famicom", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+        val cover = rule.onNodeWithTag("home-cover-${controller.homeGame}", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+        val gap = cover.top - label.bottom
+        assertTrue("Cover is too far from its console: $gap px", gap >= 0f && gap <= 32f * rule.activity.resources.displayMetrics.density)
+    }
+
     @Test
     fun onlyTheActiveCategoryAndGameShowTheirLabels() {
         show(twoConsoles = true)
@@ -305,6 +312,7 @@ class NavigationTreeTest {
         assertTrue(cover.top >= home.top && cover.bottom <= home.bottom)
         assertTrue(row.right <= preview.left)
         assertTrue(preview.top >= home.top && preview.bottom <= home.bottom && preview.right <= home.right)
+        assertCoverStaysNearTheConsoleLabel()
         screenshot("xmb-adaptive-viewport")
     }
 
@@ -346,6 +354,52 @@ class NavigationTreeTest {
             runCatching { rule.onNodeWithTag("console-game-info", useUnmergedTree = true).assertIsDisplayed() }.isSuccess
         }
         screenshot("console-vertical-strip")
+    }
+
+    @Test
+    fun changingConsolesFromTheCategoryLaneDoesNotConsumeTheFirstDown() {
+        show(twoConsoles = true)
+        pad(KeyEvent.KEYCODE_DPAD_UP)
+        rule.onNodeWithTag("home-category-console:nes").assertIsFocused()
+        pad(KeyEvent.KEYCODE_DPAD_RIGHT)
+        rule.onNodeWithTag("home-game-tree-4").assertIsFocused()
+        pad(KeyEvent.KEYCODE_DPAD_DOWN)
+        rule.onNodeWithTag("home-game-tree-5").assertIsFocused()
+        pad(KeyEvent.KEYCODE_DPAD_UP)
+        pad(KeyEvent.KEYCODE_DPAD_UP)
+        rule.onNodeWithTag("home-category-console:snes").assertIsFocused()
+        pad(KeyEvent.KEYCODE_BUTTON_L1)
+        rule.onNodeWithTag("home-game-tree-0").assertIsFocused()
+        pad(KeyEvent.KEYCODE_DPAD_DOWN)
+        rule.onNodeWithTag("home-game-tree-1").assertIsFocused()
+    }
+
+    @Test
+    fun repeatedUpStopsOnTheHeaderAndSearchWaitsForConfirmation() {
+        show(twoConsoles = true)
+        repeat(8) { pad(KeyEvent.KEYCODE_DPAD_UP) }
+        rule.onNodeWithTag("header-search-button").assertIsFocused()
+        rule.onNodeWithTag("header-search-field").assertDoesNotExist()
+        pad(KeyEvent.KEYCODE_DPAD_RIGHT)
+        rule.onNodeWithTag("header-profile-button").assertIsFocused()
+        repeat(3) { pad(KeyEvent.KEYCODE_DPAD_UP) }
+        rule.onNodeWithTag("header-profile-button").assertIsFocused()
+        pad(KeyEvent.KEYCODE_DPAD_LEFT)
+        rule.onNodeWithTag("header-search-button").assertIsFocused()
+        pad(KeyEvent.KEYCODE_DPAD_DOWN)
+        rule.onNodeWithTag("home-category-console:nes").assertIsFocused()
+        pad(KeyEvent.KEYCODE_DPAD_DOWN)
+        rule.onNodeWithTag("home-game-tree-0").assertIsFocused()
+        pad(KeyEvent.KEYCODE_DPAD_DOWN)
+        rule.onNodeWithTag("home-game-tree-1").assertIsFocused()
+        pad(KeyEvent.KEYCODE_DPAD_UP)
+        repeat(2) { pad(KeyEvent.KEYCODE_DPAD_UP) }
+        rule.onNodeWithTag("header-search-button").assertIsFocused()
+        pad(KeyEvent.KEYCODE_BUTTON_A)
+        rule.onNodeWithTag("header-search-field").assertIsFocused().performTextInput("Jeu 2")
+        rule.waitUntil(5_000) { rule.onAllNodesWithTag("search-result-tree-2").fetchSemanticsNodes().isNotEmpty() }
+        rule.onNodeWithTag("search-result-tree-2").performClick()
+        rule.onNodeWithTag("home-game-tree-2").assertIsFocused()
     }
 
     @Test
@@ -416,6 +470,7 @@ class NavigationTreeTest {
                 repeat(layout.lineCount) { line -> assertFalse("Ellipsis: $text", layout.isLineEllipsized(line)) }
             }
         }
+        assertCoverStaysNearTheConsoleLabel()
         screenshot("xmb-readable-active-labels")
     }
 
@@ -640,7 +695,7 @@ class NavigationTreeTest {
     }
 
     @Test
-    fun gameOptionsReturnFocusAndTheCategoryLaneStaysDirectional() {
+    fun gameOptionsRestoreFocusAndChangingConsoleEntersItsGames() {
         show(twoConsoles = true)
         selectGame(2)
         pad(KeyEvent.KEYCODE_BUTTON_X)
@@ -652,9 +707,9 @@ class NavigationTreeTest {
         pad(KeyEvent.KEYCODE_DPAD_UP)
         rule.onNodeWithTag("home-category-console:nes").assertIsFocused()
         pad(KeyEvent.KEYCODE_DPAD_RIGHT)
-        rule.onNodeWithTag("home-category-console:snes").assertIsFocused()
-        pad(KeyEvent.KEYCODE_DPAD_DOWN)
         rule.onNodeWithTag("home-game-tree-4").assertIsFocused()
+        pad(KeyEvent.KEYCODE_DPAD_DOWN)
+        rule.onNodeWithTag("home-game-tree-5").assertIsFocused()
         assertEquals(Route.Home, controller.nav.current)
     }
 

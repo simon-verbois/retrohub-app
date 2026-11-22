@@ -39,11 +39,7 @@ import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.onPreviewKeyEvent
-import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
@@ -138,12 +134,12 @@ fun AvatarPicker(
     val dismiss = { if (!saving) onDismiss() }
     val density = LocalDensity.current
     Dialog(onDismissRequest = dismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        CompositionLocalProvider(LocalDensity provides density) {
+        CompositionLocalProvider(LocalDensity provides density, ovh.verbois.retrohub.ui.components.LocalOverlayControls provides true) {
             GlassPanel(
                 Modifier.widthIn(max = 560.dp).fillMaxWidth().fillMaxHeight(0.9f).padding(16.dp).controllerDialog(dismiss),
             ) {
-                Column(Modifier.fillMaxSize().background(Palette.SkyLow).padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text("Photo de profil", style = MaterialTheme.typography.headlineMedium)
+                Column(Modifier.fillMaxSize().background(Palette.Deep).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("Photo de profil", style = MaterialTheme.typography.titleLarge)
                     error?.let { MessageBanner(it) }
                     BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
                         if (catalog == null) {

@@ -12,11 +12,15 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
@@ -128,7 +132,7 @@ internal fun HomeColumnContent(
                                     Modifier
                                 },
                             )
-                            .focusProperties { canFocus = active && !categoryLane }
+                            .focusProperties { canFocus = active && chosen && !categoryLane }
                             .consoleFocus(
                                 RoundedCornerShape(0.dp),
                                 {
@@ -138,13 +142,12 @@ internal fun HomeColumnContent(
                                 highlightFocus = false,
                                 focusScale = 1f,
                                 bringIntoView = false,
-                                onFocus = { if (it && current && !chosen) controller.selectHomeGame(item.id) },
                                 onLongClick = {
                                     controller.selectHomeGame(item.id)
                                     controller.gameMenu = true
                                 },
                             ),
-                        verticalAlignment = Alignment.CenterVertically,
+                        verticalAlignment = Alignment.Top,
                     ) {
                         Box(
                             Modifier.size(geometry.coverBoxSize.dp).then(if (current) Modifier.testTag("home-cover-${item.id}") else Modifier).xmbHalo {
@@ -160,21 +163,43 @@ internal fun HomeColumnContent(
                                     scaleX = scale
                                     scaleY = scale
                                     alpha = opacity * if (chosen) 1f else geometry.verticalEdgeAlpha(y)
-                                }
-                                    .then(
-                                        if ((!current || (!chosen && controller.homeMoving)) &&
-                                            !reduced
-                                        ) {
-                                            Modifier.blur(0.7.dp)
-                                        } else {
-                                            Modifier
-                                        },
-                                    ).clip(RoundedCornerShape(2.dp)),
+                                    compositingStrategy = if (chosen) CompositingStrategy.Auto else CompositingStrategy.Offscreen
+                                }.drawWithContent {
+                                    drawContent()
+                                    if (!chosen) {
+                                        val top = y.dp.toPx() - size.height * scale / 2
+                                        val bottom = top + size.height * scale
+                                        if (top < 72.dp.toPx()) {
+                                            drawRect(
+                                                Brush.verticalGradient(
+                                                    listOf(Color.Transparent, Color.White),
+                                                    startY = -top / scale,
+                                                    endY = (72.dp.toPx() - top) / scale,
+                                                ),
+                                                blendMode = BlendMode.DstIn,
+                                            )
+                                        }
+                                        val edge = geometry.height.dp.toPx()
+                                        if (bottom > edge - 24.dp.toPx()) {
+                                            drawRect(
+                                                Brush.verticalGradient(
+                                                    listOf(Color.White, Color.Transparent),
+                                                    startY = (edge - 24.dp.toPx() - top) / scale,
+                                                    endY = (edge - top) / scale,
+                                                ),
+                                                blendMode = BlendMode.DstIn,
+                                            )
+                                        }
+                                    }
+                                }.clip(RoundedCornerShape(2.dp)),
                                 showTitleOnFallback = false,
                             )
                         }
-                        AnimatedVisibility(chosen, enter = fadeIn(tween(if (reduced) 0 else 130)), exit = fadeOut(tween(if (reduced) 0 else 90))) {
-                            Column(Modifier.padding(horizontal = HOME_GAME_TEXT_PADDING.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        AnimatedVisibility(chosen, enter = fadeIn(tween(if (reduced) 0 else HOME_MOVE_MS)), exit = fadeOut(tween(if (reduced) 0 else 90))) {
+                            Column(
+                                Modifier.padding(horizontal = HOME_GAME_TEXT_PADDING.dp).heightIn(min = geometry.coverBoxSize.dp),
+                                verticalArrangement = Arrangement.spacedBy(2.dp, Alignment.CenterVertically),
+                            ) {
                                 Text(
                                     item.title,
                                     style = MaterialTheme.typography.titleLarge,

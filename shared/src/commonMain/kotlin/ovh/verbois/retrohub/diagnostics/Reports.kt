@@ -30,7 +30,7 @@ data class EmulatorDiagnostic(
     val consent: Boolean = true,
 )
 
-/** Proposed contract, gated by bug_reports_v1; never sent to the legacy diagnostics route. */
+/** Versioned contract gated by bug_reports_v1; never sent to the technical diagnostics route. */
 @Serializable
 data class BugReport(
     val id: String,

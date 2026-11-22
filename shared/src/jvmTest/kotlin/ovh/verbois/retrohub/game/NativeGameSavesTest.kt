@@ -26,6 +26,26 @@ class NativeGameSavesTest {
     }
 
     @Test
+    fun pspRestoresOnlyTheGamesMemoryStickAndRejectsForeignArchives() {
+        write("PSP/SAVEDATA/TEST00001/DATA.BIN")
+        write("PSP/SYSTEM/ppsspp.ini")
+        write("PSP/PPSSPP_STATE/slot.ppst")
+        assertTrue(NativeGameSaves.export(fs, root, "psp", "game", "rom", null, zip))
+        assertEquals(listOf("PSP/SAVEDATA/TEST00001/DATA.BIN", "manifest.json"), zipEntries(fs, zip).sorted())
+        val target = "/psp-runtime".toPath()
+        fs.createDirectories(target / "PSP/SAVEDATA/STALE00001")
+        fs.write(target / "PSP/SAVEDATA/STALE00001/old.bin") { writeUtf8("old") }
+        NativeGameSaves.install(fs, zip, target, "psp", "game", "rom", null)
+        assertTrue(fs.exists(target / "PSP/SAVEDATA/TEST00001/DATA.BIN"))
+        assertFalse(fs.exists(target / "PSP/SAVEDATA/STALE00001"))
+        assertFalse(fs.exists(target / "PSP/SYSTEM"))
+        assertFalse(fs.exists(target / "PSP/PPSSPP_STATE"))
+        assertFailsWith<IllegalArgumentException> { NativeGameSaves.install(fs, zip, target, "psp", "other-game", "rom", null) }
+        assertFailsWith<IllegalArgumentException> { NativeGameSaves.install(fs, zip, target, "psp", "game", "other-rom", null) }
+        assertTrue(fs.exists(target / "PSP/SAVEDATA/TEST00001/DATA.BIN"))
+    }
+
+    @Test
     fun failedPublicationRollsBackTheWholeRuntimeWithoutReplacingExistingData() {
         write("Azahar/nand/$zeros/title/00040000/00001234/data/main")
         assertTrue(NativeGameSaves.export(fs, root, "3ds", "game", "rom", title, zip))

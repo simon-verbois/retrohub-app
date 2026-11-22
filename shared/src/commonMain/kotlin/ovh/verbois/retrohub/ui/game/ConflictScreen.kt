@@ -112,18 +112,15 @@ fun ConflictScreen(controller: UiController, gameId: String?) {
     val serverAt = parseInstant(save.conflictPlayedAt)
     val localNewer = localAt != null && (serverAt == null || localAt > serverAt)
     BoxWithConstraints(Modifier.fillMaxSize()) {
-        val sideBySide = maxWidth >= 640.dp * LocalDensity.current.fontScale.coerceAtLeast(1f)
+        val sideBySide = maxWidth >= 460.dp * LocalDensity.current.fontScale.coerceAtLeast(1f)
         Column(
-            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 28.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(18.dp),
+            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Text("Deux progressions différentes", Modifier.semantics { heading() }, style = MaterialTheme.typography.headlineSmall)
             Text(
-                "« ${slotLabel(
-                    save.kind,
-                    save.slot,
-                )} » de ${game?.title ?: "ce jeu"} a avancé sur ce téléphone et ailleurs. Choisissez celle à garder : l’autre sera remplacée.",
-                style = MaterialTheme.typography.bodyLarge,
+                "${game?.title ?: "Ce jeu"} · ${slotLabel(save.kind, save.slot)}\nChoisissez la partie à garder : l’autre sera remplacée.",
+                style = MaterialTheme.typography.bodyMedium,
                 color = Palette.TextDim,
             )
             val cards: @Composable (Modifier) -> Unit = { modifier ->
@@ -151,9 +148,9 @@ fun ConflictScreen(controller: UiController, gameId: String?) {
                 )
             }
             if (sideBySide) {
-                Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) { cards(Modifier.weight(1f)) }
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) { cards(Modifier.weight(1f)) }
             } else {
-                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) { cards(Modifier.fillMaxWidth()) }
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) { cards(Modifier.fillMaxWidth()) }
             }
             if (conflicts.size >
                 1
@@ -181,20 +178,20 @@ private fun VersionCard(
     onChoose: () -> Unit,
     modifier: Modifier,
 ) {
-    val shape = RoundedCornerShape(24.dp)
+    val shape = RoundedCornerShape(16.dp)
     Column(
         modifier.clip(
             shape,
-        ).background(Palette.Glass).border(if (newest) 2.dp else 1.dp, if (newest) Palette.Accent else Palette.Line, shape).padding(22.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+        ).background(Palette.Glass).border(if (newest) 2.dp else 1.dp, if (newest) Palette.Accent else Palette.Line, shape).padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Icon(icon, null, Modifier.size(24.dp), tint = Palette.Select)
-            Text(title, Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
-            if (newest) Badge("Plus récente", Palette.Accent)
+            Icon(icon, null, Modifier.size(20.dp), tint = Palette.Select)
+            Text(title, Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
         }
-        Text(playedAt?.let { formatPlayedAt(it) } ?: "Date de la partie inconnue", style = MaterialTheme.typography.bodyLarge)
-        Text("Appareil : $device", style = MaterialTheme.typography.bodyMedium, color = Palette.TextDim)
+        if (newest) Badge("Plus récente", Palette.Accent)
+        Text(playedAt?.let { formatPlayedAt(it) } ?: "Date de la partie inconnue", style = MaterialTheme.typography.bodyMedium)
+        Text(device, style = MaterialTheme.typography.bodySmall, color = Palette.TextDim)
         if (newest) {
             PrimaryButton(action, onChoose, Modifier.widthIn(min = 180.dp).padding(top = 6.dp), icon = Lucide.Check, loading = busy)
         } else {

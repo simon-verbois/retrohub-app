@@ -29,8 +29,10 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
@@ -46,7 +48,7 @@ import kotlin.math.abs
 import kotlin.math.ceil
 
 private const val PREVIEW_DELAY_MS = 420L
-internal const val HOME_MOVE_MS = 140
+internal const val HOME_MOVE_MS = 80
 internal data class HomeScene(val column: HomeColumn, val selectedIndex: Int)
 private data class HomePresentation(
     val columnKey: String,
@@ -73,7 +75,7 @@ fun ConsoleHome(controller: UiController) {
     val windowFocused = LocalWindowInfo.current.isWindowFocused
     val categoryFocus = remember { FocusRequester() }
     val gameFocus = remember { FocusRequester() }
-    var categoryLane by remember { mutableStateOf(false) }
+    val categoryLane = controller.homeCategoryLane
     var ownsFocus by remember { mutableStateOf(false) }
     val selectedFocus = if (categoryLane || (game == null && column.key != "catalogue")) categoryFocus else gameFocus
     SideEffect {
@@ -93,7 +95,7 @@ fun ConsoleHome(controller: UiController) {
     }
     val changeColumn = { step: Int -> controller.cycleHomeColumn(step) }
     val changeGame = { step: Int ->
-        categoryLane = false
+        controller.homeCategoryLane = false
         controller.moveHomeGame(step)
     }
     val settledId by produceState<String?>(null, game?.id, column.key, active, categoryLane, windowFocused) {
@@ -115,7 +117,7 @@ fun ConsoleHome(controller: UiController) {
                         haptics()
                         when {
                             current.column.key == "catalogue" -> controller.nav.go(Route.Catalogue)
-                            categoryLane -> categoryLane = false
+                            controller.homeCategoryLane -> controller.homeCategoryLane = false
                             else -> controller.activateHomeGame()
                         }
                     }
@@ -136,15 +138,28 @@ fun ConsoleHome(controller: UiController) {
                         Key.DirectionRight -> changeColumn(1)
 
                         Key.DirectionDown -> when {
-                            current.column.key == "catalogue" -> if (categoryLane) categoryLane = false else controller.nav.go(Route.Catalogue)
+                            current.column.key == "catalogue" -> if (controller.homeCategoryLane) {
+                                controller.homeCategoryLane = false
+                            } else {
+                                controller.nav.go(
+                                    Route.Catalogue,
+                                )
+                            }
+
                             current.game == null -> Unit
-                            categoryLane -> categoryLane = false
+
+                            controller.homeCategoryLane -> controller.homeCategoryLane = false
+
                             else -> changeGame(1)
                         }
 
                         Key.DirectionUp -> when {
-                            categoryLane || (current.game == null && current.column.key != "catalogue") -> runCatching { tree.header.requestFocus() }
-                            current.gameIndex == 0 -> categoryLane = true
+                            controller.homeCategoryLane || (current.game == null && current.column.key != "catalogue") -> runCatching {
+                                tree.header.requestFocus()
+                            }
+
+                            current.gameIndex == 0 -> controller.homeCategoryLane = true
+
                             else -> changeGame(-1)
                         }
                     }
@@ -156,11 +171,23 @@ fun ConsoleHome(controller: UiController) {
         val categoryLabelHeight = with(density) { MaterialTheme.typography.bodySmall.lineHeight.toDp().value }
         val titleHeight = with(density) { MaterialTheme.typography.titleLarge.lineHeight.toDp().value }
         val previewAvailable = game?.let { !it.remote.screenshots.firstOrNull().isNullOrBlank() || !it.remote.coverUrl.isNullOrBlank() } == true
-        val geometry = remember(maxWidth, maxHeight, categoryLabelHeight, titleHeight, previewAvailable) {
+        val labelStyle = MaterialTheme.typography.bodySmall
+        val measurer = rememberTextMeasurer()
+        val geometry = remember(maxWidth, maxHeight, categoryLabelHeight, titleHeight, previewAvailable, column.title, labelStyle, density) {
+            val initial = HomeCrossLayout.fit(maxWidth.value, maxHeight.value)
+            val labelHeight = with(density) {
+                measurer.measure(
+                    column.title,
+                    labelStyle,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    constraints = Constraints(maxWidth = initial.categoryLabelWidth.dp.roundToPx()),
+                ).size.height.toDp().value
+            }
             HomeCrossLayout.fit(
                 maxWidth.value,
                 maxHeight.value,
-                categoryLabelHeight * 2,
+                labelHeight,
                 titleHeight * 2 + categoryLabelHeight * 3 + 4f,
                 titleHeight * 7,
                 previewAvailable,
@@ -181,8 +208,12 @@ fun ConsoleHome(controller: UiController) {
             contentKey = { it.column.key },
             transitionSpec = {
                 val direction = if ((model.columnIndices[targetState.column.key] ?: 0) >= (model.columnIndices[initialState.column.key] ?: 0)) 1 else -1
-                (fadeIn(tween(if (reduced) 0 else 160)) + slideInHorizontally(tween(if (reduced) 0 else 180)) { it / 14 * direction })
-                    .togetherWith(fadeOut(tween(if (reduced) 0 else 100)) + slideOutHorizontally(tween(if (reduced) 0 else 140)) { -it / 18 * direction })
+                (fadeIn(tween(if (reduced) 0 else HOME_MOVE_MS)) + slideInHorizontally(tween(if (reduced) 0 else HOME_MOVE_MS)) { it / 14 * direction })
+                    .togetherWith(
+                        fadeOut(tween(if (reduced) 0 else 60)) + slideOutHorizontally(tween(if (reduced) 0 else HOME_MOVE_MS)) {
+                            -it / 18 * direction
+                        },
+                    )
                     .using(SizeTransform(clip = false))
             },
             label = "home-column",
@@ -241,10 +272,10 @@ fun ConsoleHome(controller: UiController) {
                                 selected = chosen
                                 if (!chosen) contentDescription = item.title
                             }
-                            .focusProperties { canFocus = active && (categoryLane || (chosen && game == null && item.key != "catalogue")) }
+                            .focusProperties { canFocus = active && chosen && (categoryLane || (game == null && item.key != "catalogue")) }
                             .consoleFocus(RoundedCornerShape(0.dp), {
                                 if (!chosen) controller.selectHomeColumn(item.key)
-                                if (item.key == "catalogue") controller.nav.go(Route.Catalogue) else categoryLane = false
+                                if (item.key == "catalogue") controller.nav.go(Route.Catalogue) else controller.homeCategoryLane = false
                             }, enabled = active, highlightFocus = false, focusScale = 1f, bringIntoView = false),
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {

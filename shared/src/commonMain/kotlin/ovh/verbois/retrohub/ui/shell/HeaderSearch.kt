@@ -35,7 +35,6 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
@@ -65,7 +64,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import ovh.verbois.retrohub.emulation.Consoles
 import ovh.verbois.retrohub.library.Game
@@ -99,7 +97,7 @@ internal fun HeaderSearch(controller: UiController, state: HeaderSearchState, di
     val inset = (touchDiameter - diameter) / 2
     val insetPx = with(LocalDensity.current) { inset.toPx() }
     BoxWithConstraints(modifier) {
-        val width by animateDpAsState(if (controller.searching) maxWidth else touchDiameter, tween(if (reducedMotion) 0 else 220))
+        val width by animateDpAsState(if (controller.searching) maxWidth else touchDiameter, tween(if (reducedMotion) 0 else 100))
         Box(
             Modifier.align(Alignment.CenterEnd).width(width).height(touchDiameter)
                 .onGloballyPositioned {
@@ -119,7 +117,9 @@ internal fun HeaderSearch(controller: UiController, state: HeaderSearchState, di
                     value = state.query,
                     onValueChange = { state.query = it.take(250) },
                     modifier = Modifier.fillMaxSize().padding(horizontal = inset).testTag("header-search-field")
-                        .focusRequester(state.field).onPreviewKeyEvent { event ->
+                        .focusRequester(
+                            state.field,
+                        ).then(if (!controller.portrait) Modifier.focusRequester(tree.header) else Modifier).onPreviewKeyEvent { event ->
                             if (event.key in setOf(Key.ButtonA, Key.Enter, Key.NumPadEnter) && state.query.isNotBlank()) {
                                 if (event.type == KeyEventType.KeyUp) {
                                     keyboard?.hide()
@@ -176,13 +176,13 @@ internal fun HeaderSearch(controller: UiController, state: HeaderSearchState, di
                 }
             } else {
                 Box(
-                    Modifier.fillMaxSize().testTag("header-search-button")
+                    Modifier.fillMaxSize().testTag("header-search-button").then(if (!controller.portrait) Modifier.focusRequester(tree.header) else Modifier)
                         .consoleFocus(
                             CircleShape,
                             { controller.searching = true },
                             label = "Rechercher",
                             focusScale = if (controller.portrait) 1f else 1.12f,
-                            highlightFocus = controller.portrait,
+                            highlightFocus = true,
                         ),
                     contentAlignment = Alignment.Center,
                 ) {

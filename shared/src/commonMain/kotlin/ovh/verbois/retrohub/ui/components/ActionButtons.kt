@@ -34,6 +34,7 @@ fun ActionButtons(
     parentFocus: FocusRequester? = null,
     primaryModifier: Modifier = Modifier,
 ) {
+    val compact = LocalOverlayControls.current
     val primaryFocus = remember { FocusRequester() }
     val secondaryFocus = remember { FocusRequester() }
     val measurer = rememberTextMeasurer()
@@ -80,9 +81,19 @@ fun ActionButtons(
         val otherModifier = secondaryModifier.then(secondaryNavigation)
             .then(if (entryFocus != null && horizontal) Modifier.focusRequester(entryFocus) else Modifier)
         if (horizontal) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(if (compact) 8.dp else 16.dp, Alignment.End),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 GlassButton(secondary, onSecondary, otherModifier, icon = secondaryIcon)
-                PrimaryButton(primary, onPrimary, Modifier.weight(1f).then(mainModifier), icon = primaryIcon, loading = loading)
+                PrimaryButton(
+                    primary,
+                    onPrimary,
+                    Modifier.then(if (compact) Modifier else Modifier.weight(1f)).then(mainModifier),
+                    icon = primaryIcon,
+                    loading = loading,
+                )
             }
         } else {
             Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp), horizontalAlignment = Alignment.CenterHorizontally) {

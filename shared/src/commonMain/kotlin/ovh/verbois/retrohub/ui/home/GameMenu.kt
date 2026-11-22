@@ -5,14 +5,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -32,7 +28,6 @@ import ovh.verbois.retrohub.ui.UiController
 import ovh.verbois.retrohub.ui.components.AutoFocus
 import ovh.verbois.retrohub.ui.components.ConfirmDialog
 import ovh.verbois.retrohub.ui.components.XmbSidePanel
-import ovh.verbois.retrohub.ui.components.consoleFocus
 import ovh.verbois.retrohub.ui.components.controllerDialog
 import ovh.verbois.retrohub.ui.icons.Lucide
 import ovh.verbois.retrohub.ui.nav.Route
@@ -88,23 +83,31 @@ fun GameMenu(controller: UiController, game: Game) {
     }
     if (controller.portrait) {
         if (controller.gameMenu) {
-            DropdownMenu(
+            ovh.verbois.retrohub.ui.components.ConsoleDropdownMenu(
                 expanded = true,
                 onDismissRequest = close,
                 modifier = Modifier.controllerDialog(close, dismissOnStart = true),
-                containerColor = Palette.Deep,
-                shape = RoundedCornerShape(18.dp),
                 content = { items() },
             )
         }
     } else {
         XmbSidePanel(controller.gameMenu, close) {
             Column(
-                Modifier.fillMaxHeight().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 28.dp),
+                Modifier.fillMaxHeight().padding(12.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                Text(game.title, Modifier.padding(horizontal = 16.dp, vertical = 12.dp), style = MaterialTheme.typography.titleLarge)
-                items()
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        game.title,
+                        Modifier.weight(1f).padding(horizontal = 12.dp),
+                        style = MaterialTheme.typography.titleMedium,
+                        maxLines = 2,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                    )
+                    ovh.verbois.retrohub.ui.components.RoundButton(Lucide.X, "Fermer", close, size = 48.dp)
+                }
+                androidx.compose.material3.HorizontalDivider(color = Palette.Line)
+                Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) { items() }
             }
         }
     }
@@ -126,15 +129,5 @@ fun GameMenu(controller: UiController, game: Game) {
 
 @Composable
 private fun Item(icon: ImageVector, label: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    Row(
-        modifier.fillMaxWidth().heightIn(
-            min = 48.dp,
-        ).consoleFocus(RoundedCornerShape(0.dp), onClick, enabled = ovh.verbois.retrohub.ui.components.LocalScreenActive.current)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        Icon(icon, null, Modifier.size(20.dp), tint = Palette.Text)
-        Text(label, style = MaterialTheme.typography.bodyLarge, color = Palette.Text)
-    }
+    ovh.verbois.retrohub.ui.components.ConsoleMenuItem(label, onClick, modifier, icon = icon)
 }

@@ -460,10 +460,11 @@ although their server contracts and regression tests are implemented.
   evidence limits and the client/device validation matrix are recorded in
   [`native-server-validation-2026-11-13.md`](../../retrohub/docs/native-server-validation-2026-11-13.md).
 
-Still required in the app: native 3DS/PS2 adapters and atomic restore on real cores, device-scoped
-settings/reset validation, physical-phone video/input reproduction (including S25 Ultra GameCube),
-and actual Guide/Home hold save-and-exit behavior. No server test establishes that a phone renders
-these consoles or that a graphics driver problem is fixed.
+Client follow-up: the Android 3DS/PS2 adapters, private per-game save archives, atomic restore
+and Guide/Home hold save-and-exit were integrated in app release 2026.46.10. Acceptance on real
+phones remains outstanding: native saves and restore, device-scoped settings/reset, and video/input
+reproduction (including S25 Ultra GameCube). No server or virtual-device test establishes that a
+physical phone renders these consoles or that a graphics driver problem is fixed.
 
 ## Historical verification — requests 1–9 only
 
@@ -489,7 +490,7 @@ journey checks live imports against the real stream and suspension during gamepl
 build or physical-camera test is claimed by the server validation above.
 
 
-## Optional full bug reports (2026-11-20)
+## Full bug reports (requested 2026-11-20; implemented 2026-11-22)
 
 The app retains private reports locally and supports the existing `emulator_diagnostics`
 contract without adding fields to that route. Full text reports need a separate opt-in contract:
@@ -505,3 +506,20 @@ contract without adding fields to that route. Full text reports need a separate 
 Until that feature is advertised, the app sends only the existing technical diagnostic when
 supported and explicitly approved. Descriptions and filtered logs remain available through local
 sharing. An approval freezes the body and destination; retries cannot send another account's data.
+
+
+Implementation update (2026-11-22): `bug_reports_v1` and the separate route are now
+implemented with device-scoped idempotency, strict consent and fields, a 96 KiB streamed
+body limit, twenty reports per account and thirty-day retention. Account-scoped reading
+and deletion are available. The technical diagnostic route is unchanged. The app already
+selects this route when the capability is advertised and keeps its sharing fallback.
+
+## PSP integration (2026-11-22)
+
+19. [x] **PlayStation Portable through PPSSPP.** The server registers `psp` / `ppsspp`,
+    native-only discovery, console metadata and licensed local artwork, ISO/CSO/PBP detection,
+    existing Retrostic/JeuxMangas/Wowroms connectors and `ppsspp_savedata_zip_v1` archives.
+    Saves retain revision, epoch, ROM identity and conflict semantics; states require the exact
+    core build. The app bundles both Android ABIs and verified offline system assets, original
+    PSP touch/controller controls and a private Memory Stick per account, game and ROM.
+    Physical-phone validation remains separate from the server contract and emulator tests.

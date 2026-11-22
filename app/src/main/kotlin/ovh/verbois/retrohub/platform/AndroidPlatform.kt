@@ -9,6 +9,8 @@ import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.NetworkRequest
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.os.StatFs
 import android.os.VibrationEffect
 import android.os.Vibrator
@@ -16,7 +18,10 @@ import android.os.VibratorManager
 import android.view.InputDevice
 import androidx.core.net.toUri
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -65,8 +70,11 @@ class AndroidPlatform(private val context: Context) : Platform {
 
     private val onlineState = MutableStateFlow(isOnline())
     override val online: StateFlow<Boolean> = onlineState
+    private val inputHandler = Handler(Looper.getMainLooper())
     private val gamepadState = MutableStateFlow(hasGamepad())
     override val gamepadConnected: StateFlow<Boolean> = gamepadState
+    private val powerChanges = MutableSharedFlow<Unit>(extraBufferCapacity = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST)
+    override val powerStatusChanges: SharedFlow<Unit> = powerChanges
 
     override val deviceClass: DeviceClass by lazy {
         val memory = ActivityManager.MemoryInfo().also { (context.getSystemService(ActivityManager::class.java)).getMemoryInfo(it) }
@@ -120,19 +128,21 @@ class AndroidPlatform(private val context: Context) : Platform {
         context.getSystemService(InputManager::class.java).registerInputDeviceListener(
             object : InputManager.InputDeviceListener {
                 override fun onInputDeviceAdded(deviceId: Int) {
-                    gamepadState.value = hasGamepad()
+                    refreshControllers()
                 }
 
                 override fun onInputDeviceRemoved(deviceId: Int) {
-                    gamepadState.value = hasGamepad()
+                    refreshControllers()
                 }
 
                 override fun onInputDeviceChanged(deviceId: Int) {
-                    gamepadState.value = hasGamepad()
+                    refreshControllers()
                 }
             },
-            null,
+            inputHandler,
         )
+        // Close the gap between the initial snapshot and listener registration.
+        refreshControllers()
     }
 
     private fun isOnline(): Boolean {
@@ -141,16 +151,16 @@ class AndroidPlatform(private val context: Context) : Platform {
         return capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
     }
 
-    /** Vrai seulement pour une vraie manette (boutons de jeu et sticks), pas un clavier. */
-    private fun hasGamepad(): Boolean = InputDevice.getDeviceIds().any { id ->
-        val device = InputDevice.getDevice(id) ?: return@any false
-        val sources = device.sources
-        !device.isVirtual &&
-            (
-                sources and InputDevice.SOURCE_GAMEPAD == InputDevice.SOURCE_GAMEPAD ||
-                    sources and InputDevice.SOURCE_JOYSTICK == InputDevice.SOURCE_JOYSTICK
-                )
+    /** Reconcile on foreground entry too, including devices paired while the app was suspended. */
+    fun refreshControllers() {
+        gamepadState.value = hasGamepad()
+        powerChanges.tryEmit(Unit)
     }
+
+    private fun isGamepad(device: InputDevice): Boolean = !device.isVirtual &&
+        (device.supportsSource(InputDevice.SOURCE_GAMEPAD) || device.supportsSource(InputDevice.SOURCE_JOYSTICK))
+
+    private fun hasGamepad(): Boolean = InputDevice.getDeviceIds().any { id -> InputDevice.getDevice(id)?.let(::isGamepad) == true }
 
     override fun scheduleSync(delaySeconds: Long) {
         SyncWorker.enqueue(context, delaySeconds)
@@ -227,17 +237,14 @@ class AndroidPlatform(private val context: Context) : Platform {
     }
 
     override fun powerStatus(): PowerStatus {
+        val devices = InputDevice.getDeviceIds().toList().mapNotNull { InputDevice.getDevice(it) }.filter(::isGamepad)
+        // Foreground polling also repairs a missed or delayed device notification.
+        inputHandler.post { gamepadState.value = hasGamepad() }
         val battery = context.getSystemService(android.os.BatteryManager::class.java)
         val phone = battery.getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY)
             .takeIf { it in 0..100 }?.let { BatteryLevel(it, battery.isCharging) }
         val controllers = if (Build.VERSION.SDK_INT >= 31) {
-            InputDevice.getDeviceIds().toList().mapNotNull { id ->
-                val device = InputDevice.getDevice(id) ?: return@mapNotNull null
-                if (device.isVirtual || !device.isExternal ||
-                    (!device.supportsSource(InputDevice.SOURCE_GAMEPAD) && !device.supportsSource(InputDevice.SOURCE_JOYSTICK))
-                ) {
-                    return@mapNotNull null
-                }
+            devices.mapNotNull { device ->
                 val state = runCatching { device.batteryState }.getOrNull() ?: return@mapNotNull null
                 val capacity = state.capacity
                 if (!state.isPresent || !capacity.isFinite() || capacity !in 0f..1f) return@mapNotNull null

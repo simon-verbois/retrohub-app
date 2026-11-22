@@ -92,6 +92,16 @@ object CoreOptions {
                     "citra_use_libretro_save_path" to "LibRetro Default",
                 )
 
+                "ppsspp" -> mapOf(
+                    "ppsspp_backend" to "opengl",
+                    "ppsspp_cpu_core" to "JIT",
+                    "ppsspp_fast_memory" to "disabled",
+                    "ppsspp_internal_resolution" to "${480 * scale}x${272 * scale}",
+                    "ppsspp_language" to "French",
+                    "ppsspp_button_preference" to "Cross",
+                    "ppsspp_enable_wlan" to "disabled",
+                )
+
                 "armsx2" -> mapOf(
                     "armsx2_renderer" to "OpenGL",
                     "armsx2_upscale" to "${scale}x",
@@ -153,6 +163,7 @@ object CoreOptions {
         return options + overrides(spec, core, settings) + (if (core == (console.core ?: spec.cores.first())) console.options else emptyMap()) +
             console.optionsByCore[core].orEmpty() + when (core) {
                 "azahar" -> mapOf("citra_use_libretro_save_path" to "LibRetro Default", "citra_graphics_api" to "OpenGL")
+                "ppsspp" -> mapOf("ppsspp_backend" to "opengl")
                 "armsx2" -> mapOf("armsx2_renderer" to "OpenGL")
                 else -> emptyMap()
             }
@@ -166,6 +177,7 @@ object CoreOptions {
         when (core) {
             "melonds" -> out["melonds_language"] = if (french) "French" else "English"
             "dolphin" -> out["dolphin_language"] = if (french) "3" else "1"
+            "ppsspp" -> out["ppsspp_language"] = if (french) "French" else "English"
             "flycast" -> out["reicast_language"] = if (french) "French" else "English"
         }
         console.region?.let { region ->
@@ -233,7 +245,7 @@ object CoreOptions {
 
     fun defaultBoot(console: String): BootMode = if (console == "dreamcast") BootMode.ORIGINAL else BootMode.FAST
 
-    fun supportsLanguage(core: String) = core in setOf("melonds", "dolphin", "flycast")
+    fun supportsLanguage(core: String) = core in setOf("melonds", "dolphin", "flycast", "ppsspp")
 
     fun supportsRegion(core: String) = core in REGION_KEYS
 
@@ -268,14 +280,14 @@ object CoreOptions {
         "psx" -> 2
         "n64" -> 4
         "gamecube" -> 4
-        "dreamcast", "3ds", "ps2" -> 4
+        "dreamcast", "3ds", "ps2", "psp" -> 4
         else -> 1
     }
 
     fun supportsWidescreen(console: String, core: String): Boolean = core in setOf("swanstation", "parallel_n64", "dolphin", "flycast") && console != "nds"
 
     fun shader(spec: ConsoleSpec, settings: AppSettings): Shader = settings.console(spec.id).shader ?: when (spec.id) {
-        "n64", "gamecube", "dreamcast", "psx", "3ds", "ps2" -> Shader.SMOOTH
+        "n64", "gamecube", "dreamcast", "psx", "3ds", "ps2", "psp" -> Shader.SMOOTH
         "gb", "gbc", "gba" -> Shader.LCD
         "nds" -> Shader.SHARP
         else -> if (settings.performance == PerformanceProfile.QUALITY) Shader.UPSCALE else Shader.SHARP

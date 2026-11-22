@@ -1,7 +1,5 @@
 package ovh.verbois.retrohub.ui.catalogue
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -11,16 +9,13 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -40,17 +35,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.onPreviewKeyEvent
-import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
@@ -71,7 +61,6 @@ import ovh.verbois.retrohub.ui.components.GlassButton
 import ovh.verbois.retrohub.ui.components.LocalNavigationFocus
 import ovh.verbois.retrohub.ui.components.ProgressLine
 import ovh.verbois.retrohub.ui.components.SettingsGroup
-import ovh.verbois.retrohub.ui.components.controllerDialog
 import ovh.verbois.retrohub.ui.home.GameCard
 import ovh.verbois.retrohub.ui.icons.Lucide
 import ovh.verbois.retrohub.ui.nav.Route
@@ -366,17 +355,13 @@ fun CatalogueScreen(controller: UiController) {
 @Composable
 internal fun CatalogueDialog(title: String, onDismiss: () -> Unit, content: @Composable () -> Unit) {
     val first = remember { FocusRequester() }
-    Dialog(onDismissRequest = onDismiss) {
-        Column(
-            Modifier.widthIn(
-                max = 600.dp,
-            ).fillMaxWidth().background(Palette.Deep, RoundedCornerShape(24.dp)).verticalScroll(rememberScrollState()).padding(20.dp)
-                .focusRequester(first).focusGroup().controllerDialog(onDismiss),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
-            Text(title, style = MaterialTheme.typography.headlineSmall)
-            content()
-        }
-        AutoFocus(first)
+    ovh.verbois.retrohub.ui.components.ModalPanel(
+        title,
+        onDismiss,
+        Modifier.focusRequester(first),
+        maxWidth = 600.dp,
+        initialFocus = first,
+    ) {
+        content()
     }
 }

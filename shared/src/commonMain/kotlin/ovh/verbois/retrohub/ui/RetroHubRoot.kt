@@ -12,7 +12,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.InputMode
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalInputModeManager
 import androidx.compose.ui.unit.Density
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -61,6 +63,13 @@ fun RetroHubRoot(container: AppContainer, onExit: () -> Unit = {}, onController:
     val auth by container.account.auth.collectAsState()
     val settings by container.settings.settings.collectAsState()
     val lifecycle = LocalLifecycleOwner.current.lifecycle
+    val gamepad by container.platform.gamepadConnected.collectAsState()
+    val inputMode = LocalInputModeManager.current
+    LaunchedEffect(gamepad, lifecycle) {
+        lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            if (gamepad) inputMode.requestInputMode(InputMode.Keyboard)
+        }
+    }
     val activeAccount = (auth as? AuthState.SignedIn)?.account
     val libraryVisible = settings.setupDone && when (controller.nav.contentRoute) {
         Route.Home, is Route.Game, is Route.Library, is Route.Folder, Route.Favorites, Route.Downloads,

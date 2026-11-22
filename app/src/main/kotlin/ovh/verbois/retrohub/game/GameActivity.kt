@@ -124,7 +124,7 @@ class GameActivity : ComponentActivity() {
         }
         lifecycleScope.launch {
             val compatible = withContext(Dispatchers.IO) {
-                plan.console !in setOf("3ds", "ps2") || (plan.coreBuild != null && app.platform.coreBuild(plan.core) == plan.coreBuild)
+                plan.console !in setOf("3ds", "ps2", "psp") || (plan.coreBuild != null && app.platform.coreBuild(plan.core) == plan.coreBuild)
             }
             if (!compatible) {
                 android.widget.Toast.makeText(
@@ -272,6 +272,12 @@ class GameActivity : ComponentActivity() {
             unzip(okio.FileSystem.SYSTEM, archive.absolutePath.toPath(), system.absolutePath.toPath())
             archive.delete()
         }
+        if (plan.core == "ppsspp" && !File(system, "PPSSPP/compat.ini").isFile) {
+            val archive = File(cacheDir, "ppsspp-sys.zip")
+            assets.open("ppsspp-sys.zip").use { input -> archive.outputStream().use { input.copyTo(it) } }
+            unzip(okio.FileSystem.SYSTEM, archive.absolutePath.toPath(), system.absolutePath.toPath())
+            archive.delete()
+        }
         if (plan.console == "dreamcast") File(system, "dc").mkdirs()
     }
 
@@ -401,6 +407,11 @@ class GameActivity : ComponentActivity() {
         KeyEvent.KEYCODE_BUTTON_START, KeyEvent.KEYCODE_ENTER -> PadKey.START
         KeyEvent.KEYCODE_BUTTON_SELECT, KeyEvent.KEYCODE_SHIFT_RIGHT, KeyEvent.KEYCODE_SHIFT_LEFT -> PadKey.SELECT
         else -> null
+    }
+
+    override fun onResume() {
+        super.onResume()
+        (application as RetroHubApp).platform.refreshControllers()
     }
 
     override fun onPause() {

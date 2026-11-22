@@ -52,16 +52,19 @@ class DsLifecycleTest {
             ActivityScenario.launch<GameActivity>(intent).use {
                 waitForFrames(30)
                 for (ds in listOf(DsLayout.STACKED, DsLayout.SIDE_BY_SIDE)) {
-                    device.pressKeyCode(KeyEvent.KEYCODE_MENU)
+                    openPauseMenu()
                     click("Image et écrans")
                     click(ds.label)
+                    waitForMenuClosed()
                     for (rotation in GameRotation.entries) {
-                        device.pressKeyCode(KeyEvent.KEYCODE_MENU)
+                        openPauseMenu()
                         click("Image et écrans")
                         click(rotation.label)
                         val frame = GameActivity.current?.get()?.frames?.value ?: 0
                         device.pressBack()
+                        assertTrue("Returned to pause actions", device.wait(Until.hasObject(By.text("Reprendre")), 5_000))
                         device.pressBack()
+                        waitForMenuClosed()
                         waitForFrames(frame + 10)
                         val bitmap = instrumentation.uiAutomation.takeScreenshot()
                         val unit = 48f * context.resources.displayMetrics.density
@@ -149,8 +152,9 @@ class DsLifecycleTest {
                 waitFor("background snapshot") { runBlocking { container.saveStore.find(plan.playGameId, "state", 0)?.localSha != null } }
                 scenario.moveToState(Lifecycle.State.RESUMED)
                 click("Reprendre")
+                waitForMenuClosed()
                 waitForFrames(before + 10)
-                device.pressKeyCode(KeyEvent.KEYCODE_MENU)
+                openPauseMenu()
                 click("Redémarrer le jeu")
                 val resetFrame = GameActivity.current?.get()?.frames?.value ?: 0
                 click("Redémarrer")
@@ -163,28 +167,42 @@ class DsLifecycleTest {
                     }
                 }
             }
-            device.pressKeyCode(KeyEvent.KEYCODE_MENU)
+            openPauseMenu()
             click("Quitter")
             click("Quitter")
             waitFor("game closed") { GameActivity.current?.get()?.isDestroyed != false }
         }
     }
 
+    private fun openPauseMenu() {
+        device.pressKeyCode(KeyEvent.KEYCODE_MENU)
+        assertTrue("Pause actions opened", device.wait(Until.hasObject(By.text("Reprendre")), 5_000))
+    }
+
+    private fun waitForMenuClosed() {
+        assertTrue("Pause menu closed", device.wait(Until.gone(By.desc("Fermer le menu")), 5_000))
+    }
+
     private fun click(text: String) {
-        // The pause menu scrolls on short landscape screens.
+        // Match an action rather than a fixed header with the same text; long settings can scroll.
         repeat(6) {
-            val item = device.wait(Until.findObject(By.text(text)), 500)
-            if (item != null) {
-                try {
+            var item = device.wait(Until.findObject(By.text(text)), 500)
+            try {
+                while (item != null && !item.isClickable) item = item.parent
+                if (item != null) {
                     item.click()
                     device.waitForIdle()
                     return
-                } catch (_: androidx.test.uiautomator.StaleObjectException) {
-                    return@repeat
                 }
+            } catch (_: androidx.test.uiautomator.StaleObjectException) {
+                return@repeat
             }
             device.swipe(device.displayWidth / 4, device.displayHeight * 4 / 5, device.displayWidth / 4, device.displayHeight / 4, 20)
         }
+        val pictures = File(context.getExternalFilesDir(null), "test-screens").apply { mkdirs() }
+        val name = "ds-missing-${text.replace(' ', '-')}"
+        device.dumpWindowHierarchy(File(pictures, "$name.xml"))
+        device.takeScreenshot(File(pictures, "$name.png"))
         throw AssertionError("Missing action: $text")
     }
 

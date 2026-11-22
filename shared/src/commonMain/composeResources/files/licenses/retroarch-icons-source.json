@@ -60,6 +60,10 @@
     "dreamcast": {
       "path": "src/xmb/monochrome/Sega - Dreamcast.svg",
       "sha256": "284e7f243fa05c1a772f2fea1b173b2ec6c72db5e66138f0dca45c47d1f82a48"
+    },
+    "psp": {
+      "path": "src/xmb/monochrome/Sony - PlayStation Portable.svg",
+      "sha256": "072cb3e5fc95b7b056c42013ca78d7e2984270ce76cc00f7a9740952b37f4988"
     }
   }
 }

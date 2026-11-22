@@ -10,6 +10,8 @@ artifacts/
 # libretro cores and Dolphin Sys folder, downloaded by scripts/fetch-cores.sh
 app/src/main/jniLibs/
 app/src/main/assets/dolphin-sys.zip
+app/src/main/assets/ppsspp-sys.zip
+app/src/androidTest/assets/psp-cube.elf
 # Local configuration and signing
 .env
 .env.*

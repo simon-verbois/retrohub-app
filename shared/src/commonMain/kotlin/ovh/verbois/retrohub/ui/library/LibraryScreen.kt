@@ -276,12 +276,10 @@ fun DownloadsScreen(controller: UiController) {
                         download = state,
                         onLongClick = { menuGame = game.id },
                     )
-                    androidx.compose.material3.DropdownMenu(
+                    ovh.verbois.retrohub.ui.components.ConsoleDropdownMenu(
                         expanded = menuGame == game.id,
                         onDismissRequest = { menuGame = null },
                         modifier = Modifier.focusRequester(menuFocus).focusGroup().controllerDialog({ menuGame = null }, dismissOnStart = true),
-                        containerColor = Palette.Deep,
-                        shape = RoundedCornerShape(16.dp),
                     ) {
                         if (state is ovh.verbois.retrohub.library.DownloadState.Running) {
                             ConsoleMenuItem(
@@ -424,12 +422,10 @@ private fun FilterMenu(
     val menuFocus = remember { FocusRequester() }
     Box {
         RoundButton(Lucide.SlidersHorizontal, "Filtrer et trier", { open = true }, modifier, size = 48.dp, selected = filter != null || sort != Sort.RECENT)
-        androidx.compose.material3.DropdownMenu(
+        ovh.verbois.retrohub.ui.components.ConsoleDropdownMenu(
             expanded = open,
             onDismissRequest = { open = false },
             modifier = Modifier.focusRequester(menuFocus).focusGroup().controllerDialog({ open = false }, dismissOnStart = true),
-            containerColor = Palette.Deep,
-            shape = androidx.compose.foundation.shape.RoundedCornerShape(18.dp),
         ) {
             // A single scrollable column stays usable on narrow phones and in split screen.
             Column(Modifier.widthIn(max = 420.dp).fillMaxWidth().padding(horizontal = 6.dp)) {

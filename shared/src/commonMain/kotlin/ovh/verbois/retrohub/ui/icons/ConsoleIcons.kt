@@ -17,6 +17,7 @@ import ovh.verbois.retrohub.resources.console_n64
 import ovh.verbois.retrohub.resources.console_nds
 import ovh.verbois.retrohub.resources.console_nes
 import ovh.verbois.retrohub.resources.console_ps2
+import ovh.verbois.retrohub.resources.console_psp
 import ovh.verbois.retrohub.resources.console_psx
 import ovh.verbois.retrohub.resources.console_snes
 
@@ -35,6 +36,7 @@ object ConsoleIcons {
             "megadrive" -> Res.drawable.console_megadrive
             "psx" -> Res.drawable.console_psx
             "ps2" -> Res.drawable.console_ps2
+            "psp" -> Res.drawable.console_psp
             "nds" -> Res.drawable.console_nds
             "3ds" -> Res.drawable.console_3ds
             "n64" -> Res.drawable.console_n64

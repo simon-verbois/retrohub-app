@@ -23,6 +23,7 @@ libretro buildbot; their source is in each core's libretro repository.
 | parallel_n64 | GPL-2.0 | Nintendo 64 |
 | dolphin (and its Sys folder) | GPL-2.0+ | GameCube |
 | flycast | GPL-2.0 | Dreamcast |
+| PPSSPP and its system assets | GPL-2.0+ (bundled fonts retain their licenses) | PlayStation Portable; [source](https://github.com/hrydgard/ppsspp) |
 | Lucide (icons, logo) | ISC | Interface and app icons |
 | RetroArch Monochrome icons | CC-BY-4.0 | Console silhouettes from the [Libretro assets contributors](https://github.com/libretro/retroarch-assets), commit `8c918e2872482139273374ef4cc6c7aff34d7585`; converted from SVG to Compose vector resources and normalized to 24 units |
 | Manrope | SIL OFL 1.1 (`docs/fonts/Manrope-OFL.txt`) | Font, taken from the web |

@@ -108,7 +108,7 @@ class GameLauncher(
                 }
             }
 
-            val native = spec.id in setOf("3ds", "ps2")
+            val native = spec.id in setOf("3ds", "ps2", "psp")
             val titleId = rom.nativeTitleId ?: game.remote.rom?.takeIf { it.sha256.equals(rom.sha256, true) }?.nativeTitleId
             val build = if (native) coreBuild(core) else null
             if (native &&

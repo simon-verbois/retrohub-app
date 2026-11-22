@@ -158,7 +158,9 @@ fun Modifier.consoleFocus(
         }.drawWithContent {
             drawContent()
             if (highlight > 0f) {
-                drawOutline(shape.createOutline(size, layoutDirection, this), Palette.ButtonFocusTop.copy(alpha = highlight * 0.22f))
+                val outline = shape.createOutline(size, layoutDirection, this)
+                drawOutline(outline, Palette.ButtonFocusTop.copy(alpha = highlight * 0.22f))
+                drawOutline(outline, Palette.Text.copy(alpha = highlight), style = androidx.compose.ui.graphics.drawscope.Stroke(2.dp.toPx()))
             }
         }
 }

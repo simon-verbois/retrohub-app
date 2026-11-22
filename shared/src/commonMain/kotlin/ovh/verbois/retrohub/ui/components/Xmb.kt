@@ -90,13 +90,13 @@ internal fun XmbSidePanel(
                 exit = fadeOut(tween(if (reduced) 0 else 100)) + slideOutHorizontally(tween(if (reduced) 0 else 120)) { distance },
             ) {
                 Box(
-                    modifier.width((maxWidth * if (wide) 0.70f else 0.52f).coerceAtMost(if (wide) 1200.dp else 560.dp))
+                    modifier.width((maxWidth * if (wide) 0.70f else 0.48f).coerceAtMost(if (wide) 1200.dp else 480.dp))
                         .fillMaxHeight().testTag(tag)
                         .background(Brush.horizontalGradient(listOf(Palette.SkyMid.copy(alpha = 0.96f), Palette.SkyLow)))
                         .controllerDialog({ dismiss() }, dismissOnStart = true)
                         .pointerInput(Unit) { detectTapGestures { } },
                 ) {
-                    CompositionLocalProvider(LocalScreenActive provides isExpanded.value) { XmbTheme(content) }
+                    CompositionLocalProvider(LocalScreenActive provides isExpanded.value, LocalOverlayControls provides true) { XmbTheme(content) }
                 }
             }
         }

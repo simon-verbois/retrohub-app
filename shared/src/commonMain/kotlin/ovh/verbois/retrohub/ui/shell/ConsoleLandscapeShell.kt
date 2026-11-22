@@ -19,7 +19,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.focusProperties
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.graphicsLayer
@@ -153,14 +152,25 @@ private fun LandscapeContent(controller: UiController, account: Account, content
             },
         ) {
             CompositionLocalProvider(LocalScreenActive provides (!overlay && !controller.menuOpen)) {
-                Column(Modifier.fillMaxSize().graphicsLayer { alpha = parentOpacity }) {
+                Box(Modifier.fillMaxSize().graphicsLayer { alpha = parentOpacity }) {
+                    Box(Modifier.fillMaxSize().padding(bottom = if (showHints) 32.dp else 0.dp)) {
+                        CompositionLocalProvider(LocalScreenActive provides active) { content(Route.Home) }
+                    }
                     Row(
-                        Modifier.fillMaxWidth().height(48.dp).padding(horizontal = 20.dp).focusProperties { down = navigation.content },
+                        Modifier.align(Alignment.TopCenter).fillMaxWidth().height(48.dp).padding(horizontal = 20.dp).focusProperties {
+                            up =
+                                androidx.compose.ui.focus.FocusRequester.Cancel
+                            down = navigation.content
+                        },
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
                         if (!controller.searching) {
-                            Text("RetroHub", style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp), fontWeight = FontWeight.Light)
+                            Text(
+                                "retrohub.",
+                                style = MaterialTheme.typography.titleLarge.copy(fontSize = 23.sp, letterSpacing = (-0.92).sp),
+                                fontWeight = FontWeight.ExtraBold,
+                            )
                             if (!online) {
                                 Icon(Lucide.WifiOff, "Hors connexion", Modifier.size(16.dp), tint = Palette.TextDim)
                             }
@@ -172,14 +182,14 @@ private fun LandscapeContent(controller: UiController, account: Account, content
                                 28.dp,
                                 closeSearch,
                                 Modifier.align(Alignment.CenterEnd)
-                                    .widthIn(max = 520.dp).fillMaxWidth().height(48.dp).focusRequester(navigation.header),
+                                    .widthIn(max = 520.dp).fillMaxWidth().height(48.dp),
                             )
                         }
                         val (_, statusTint, statusLabel) = profileStatus(sync, online)
                         Box(
                             Modifier.size(48.dp).testTag("header-profile-button").onGloballyPositioned { profileAnchor = it.boundsInWindow() }
                                 .semantics { contentDescription = "Compte et menu · $statusLabel" }
-                                .consoleFocus(CircleShape, { controller.menuOpen = true }, highlightFocus = false),
+                                .consoleFocus(CircleShape, { controller.menuOpen = true }),
                             contentAlignment = Alignment.Center,
                         ) {
                             ProfileAvatar(
@@ -193,12 +203,11 @@ private fun LandscapeContent(controller: UiController, account: Account, content
                         }
                         StatusPill(controller.container.platform, transparent = true, compact = true)
                     }
-                    Box(Modifier.fillMaxWidth().weight(1f)) {
-                        CompositionLocalProvider(LocalScreenActive provides active) { content(Route.Home) }
-                    }
                     if (showHints) {
                         Row(
-                            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 8.dp),
+                            Modifier.align(
+                                Alignment.BottomStart,
+                            ).fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 8.dp),
                             horizontalArrangement = Arrangement.spacedBy(24.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {

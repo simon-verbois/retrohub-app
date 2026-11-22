@@ -191,7 +191,7 @@ class GameSession(
                 flash("Cette sauvegarde vient d’un autre émulateur (${save.core}) et ne peut pas être chargée ici.")
                 return@withLock false
             }
-            if (plan.console in setOf("3ds", "ps2") && (
+            if (plan.console in setOf("3ds", "ps2", "psp") && (
                     save?.coreBuild == null || save.coreBuild != plan.coreBuild || save.console != plan.console ||
                         save.core != plan.core || !save.romSha.equals(plan.romSha, true)
                     )
@@ -215,7 +215,7 @@ class GameSession(
             if (!state.value.started || state.value.failed || finished) return@withLock
             val code = plan.gameCode
             val userDir = plan.dolphinUserDir
-            if (plan.console in setOf("3ds", "ps2")) {
+            if (plan.console in setOf("3ds", "ps2", "psp")) {
                 val resumeAfter = !state.value.paused
                 engine.pause()
                 try {
@@ -277,7 +277,7 @@ class GameSession(
 
     /** Keep an incompatible local checkpoint before a new core/ROM writes its first snapshot. */
     private suspend fun preservePrevious(kind: String, slot: Int) {
-        if (plan.console !in setOf("3ds", "ps2")) return
+        if (plan.console !in setOf("3ds", "ps2", "psp")) return
         val previous = saves.find(plan.playGameId, kind, slot) ?: return
         if (previous.romSha == plan.romSha && (kind != "state" || previous.coreBuild == plan.coreBuild)) return
         val source = saves.file(previous)

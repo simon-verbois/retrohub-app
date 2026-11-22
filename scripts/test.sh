@@ -60,6 +60,7 @@ instrumented() {
   ensure_cores
   local reports="app/build/outputs/androidTest-results/connected/$variant"
   local group="${RETROHUB_INSTRUMENTED_GROUP:-all}"
+  if [[ "$group" == all || "$group" == native ]]; then scripts/fetch-test-content.sh; fi
   local selection=()
   case "$group" in
     all) selection=(-Pandroid.testInstrumentationRunnerArguments.notPackage=ovh.verbois.retrohub.e2e,ovh.verbois.retrohub.performance) ;;

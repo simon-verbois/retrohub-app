@@ -17,7 +17,7 @@ assets="$root/app/src/main/assets"
 cache="${XDG_CACHE_HOME:-$HOME/.cache}/retrohub-android/cores"
 abis=(${RETROHUB_ABIS:-arm64-v8a x86_64})
 # Same names as the RetroHub server (consoles.py) for X-Emulator-Core.
-cores=(fceumm snes9x gambatte mgba genesis_plus_gx pcsx_rearmed swanstation melonds stella2014 parallel_n64 dolphin flycast azahar armsx2)
+cores=(fceumm snes9x gambatte mgba genesis_plus_gx pcsx_rearmed swanstation melonds stella2014 parallel_n64 dolphin flycast azahar armsx2 ppsspp)
 base="https://buildbot.libretro.com/nightly/android/latest"
 dolphin_sys="https://buildbot.libretro.com/assets/system/Dolphin.zip"
 update=false
@@ -82,3 +82,7 @@ mkdir -p "$assets"
 path="$(fetch "dolphin-sys" "$dolphin_sys" "")"
 install -m 644 "$path" "$assets/dolphin-sys.zip"
 echo "✓ Dolphin Sys"
+
+path="$(fetch "ppsspp-sys" "https://buildbot.libretro.com/assets/system/PPSSPP.zip" "")"
+install -m 644 "$path" "$assets/ppsspp-sys.zip"
+echo "✓ PPSSPP system assets"

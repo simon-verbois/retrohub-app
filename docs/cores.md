@@ -19,6 +19,7 @@ each core's source (github.com/libretro repositories, November 2026). A console'
 | Atari 2600 | stella2014 | standard palette |
 | Nintendo 64 | parallel_n64 | Glide64 (GLES2), HLE RSP, recompiler, resolution depending on the profile, Controller Pak, enhanced HLE audio (32-tap resampling) and buffered audio output |
 | GameCube | dolphin | hardware rendering, ×1 to ×4 resolution, asynchronous shader compilation, French, BIOS skipped |
+| PSP | ppsspp | OpenGL ES, 480×272 to 1920×1088, French, JIT, private per-game Memory Stick saves; system assets bundled for offline play |
 | Dreamcast | flycast | ×1 to ×4 resolution, French, threaded rendering, per-game VMU |
 
 Touch button mapping (RetroPad): `ui/play/PadLayouts.kt`, following the cores. Examples: Mega Drive
@@ -50,3 +51,13 @@ the app checkpoints files flushed by a stopped core, including a session interru
 first autosave. Those changes use the normal revision/conflict protocol. Running cores are not
 read, and an explicit server/history choice awaiting installation is preserved. A restored server
 invalidates the running game's old base revision without replacing its files.
+
+PPSSPP uses the pinned libretro system archive under `system/PPSSPP` and a private per-account,
+per-game and per-ROM Memory Stick root. Only `PSP/SAVEDATA` is synchronized in the versioned
+`ppsspp_savedata_zip_v1` archive; caches, firmware and emulator configuration remain local.
+States require the exact PPSSPP build and ROM checksum. PSP controls follow the original handheld:
+D-pad, one left analog stick, four PlayStation face buttons, L/R, Select and Start.
+
+Native tests download PPSSPP's public [spinning-cube demo](https://www.ppsspp.org/legacybuilds/)
+with a pinned checksum through `scripts/fetch-test-content.sh`. It is packaged only in the test
+APK; the application APK contains no game or test ROM.

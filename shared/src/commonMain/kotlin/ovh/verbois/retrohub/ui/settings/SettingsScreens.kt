@@ -60,6 +60,7 @@ fun coreLabel(core: String): String = when (core) {
     "parallel_n64" -> "ParaLLEl N64"
     "dolphin" -> "Dolphin"
     "flycast" -> "Flycast"
+    "ppsspp" -> "PPSSPP"
     else -> core
 }
 

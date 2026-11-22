@@ -1,7 +1,9 @@
 package ovh.verbois.retrohub.ui
 
+import android.os.Build
 import android.view.InputDevice
 import android.view.KeyEvent
+import android.view.inspector.WindowInspector
 import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -72,10 +74,26 @@ class ControllerWidgetsTest {
     }
 
     private fun waitFocused(text: String) {
-        rule.waitUntil(5_000) {
-            runCatching { rule.onNodeWithText(text).fetchSemanticsNode().config[SemanticsProperties.Focused] }.getOrDefault(false)
+        try {
+            rule.waitUntil(5_000) {
+                runCatching { rule.onNodeWithText(text).fetchSemanticsNode().config[SemanticsProperties.Focused] }.getOrDefault(false)
+            }
+        } catch (error: androidx.compose.ui.test.ComposeTimeoutException) {
+            val pictures = java.io.File(instrumentation.targetContext.getExternalFilesDir(null), "test-screens").apply { mkdirs() }
+            device.takeScreenshot(java.io.File(pictures, "widget-focus-failure.png"))
+            val focused = rule.onAllNodes(SemanticsMatcher.expectValue(SemanticsProperties.Focused, true)).fetchSemanticsNodes().map { it.config.toString() }
+            throw AssertionError("Expected focus on $text, focused=$focused", error)
         }
         device.waitForIdle()
+    }
+
+    private fun waitDialogFocused(text: String) {
+        // Compose can report a focused control before Android routes hardware keys to its window.
+        rule.waitUntil(5_000) {
+            !rule.activity.hasWindowFocus() &&
+                (Build.VERSION.SDK_INT < 29 || WindowInspector.getGlobalWindowViews().any { it.hasWindowFocus() && it.isLaidOut })
+        }
+        waitFocused(text)
     }
 
     @Test
@@ -208,14 +226,15 @@ class ControllerWidgetsTest {
         }
         waitFocused("Retirer")
         pad(KeyEvent.KEYCODE_BUTTON_A)
-        waitFocused("Annuler")
+        waitDialogFocused("Annuler")
         pad(KeyEvent.KEYCODE_BUTTON_R1)
         rule.onNodeWithText("Annuler").assertIsFocused()
         pad(KeyEvent.KEYCODE_BUTTON_B)
         waitFocused("Retirer")
+        rule.waitUntil(5_000) { rule.activity.hasWindowFocus() }
         assertEquals(0, confirmed)
         pad(KeyEvent.KEYCODE_BUTTON_A)
-        waitFocused("Annuler")
+        waitDialogFocused("Annuler")
         pad(KeyEvent.KEYCODE_DPAD_RIGHT)
         waitFocused("Supprimer")
         pad(KeyEvent.KEYCODE_BUTTON_A)

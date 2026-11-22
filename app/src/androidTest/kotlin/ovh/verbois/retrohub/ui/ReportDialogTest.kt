@@ -49,6 +49,7 @@ class ReportDialogTest {
         rule.onNodeWithText("Envoyer le diagnostic").assertDoesNotExist()
         rule.onNodeWithText("Voir le rapport").performScrollTo().performClick()
         rule.onNodeWithText("Masquer le rapport").assertIsDisplayed()
+        rule.onNodeWithText("Fermer").assertIsDisplayed()
         val directory = File(instrumentation.targetContext.getExternalFilesDir(null), "test-screens").apply { mkdirs() }
         File(directory, "report-local-landscape.png").outputStream().use { stream ->
             check(instrumentation.uiAutomation.takeScreenshot().compress(Bitmap.CompressFormat.PNG, 100, stream))

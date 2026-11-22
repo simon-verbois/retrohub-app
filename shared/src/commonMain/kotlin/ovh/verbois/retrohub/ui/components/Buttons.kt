@@ -62,6 +62,8 @@ fun PrimaryButton(
     progress: Float? = null,
     height: Dp = 52.dp,
 ) {
+    val compact = LocalOverlayControls.current
+    val shape = if (compact) OverlayControlShape else Pill
     // La progression est dessinée derrière le texte : la taille du bouton ne dépend que du libellé.
     val fraction = progress?.let { animateFloatAsState(it.coerceIn(0f, 1f), tween(450), label = "progress").value }
     // L’animation ne tourne que pendant un téléchargement.
@@ -74,14 +76,22 @@ fun PrimaryButton(
     }
     Box(
         modifier
-            .heightIn(min = height)
-            .consoleFocus(Pill, onClick, enabled = enabled && !loading, focusScale = 1.05f)
-            .consoleButtonSurface(Pill, primary = true, enabled = enabled)
+            .heightIn(min = if (compact) 48.dp else height)
+            .consoleFocus(shape, onClick, enabled = enabled && !loading, focusScale = if (compact) 1f else 1.05f)
+            .then(
+                if (compact) {
+                    Modifier.clip(
+                        shape,
+                    ).background(if (enabled) Palette.Accent else Palette.Raised)
+                } else {
+                    Modifier.consoleButtonSurface(shape, primary = true, enabled = enabled)
+                },
+            )
             .then(if (fraction != null) Modifier.drawBehind { drawProgress(fraction, stripes, glow) } else Modifier),
         contentAlignment = Alignment.Center,
     ) {
         Row(
-            Modifier.padding(horizontal = 24.dp, vertical = 14.dp),
+            Modifier.padding(horizontal = if (compact) 16.dp else 24.dp, vertical = if (compact) 8.dp else 14.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
@@ -146,12 +156,22 @@ fun GlassButton(
     tint: Color = Palette.Text,
     height: Dp = 48.dp,
 ) {
+    val compact = LocalOverlayControls.current
+    val shape = if (compact) OverlayControlShape else Pill
     Row(
         modifier
             .heightIn(min = height)
-            .consoleFocus(Pill, onClick, enabled = enabled)
-            .consoleButtonSurface(Pill, enabled = enabled)
-            .padding(horizontal = 20.dp, vertical = 12.dp),
+            .consoleFocus(shape, onClick, enabled = enabled, focusScale = if (compact) 1f else 1.04f)
+            .then(
+                if (compact) {
+                    Modifier.clip(
+                        shape,
+                    ).background(Palette.Raised).border(1.dp, Palette.Line, shape)
+                } else {
+                    Modifier.consoleButtonSurface(shape, enabled = enabled)
+                },
+            )
+            .padding(horizontal = if (compact) 14.dp else 20.dp, vertical = if (compact) 8.dp else 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterHorizontally),
     ) {
@@ -204,11 +224,23 @@ fun RoundButton(
 /** Pastille de filtre (consoles, tri), avec un point de couleur facultatif. */
 @Composable
 fun FilterChip(text: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier, dot: Color? = null) {
+    val compact = LocalOverlayControls.current
+    val shape = if (compact) OverlayControlShape else Pill
     Row(
         modifier
             .heightIn(min = 48.dp)
-            .consoleFocus(Pill, onClick)
-            .consoleButtonSurface(Pill, primary = selected)
+            .consoleFocus(shape, onClick, focusScale = if (compact) 1f else 1.04f)
+            .then(
+                if (compact) {
+                    Modifier.clip(
+                        shape,
+                    ).background(
+                        if (selected) Palette.Accent else Palette.Raised,
+                    ).border(1.dp, Palette.Line, shape)
+                } else {
+                    Modifier.consoleButtonSurface(shape, primary = selected)
+                },
+            )
             .padding(PaddingValues(horizontal = 16.dp, vertical = 10.dp)),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),

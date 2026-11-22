@@ -10,6 +10,23 @@ change, in plain text. Never rewrite the notes of a published version.
 
 ## [Unreleased]
 
+## [2026.47.2] - 2026-11-22
+
+### Added
+
+- Play PSP games with bundled PPSSPP, its offline system assets, original touch controls, adjustable rendering resolution and private per-game save synchronization.
+
+### Changed
+
+- Speed up home transitions, raise and tighten the carousel, fade covers beneath the header, and match the web wordmark.
+- Fit the pause menu into a compact action grid in landscape and portrait, with a clear resume action and consistent controller navigation.
+- Unify popups and dialogs with restrained controls, compact spacing, and fixed titles and actions while longer content scrolls; keep save-version choices compact and side by side when space allows.
+
+### Fixed
+
+- Refresh controller detection and battery status after connection, reconnection and foreground return; show a connected-controller indicator when Android cannot report its battery level.
+- Enter each console’s game list immediately and keep repeated upward navigation on the header without opening search until confirmation; outline focused controls clearly.
+
 ## [2026.47.1] - 2026-11-21
 
 ### Added
