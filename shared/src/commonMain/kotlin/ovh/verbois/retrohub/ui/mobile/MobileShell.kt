@@ -1,4 +1,4 @@
-package ovh.verbois.retrohub.ui.shell
+package ovh.verbois.retrohub.ui.mobile
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
@@ -119,25 +119,28 @@ import ovh.verbois.retrohub.ui.game.LaunchChoiceDialog
 import ovh.verbois.retrohub.ui.icons.Lucide
 import ovh.verbois.retrohub.ui.nav.Route
 import ovh.verbois.retrohub.ui.nav.Section
+import ovh.verbois.retrohub.ui.shell.AccountMenu
+import ovh.verbois.retrohub.ui.shell.HeaderSearch
+import ovh.verbois.retrohub.ui.shell.HeaderSearchState
+import ovh.verbois.retrohub.ui.shell.SearchDropdown
+import ovh.verbois.retrohub.ui.shell.StatusPill
+import ovh.verbois.retrohub.ui.shell.profileStatus
+import ovh.verbois.retrohub.ui.shell.statusBubbleSize
 import ovh.verbois.retrohub.ui.theme.Palette
 import kotlin.time.Clock
 
 private val Pill = RoundedCornerShape(percent = 50)
 
 @Composable
-fun ConsoleShell(controller: UiController, account: Account, content: @Composable (Route) -> Unit) {
+fun MobileShell(controller: UiController, account: Account, content: @Composable (Route) -> Unit) {
     val settings by controller.container.settings.settings.collectAsState()
     androidx.compose.runtime.CompositionLocalProvider(
         ovh.verbois.retrohub.ui.components.LocalReducedMotion provides (settings.reduceMotion || controller.container.platform.reducedMotion),
-    ) { ConsoleShellContent(controller, account, content) }
+    ) { MobileShellContent(controller, account, content) }
 }
 
 @Composable
-private fun ConsoleShellContent(controller: UiController, account: Account, content: @Composable (Route) -> Unit) {
-    if (!controller.portrait) {
-        ConsoleLandscapeShell(controller, account, content)
-        return
-    }
+private fun MobileShellContent(controller: UiController, account: Account, content: @Composable (Route) -> Unit) {
     val container = controller.container
     val sync by container.sync.status.collectAsState()
     val online by container.platform.online.collectAsState()
@@ -373,17 +376,6 @@ private fun TopBar(
     }
 }
 
-internal fun profileStatus(sync: SyncStatus, online: Boolean): Triple<ImageVector, Color, String> = when {
-    !online || sync.phase == SyncPhase.SIGNED_OUT -> Triple(Lucide.X, Palette.TextFaint, "Déconnecté")
-    sync.phase == SyncPhase.OFFLINE -> Triple(Lucide.CircleAlert, Palette.Warning, "Serveur injoignable")
-    sync.phase == SyncPhase.ERROR -> Triple(Lucide.CircleAlert, Palette.Danger, "Erreur de synchronisation")
-    sync.conflicts > 0 -> Triple(Lucide.CircleAlert, Palette.Warning, "Une sauvegarde attend votre choix")
-    sync.phase == SyncPhase.MAINTENANCE -> Triple(Lucide.CircleAlert, Palette.Warning, "Serveur en maintenance")
-    sync.phase == SyncPhase.SYNCING -> Triple(Lucide.RefreshCw, Palette.Success, "Synchronisation en cours")
-    sync.pendingSaves > 0 || sync.pendingSessions > 0 -> Triple(Lucide.Clock, Palette.Warning, "Synchronisation en attente")
-    else -> Triple(Lucide.Check, Palette.Success, "Tout est synchronisé")
-}
-
 @Composable
 fun SectionTabs(controller: UiController, section: Section?, modifier: Modifier = Modifier) {
     val tree = ovh.verbois.retrohub.ui.components.LocalNavigationFocus.current
@@ -491,110 +483,6 @@ private fun SectionTab(title: String, active: Boolean, modifier: Modifier = Modi
                 color = Palette.Text,
                 maxLines = 1,
             )
-        }
-    }
-}
-
-@Composable
-private fun statusBubbleSize() = with(LocalDensity.current) { 16.sp.toDp() }.plus(10.dp).coerceAtLeast(30.dp)
-
-/** Foreground clock and power state, including controllers attached after launch. */
-@Composable
-fun StatusPill(platform: Platform, transparent: Boolean = false, compact: Boolean = false) {
-    val textStyle = MaterialTheme.typography.labelLarge.copy(
-        fontSize = if (compact) 11.sp else 12.sp,
-        lineHeight = 16.sp,
-        fontFeatureSettings = "tnum",
-        fontWeight = if (compact) FontWeight.Normal else FontWeight.Bold,
-    )
-    val lifecycle = LocalLifecycleOwner.current.lifecycle
-    val gamepad by platform.gamepadConnected.collectAsState()
-    val power by produceState(PowerStatus(), platform, lifecycle) {
-        lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
-            val polling = flow {
-                while (true) {
-                    emit(Unit)
-                    delay(5_000)
-                }
-            }
-            merge(polling, platform.powerStatusChanges).collectLatest {
-                value = withContext(Dispatchers.IO) { platform.powerStatus() }
-            }
-        }
-    }
-    val now by produceState(Clock.System.now(), lifecycle) {
-        lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
-            while (true) {
-                value = Clock.System.now()
-                delay(15_000)
-            }
-        }
-    }
-    val local = now.toLocalDateTime(TimeZone.currentSystemDefault())
-    Row(
-        Modifier.heightIn(
-            min = statusBubbleSize(),
-        ).testTag("header-status").semantics(mergeDescendants = true) {}
-            .then(if (transparent) Modifier else Modifier.consoleButtonSurface(Pill)).padding(horizontal = 7.dp, vertical = 3.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(5.dp),
-    ) {
-        if (compact) Text("${local.day}/${local.month.number}", style = textStyle, maxLines = 1)
-        Text("${local.hour.toString().padStart(2, '0')}:${local.minute.toString().padStart(2, '0')}", style = textStyle, maxLines = 1)
-        power.phone?.let { level ->
-            Box(Modifier.width(1.dp).height(14.dp).background(Palette.Line))
-            Icon(
-                if (level.charging) Lucide.Zap else Lucide.Battery,
-                null,
-                Modifier.size(14.dp),
-                tint = if (level.percent <=
-                    20
-                ) {
-                    Palette.Warning
-                } else {
-                    Palette.Text
-                },
-            )
-            Text(
-                "${level.percent} %",
-                Modifier.semantics {
-                    contentDescription =
-                        "Batterie du téléphone : ${level.percent} %" + if (level.charging) ", en charge" else ""
-                },
-                style = if (compact) textStyle else MaterialTheme.typography.labelMedium,
-                maxLines = 1,
-            )
-        }
-        if (gamepad) {
-            val controller = power.controllers.firstOrNull()
-            Box(Modifier.width(1.dp).height(14.dp).background(Palette.Line))
-            Row(
-                Modifier.testTag("header-controller").semantics(mergeDescendants = true) {
-                    contentDescription = if (controller == null) {
-                        "Manette connectée"
-                    } else {
-                        "Batterie de ${controller.name} : ${controller.level.percent} %" + if (controller.level.charging) ", en charge" else ""
-                    }
-                },
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(5.dp),
-            ) {
-                Icon(
-                    Lucide.Gamepad2,
-                    null,
-                    Modifier.size(14.dp),
-                    tint = if (controller != null &&
-                        controller.level.percent <= 20
-                    ) {
-                        Palette.Warning
-                    } else {
-                        Palette.Text
-                    },
-                )
-                if (controller != null) {
-                    Text("${controller.level.percent} %", style = if (compact) textStyle else MaterialTheme.typography.labelMedium, maxLines = 1)
-                }
-            }
         }
     }
 }

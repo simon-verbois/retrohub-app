@@ -41,11 +41,17 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import ovh.verbois.retrohub.ui.theme.Palette
 
-private class FocusActivity {
+internal class FocusActivity {
     var generation = 0
+
+    /** A text field is being typed into: default focus must never steal it. */
+    var typing = false
+
+    /** Something in the main window has the focus. */
+    var focused = false
 }
 
-private val LocalFocusActivity = staticCompositionLocalOf { FocusActivity() }
+internal val LocalFocusActivity = staticCompositionLocalOf { FocusActivity() }
 
 /** Retour haptique léger, fourni par la plateforme (désactivable dans les réglages). */
 val LocalHaptics = staticCompositionLocalOf<() -> Unit> { {} }
@@ -88,6 +94,7 @@ fun Modifier.consoleFocus(
     val haptics = LocalHaptics.current
     val navSound = LocalNavSound.current
     val reduced = LocalReducedMotion.current
+    val consoleStyle = LocalConsoleStyle.current
     val scale by animateFloatAsState(
         when {
             pressed -> 0.97f
@@ -159,8 +166,13 @@ fun Modifier.consoleFocus(
             drawContent()
             if (highlight > 0f) {
                 val outline = shape.createOutline(size, layoutDirection, this)
-                drawOutline(outline, Palette.ButtonFocusTop.copy(alpha = highlight * 0.22f))
-                drawOutline(outline, Palette.Text.copy(alpha = highlight), style = androidx.compose.ui.graphics.drawscope.Stroke(2.dp.toPx()))
+                if (consoleStyle) {
+                    // Console: never an outline, a white veil instead.
+                    drawOutline(outline, Palette.Text.copy(alpha = highlight * 0.3f))
+                } else {
+                    drawOutline(outline, Palette.ButtonFocusTop.copy(alpha = highlight * 0.22f))
+                    drawOutline(outline, Palette.Text.copy(alpha = highlight), style = androidx.compose.ui.graphics.drawscope.Stroke(2.dp.toPx()))
+                }
             }
         }
 }
@@ -170,19 +182,32 @@ fun Modifier.consoleFocus(
  * (en mode tactile, Compose ne focalise pas les éléments cliquables).
  */
 @Composable
-fun AutoFocus(requester: androidx.compose.ui.focus.FocusRequester) {
+fun AutoFocus(requester: androidx.compose.ui.focus.FocusRequester, enabled: Boolean = true) {
     val mode = LocalInputModeManager.current.inputMode
     val windowFocused = LocalWindowInfo.current.isWindowFocused
     val activity = LocalFocusActivity.current
     val active = LocalScreenActive.current
     val target by androidx.compose.runtime.rememberUpdatedState(requester)
     val generation = activity.generation
-    androidx.compose.runtime.LaunchedEffect(mode, windowFocused, active) {
-        if (mode != InputMode.Keyboard || !windowFocused || !active) return@LaunchedEffect
+    val first = remember { booleanArrayOf(true) }
+    androidx.compose.runtime.LaunchedEffect(mode, windowFocused, active, enabled) {
+        if (!active) first[0] = true
+        if (mode != InputMode.Keyboard || !windowFocused || !active || !enabled) return@LaunchedEffect
+        val start = activity.generation
         kotlinx.coroutines.delay(60)
-        // A delayed default must never override a direction the player has already chosen.
-        if (activity.generation == generation) runCatching { target.requestFocus() }
+        // A delayed default must never override a direction the player has already chosen. Later runs
+        // (the window comes back after a system dialog, keys after touch) only fill an empty focus.
+        val wanted = if (first[0]) activity.generation == generation else activity.generation == start && !activity.focused
+        first[0] = false
+        if (wanted && !activity.typing) runCatching { target.requestFocus() }
     }
+}
+
+/** Tracks whether the main window holds a focused control, for [AutoFocus]. Set once on the root. */
+@Composable
+fun Modifier.trackFocus(): Modifier {
+    val activity = LocalFocusActivity.current
+    return onFocusChanged { activity.focused = it.hasFocus }
 }
 
 @Composable

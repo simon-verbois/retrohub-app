@@ -71,6 +71,15 @@ fun GlassPanel(modifier: Modifier = Modifier, shape: androidx.compose.ui.graphic
 
 @Composable
 fun SectionLabel(text: String, modifier: Modifier = Modifier) {
+    if (LocalConsoleStyle.current) {
+        Text(
+            text,
+            modifier.padding(start = 14.dp, top = 10.dp, bottom = 2.dp),
+            style = MaterialTheme.typography.labelMedium,
+            color = Color.White.copy(alpha = 0.7f),
+        )
+        return
+    }
     Text(
         text,
         modifier.padding(start = 4.dp, top = 8.dp, bottom = 8.dp),
@@ -82,11 +91,17 @@ fun SectionLabel(text: String, modifier: Modifier = Modifier) {
 /** Groupe de lignes de réglages dans une carte arrondie (séparateurs fins entre les lignes). */
 @Composable
 fun SettingsGroup(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
+    if (LocalConsoleStyle.current) {
+        Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(2.dp), content = content)
+        return
+    }
     Column(modifier.fillMaxWidth().clip(CardShape).background(MaterialTheme.colorScheme.surface).border(1.dp, Palette.Line, CardShape), content = content)
 }
 
 @Composable
-fun GroupDivider() = HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = Palette.Line)
+fun GroupDivider() {
+    if (!LocalConsoleStyle.current) HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = Palette.Line)
+}
 
 /** Une ligne de réglage : icône, titre, explication et élément à droite. */
 @Composable
@@ -101,6 +116,10 @@ fun SettingRow(
     tint: Color = Palette.Text,
     trailing: @Composable (() -> Unit)? = null,
 ) {
+    if (LocalConsoleStyle.current) {
+        ConsoleSettingRow(title, modifier, subtitle, icon, onClick, role, value, tint, trailing)
+        return
+    }
     val fontScale = LocalDensity.current.fontScale
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         val inlineValue = value != null && maxWidth >= 520.dp && fontScale <= 1.3f
@@ -145,6 +164,10 @@ fun SwitchRow(title: String, checked: Boolean, onChange: (Boolean) -> Unit, subt
         onClick = { onChange(!checked) },
         role = Role.Switch,
     ) {
+        if (LocalConsoleStyle.current) {
+            ConsoleToggle(checked)
+            return@SettingRow
+        }
         Switch(
             checked = checked,
             onCheckedChange = null,
@@ -163,7 +186,12 @@ fun SwitchRow(title: String, checked: Boolean, onChange: (Boolean) -> Unit, subt
 @Composable
 fun NavigationRow(title: String, icon: ImageVector, onClick: () -> Unit, subtitle: String? = null, value: String? = null) {
     SettingRow(title, subtitle = subtitle, icon = icon, onClick = onClick, value = value) {
-        Icon(Lucide.ChevronRight, null, Modifier.size(20.dp), tint = Palette.TextFaint)
+        Icon(
+            Lucide.ChevronRight,
+            null,
+            Modifier.size(20.dp),
+            tint = if (LocalConsoleStyle.current) androidx.compose.material3.LocalContentColor.current.copy(alpha = 0.6f) else Palette.TextFaint,
+        )
     }
 }
 
@@ -180,6 +208,10 @@ fun <T> ChoiceRow(
     describe: ((T) -> String?)? = null,
     recommended: T? = null,
 ) {
+    if (LocalConsoleStyle.current) {
+        ConsoleChoiceRow(title, options, selected, label, onSelect, subtitle, icon, describe, recommended)
+        return
+    }
     var open by remember { mutableStateOf(false) }
     val rowFocus = remember { FocusRequester() }
     val optionFocus = remember { FocusRequester() }
@@ -264,6 +296,10 @@ fun SliderRow(
     icon: ImageVector? = null,
     steps: Int = 0,
 ) {
+    if (LocalConsoleStyle.current) {
+        ConsoleSliderRow(title, value, range, onChange, valueLabel, subtitle, icon, steps)
+        return
+    }
     Column(Modifier.padding(horizontal = 20.dp, vertical = 14.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             if (icon != null) Icon(icon, null, Modifier.size(24.dp), tint = Palette.Select)
@@ -334,6 +370,10 @@ fun ConfirmDialog(
     destructive: Boolean = false,
     focusDismiss: Boolean = false,
 ) {
+    if (LocalConsoleStyle.current) {
+        ConsoleConfirmDialog(title, text, confirm, onConfirm, onDismiss, dismiss, destructive, focusDismiss)
+        return
+    }
     val dismissFocus = remember { FocusRequester() }
     val confirmFocus = remember { FocusRequester() }
     ModalPanel(

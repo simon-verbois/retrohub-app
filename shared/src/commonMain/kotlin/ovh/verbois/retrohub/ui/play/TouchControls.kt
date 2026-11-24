@@ -478,13 +478,17 @@ private fun RoundKey(label: String, color: Color, down: Boolean, size: Dp, modif
             "touch-key-${label.lowercase()}",
         ).semantics {
             selected = down
-        }.consoleButtonSurface(CircleShape, primary = down).border(1.dp, if (down) color else color.copy(alpha = 0.6f), CircleShape),
+        }.consoleButtonSurface(CircleShape, primary = down).border(2.dp, if (down) color else color.copy(alpha = 0.9f), CircleShape),
         contentAlignment = Alignment.Center,
     ) {
         Text(
             label,
-            style = MaterialTheme.typography.titleMedium.copy(fontSize = if (small) 12.sp else 20.sp),
-            color = if (down) Palette.OnAccent else lerp(color, Color.White, 0.45f),
+            style = MaterialTheme.typography.titleMedium.copy(
+                fontSize = if (small) 12.sp else 20.sp,
+                fontWeight = androidx.compose.ui.text.font.FontWeight.ExtraBold,
+            ),
+            // White on the key, the button's color on its ring: readable on every game.
+            color = if (down) Palette.OnAccent else Color.White,
         )
     }
 }

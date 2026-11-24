@@ -1,4 +1,4 @@
-package ovh.verbois.retrohub.ui.home
+package ovh.verbois.retrohub.ui.mobile.home
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -29,6 +29,7 @@ import ovh.verbois.retrohub.ui.components.AutoFocus
 import ovh.verbois.retrohub.ui.components.ConfirmDialog
 import ovh.verbois.retrohub.ui.components.XmbSidePanel
 import ovh.verbois.retrohub.ui.components.controllerDialog
+import ovh.verbois.retrohub.ui.home.*
 import ovh.verbois.retrohub.ui.icons.Lucide
 import ovh.verbois.retrohub.ui.nav.Route
 import ovh.verbois.retrohub.ui.nav.SettingsPage

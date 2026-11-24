@@ -14,6 +14,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.time.Instant
 
 class HomeItemsTest {
     private fun game(id: String, played: String? = null, downloaded: String? = null) = Game(
@@ -36,11 +37,37 @@ class HomeItemsTest {
     }
 
     @Test
-    fun emptyCollectionsRemainAvailableAndHiddenConsolesStayHidden() {
-        assertEquals(listOf("catalogue", "favorites"), homeColumns(emptyList(), AppSettings()).map { it.key })
+    fun emptyCollectionsOnlyKeepTheCatalogueAndHiddenConsolesStayHidden() {
+        assertEquals(listOf("catalogue"), homeColumns(emptyList(), AppSettings()).map { it.key })
         val columns = homeColumns(listOf(game("hidden")), AppSettings(hiddenConsoles = setOf("nes")))
-        assertEquals(listOf("catalogue", "favorites"), columns.map { it.key })
+        assertEquals(listOf("catalogue"), columns.map { it.key })
         assertTrue(columns.all { it.games.isEmpty() })
+    }
+
+    @Test
+    fun recentGamesComeFirstThenCatalogueThenFavoritesOnlyWhenTheyExist() {
+        val old = game("old", played = "2026-11-01T12:00:00Z")
+        val last = game("last", played = "2026-11-20T12:00:00Z")
+        val never = game("never")
+        assertEquals(listOf("recent", "catalogue", "console:nes"), homeColumns(listOf(old, last, never), AppSettings()).map { it.key })
+        assertEquals(listOf("last", "old"), homeColumns(listOf(old, last, never), AppSettings()).first().games.map { it.id })
+        val favorite = Game(LibraryGame("fav", "fav", title = "fav", console = "nes", favorite = true), null)
+        assertEquals(listOf("catalogue", "favorites", "console:nes"), homeColumns(listOf(never, favorite), AppSettings()).map { it.key })
+    }
+
+    @Test
+    fun aGamePlayedOnThisDeviceIsRecentBeforeTheServerCountsIt() {
+        val local = Game(LibraryGame("local", "local", title = "local", console = "nes"), null, localPlayed = Instant.parse("2026-11-21T12:00:00Z"))
+        val server = game("server", played = "2026-11-20T12:00:00Z")
+        val stale = Game(
+            LibraryGame("stale", "stale", title = "stale", console = "nes", lastPlayedAt = "2026-11-22T12:00:00Z"),
+            null,
+            localPlayed = Instant.parse("2026-11-01T12:00:00Z"),
+        )
+        assertEquals(Instant.parse("2026-11-22T12:00:00Z"), stale.lastPlayed)
+        val recent = homeColumns(listOf(server, local, stale), AppSettings()).first()
+        assertEquals("recent", recent.key)
+        assertEquals(listOf("stale", "local", "server"), recent.games.map { it.id })
     }
 
     @Test
@@ -63,7 +90,7 @@ class HomeItemsTest {
         val games = (0..25).map { game("game-$it") }
         val settings = AppSettings(homePins = listOf("game-25", folder.key, "game-2"), homeFolders = listOf(folder))
         val entries = homeColumns(games, settings)
-        assertEquals(listOf("catalogue", "favorites", "console:nes"), entries.map { it.key })
+        assertEquals(listOf("catalogue", "console:nes"), entries.map { it.key })
         assertEquals(entries.size, entries.distinctBy { it.key }.size)
     }
 
@@ -73,7 +100,7 @@ class HomeItemsTest {
         val settings = AppSettings(homeFolders = listOf(folder), homePins = listOf(folder.key))
         assertEquals(settings, ApiJson.decodeFromString(AppSettings.serializer(), ApiJson.encodeToString(AppSettings.serializer(), settings)))
         assertTrue(ApiJson.decodeFromString(AppSettings.serializer(), "{}").homeFolders.isEmpty())
-        assertEquals(listOf("catalogue", "favorites"), homeColumns(emptyList(), settings).map { it.key })
+        assertEquals(listOf("catalogue"), homeColumns(emptyList(), settings).map { it.key })
     }
 
     @Test

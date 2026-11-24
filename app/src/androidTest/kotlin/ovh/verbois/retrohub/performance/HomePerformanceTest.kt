@@ -40,12 +40,12 @@ import ovh.verbois.retrohub.data.GameEntity
 import ovh.verbois.retrohub.data.LocalRomEntity
 import ovh.verbois.retrohub.emulation.AppSettings
 import ovh.verbois.retrohub.library.Game
+import ovh.verbois.retrohub.ui.AppShell
+import ovh.verbois.retrohub.ui.HomeScreen
 import ovh.verbois.retrohub.ui.UiController
 import ovh.verbois.retrohub.ui.components.AnimatedBackground
-import ovh.verbois.retrohub.ui.home.HomeScreen
 import ovh.verbois.retrohub.ui.home.homeColumns
 import ovh.verbois.retrohub.ui.nav.Route
-import ovh.verbois.retrohub.ui.shell.ConsoleShell
 import ovh.verbois.retrohub.ui.theme.RetroHubTheme
 import ovh.verbois.retrohub.ui.theme.consoleColor
 import java.io.File
@@ -165,7 +165,7 @@ class HomePerformanceTest {
                                 reducedMotion = reduced,
                                 paused = controller.homeMoving,
                             )
-                            ConsoleShell(
+                            AppShell(
                                 controller,
                                 Account("https://example.invalid", userId = "test", username = "Test", deviceId = "test", deviceName = "Test"),
                             ) { route ->

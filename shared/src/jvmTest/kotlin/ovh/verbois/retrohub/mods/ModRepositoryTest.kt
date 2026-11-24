@@ -163,6 +163,32 @@ class ModRepositoryTest {
     }
 
     @Test
+    fun extendedHeaderIsWrittenBesideExefsAndLeavesWithItsMod() = runTest {
+        val (release, bytes) = zipReleaseFiles(fs, "single-screen", ModPlanner.EXEFS, listOf("code.ips", "exheader.bin"))
+        install(release, bytes, "mod-context")
+        val runtime = repository.runtime(modGame, modEnvironment, false)
+        // The launcher gives each gameplay profile its own runtime folder, like apply() and uninstall().
+        val profileRoot = "/app/core-saves/owner/3ds".toPath() / sha256("mod-context".encodeToByteArray()) / modEnvironment.romSha /
+            "mod-profiles" / runtime.plan.fingerprint!!
+        repository.prepare(runtime, profileRoot)
+        val mods = profileRoot / "Azahar/load/mods/0004000000033600"
+        assertTrue(fs.exists(mods / "exefs/code.ips"))
+        assertTrue(fs.exists(mods / "exheader.bin"))
+        assertFalse(fs.exists(mods / "exefs/exheader.bin"))
+        // Disabled: the original game's load tree has no mod file at all.
+        repository.apply(modGame, emptyList(), false)
+        val vanilla = repository.runtime(modGame, modEnvironment, false)
+        val originalRoot = "/app/core-saves/owner/3ds/original".toPath()
+        repository.prepare(vanilla, originalRoot)
+        assertFalse(fs.exists(originalRoot / "Azahar/load/mods/0004000000033600/exheader.bin"))
+        assertFalse(fs.exists(originalRoot / "Azahar/load/mods/0004000000033600/exefs"))
+        // Uninstalled: the profile's load tree, header included, is removed.
+        repository.uninstall(modGame, release.selection)
+        assertFalse(fs.exists(mods / "exheader.bin"))
+        assertFalse(fs.exists(profileRoot / "Azahar/load"))
+    }
+
+    @Test
     fun maliciousServerCannotShareOriginalProgressWithGameplay() = runTest {
         val (release, bytes) = zipRelease(fs, "camera", ModPlanner.EXEFS, "code.ips")
         assertFailsWith<ModProblem> { install(release, bytes, "base") }

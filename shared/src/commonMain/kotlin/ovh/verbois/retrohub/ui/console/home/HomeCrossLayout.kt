@@ -1,4 +1,4 @@
-package ovh.verbois.retrohub.ui.home
+package ovh.verbois.retrohub.ui.console.home
 
 import kotlin.math.ceil
 

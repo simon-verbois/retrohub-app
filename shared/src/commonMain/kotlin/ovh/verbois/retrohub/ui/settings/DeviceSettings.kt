@@ -84,10 +84,10 @@ import ovh.verbois.retrohub.ui.components.SectionLabel
 import ovh.verbois.retrohub.ui.components.SettingRow
 import ovh.verbois.retrohub.ui.components.SettingsGroup
 import ovh.verbois.retrohub.ui.components.SliderRow
+import ovh.verbois.retrohub.ui.components.StorageSummary
 import ovh.verbois.retrohub.ui.components.SwitchRow
 import ovh.verbois.retrohub.ui.components.TouchPresetSelector
 import ovh.verbois.retrohub.ui.icons.Lucide
-import ovh.verbois.retrohub.ui.library.StorageSummary
 import ovh.verbois.retrohub.ui.nav.Section
 import ovh.verbois.retrohub.ui.theme.Palette
 
@@ -157,7 +157,7 @@ internal fun DisplayPage(controller: UiController) {
         GroupDivider()
         ChoiceRow("Orientation en jeu", Orientation.entries, settings.orientation, { it.label }, { v ->
             repo.update { it.copy(orientation = v) }
-        }, null, Lucide.Smartphone, recommended = Orientation.AUTO)
+        }, null, Lucide.RotateCw, recommended = Orientation.AUTO)
         GroupDivider()
         ChoiceRow("Image en portrait", PortraitPosition.entries, settings.portraitPosition, { it.label }, { v ->
             repo.update { it.copy(portraitPosition = v) }

@@ -102,9 +102,10 @@ class MainActivity : ComponentActivity() {
                 handleLaunchIntent()
             }
         }
-        // Notifications (téléchargements, conflits) : demandées une fois la configuration faite.
+        // Notifications serve downloads first: ask when the first download starts, with that context.
         lifecycleScope.launch {
             container.settings.settings.first { it.setupDone }
+            container.downloads.states.first { states -> states.values.any { it is ovh.verbois.retrohub.library.DownloadState.Running } }
             if (android.os.Build.VERSION.SDK_INT >= 33 &&
                 checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED
             ) {

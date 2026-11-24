@@ -12,6 +12,7 @@ import androidx.compose.ui.test.assertIsNotSelected
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.longClick
@@ -95,44 +96,42 @@ class EndToEndTest {
         waitUntil(30_000, "jeu dans le catalogue") { container.library.games.value.any { it.title == title } }
         waitHome()
         screenshot("home-landscape")
-        waitText("Aucun favori")
+        // Nothing played yet and no favorite: the home opens on the catalogue, then the consoles.
+        waitFocusedTag("home-catalogue-action")
+        rule.onNodeWithTag("home-category-favorites").assertDoesNotExist()
+        rule.onNodeWithTag("home-category-recent").assertDoesNotExist()
         pad(KeyEvent.KEYCODE_BUTTON_R1)
         rule.onNodeWithTag("home-game-$gameId").assertIsFocused()
         pad(KeyEvent.KEYCODE_BUTTON_R1)
         rule.onNodeWithTag("home-game-$gameId").assertIsFocused()
         rule.onNodeWithTag("home-category-downloads").assertDoesNotExist()
         pad(KeyEvent.KEYCODE_BUTTON_L1)
-        rule.onNodeWithTag("home-category-favorites").assertIsFocused()
-        pad(KeyEvent.KEYCODE_BUTTON_L1)
         rule.onNodeWithTag("home-catalogue-action").assertIsFocused()
         pad(KeyEvent.KEYCODE_BUTTON_L1)
         rule.onNodeWithTag("home-catalogue-action").assertIsFocused()
         pad(KeyEvent.KEYCODE_BUTTON_A)
         rule.onNodeWithTag("home-overlay").assertIsDisplayed()
-        waitFocused("Filtres")
-        rule.onNodeWithTag("header-search-field").assertDoesNotExist()
-        pad(KeyEvent.KEYCODE_BUTTON_A)
-        waitFocused("Console")
-        pad(KeyEvent.KEYCODE_BUTTON_A)
+        rule.onNodeWithTag("catalogue").assertIsDisplayed()
+        // Start opens the filters panel; B closes it.
+        pad(KeyEvent.KEYCODE_BUTTON_START)
+        rule.onNodeWithTag("catalogue-filter-sheet").assertIsDisplayed()
+        waitFocused("Derniers ajouts")
         pad(KeyEvent.KEYCODE_BUTTON_B)
-        waitFocused("Console")
-        pad(KeyEvent.KEYCODE_BUTTON_B)
-        waitFocused("Filtres")
-        waitText("Chercher dans le catalogue")
-        rule.onNode(hasSetTextAction()).performTextInput(title)
-        rule.onNode(hasSetTextAction()).performImeAction()
+        waitGoneTag("catalogue-filter-sheet")
+        // Y types in the catalogue search.
+        pad(KeyEvent.KEYCODE_BUTTON_Y)
+        typeInto("catalogue-search", title, open = false)
+        rule.onNodeWithTag("catalogue-search").performImeAction()
         rule.waitUntil(15_000) { rule.onAllNodesWithTag("catalogue-game-$gameId").fetchSemanticsNodes().isNotEmpty() }
         screenshot("catalogue-landscape")
         rule.onNodeWithTag("catalogue-game-$gameId").performClick()
-        waitText("Télécharger sur le téléphone")
+        rule.waitUntil(15_000) { rule.onAllNodesWithTag("console-game").fetchSemanticsNodes().isNotEmpty() }
+        waitText("Télécharger ·", substring = true)
         screenshot("catalogue-game-landscape")
-        click("Télécharger sur le téléphone")
-        waitText("Télécharger cette version ?")
-        click("Annuler")
         assertTrue(container.downloads.states.value[gameId] == null)
-        device.pressBack()
-        waitText("Chercher dans le catalogue")
-        device.pressBack()
+        pad(KeyEvent.KEYCODE_BUTTON_B)
+        rule.waitUntil(5_000) { rule.onAllNodesWithTag("catalogue").fetchSemanticsNodes().isNotEmpty() }
+        pad(KeyEvent.KEYCODE_BUTTON_B)
         waitHome()
         rule.onNodeWithTag("home-category-console:nes").performClick()
 
@@ -152,58 +151,50 @@ class EndToEndTest {
             container.library.games.value.any { it.title == liveTitle }
         }
         if (liveEvents) assertTrue(container.foregroundLibrary.streaming.value)
-        pad(KeyEvent.KEYCODE_BUTTON_L1)
-        waitText("Aucun favori")
-        pad(KeyEvent.KEYCODE_BUTTON_R1)
+        rule.runOnIdle { } // let the new game reach the home
         rule.onNodeWithTag("home-content").assertIsDisplayed()
         screenshot("library-landscape")
-        // Recherche (bouton Y) : le jeu du test, quel que soit le contenu de la bibliothèque.
+        // Recherche (bouton Y) : plein écran, le jeu du test quel que soit le contenu de la bibliothèque.
         pad(KeyEvent.KEYCODE_BUTTON_Y)
-        val search = rule.onNode(hasSetTextAction())
-        search.performTextInput(title)
-        waitText(title)
-        rule.onAllNodesWithText(title, useUnmergedTree = true).fetchSemanticsNodes()
+        typeInto("header-search-field", title, open = false)
         rule.waitUntil(10_000) { rule.onAllNodesWithTag("search-result-$gameId").fetchSemanticsNodes().isNotEmpty() }
         screenshot("search-dropdown-landscape")
-        pad(KeyEvent.KEYCODE_DPAD_DOWN)
-        rule.onNodeWithTag("search-result-$gameId").assertIsFocused()
+        rule.onNodeWithTag("header-search-field").performImeAction()
+        waitFocusedTag("search-result-$gameId")
         pad(KeyEvent.KEYCODE_BUTTON_B)
-        rule.onNodeWithTag("header-search-field").assertDoesNotExist()
-        rule.onNodeWithTag("home-game-$gameId").assertIsFocused()
+        waitGoneTag("console-search")
         pad(KeyEvent.KEYCODE_BUTTON_Y)
-        rule.onNode(hasSetTextAction()).performTextInput(title)
+        typeInto("header-search-field", title, open = false)
         rule.waitUntil(10_000) { rule.onAllNodesWithTag("search-result-$gameId").fetchSemanticsNodes().isNotEmpty() }
-        search.performImeAction()
-        rule.onNodeWithTag("header-search-field").assertIsDisplayed()
-        rule.onNodeWithTag("search-result-$gameId").performClick()
+        rule.onNodeWithTag("header-search-field").performImeAction()
+        waitFocusedTag("search-result-$gameId")
+        pad(KeyEvent.KEYCODE_BUTTON_A)
 
-        // Le jeu est choisi sur l’accueil ; toucher sa tuile lance l’action : ici le téléchargement,
-        // vérifié par son SHA-256.
+        // A result opens the game page; its main action downloads the game, checked by SHA-256.
+        rule.waitUntil(15_000) { rule.onAllNodesWithTag("console-game").fetchSemanticsNodes().isNotEmpty() }
         waitText("Télécharger ·", substring = true)
-        rule.onNodeWithTag("home-game-$gameId").performClick()
-        waitText("Télécharger ce jeu ?")
-        click("Annuler")
-        assertTrue(container.downloads.states.value[gameId] == null)
-        rule.onNodeWithTag("home-game-$gameId").performClick()
-        click("Télécharger")
+        rule.onNodeWithTag("game-primary-action").performClick()
         waitUntil(60_000, "jeu téléchargé") { runBlocking { container.database.roms().find(gameId) } != null }
         val local = runBlocking { container.database.roms().find(gameId) }!!
         val expected = backend.game(gameId)["rom"]!!.jsonObject["sha256"]!!.jsonPrimitive.content
         assertEquals(expected, Backend.sha256(File(local.path).readBytes()))
         assertEquals(Backend.sha256(rom), expected)
-        rule.onNodeWithTag("home-game-$gameId").performTouchInput { longClick() }
         click("Ajouter aux favoris")
         waitUntil(10_000, "favori enregistré") { backend.game(gameId)["favorite"]!!.jsonPrimitive.content == "true" }
-        rule.onNodeWithTag("home-favorite").assertDoesNotExist()
+        pad(KeyEvent.KEYCODE_BUTTON_B)
+        waitHome()
+        // With a favorite, the Favoris column appears.
+        rule.waitUntil(10_000) { rule.onAllNodesWithTag("home-category-favorites").fetchSemanticsNodes().isNotEmpty() }
         rule.onNodeWithTag("home-category-favorites").performClick()
         rule.onNodeWithTag("home-game-$gameId").assertIsDisplayed()
+        rule.onNodeWithTag("home-favorite-$gameId", useUnmergedTree = true).assertExists()
+        rule.onNodeWithTag("home-game-$gameId").performSemanticsAction(SemanticsActions.RequestFocus) { it() }
         pad(KeyEvent.KEYCODE_BUTTON_START)
         click("Retirer des favoris")
         waitUntil(10_000, "favori retiré") { backend.game(gameId)["favorite"]!!.jsonPrimitive.content == "false" }
-        waitText("Aucun favori")
-        // The server update can arrive while the modal is still animating out.
+        rule.waitUntil(10_000) { rule.onAllNodesWithTag("home-category-favorites").fetchSemanticsNodes().isEmpty() }
+        // The server update can arrive while the panel is still animating out.
         rule.waitUntil(5_000) { rule.activity.hasWindowFocus() }
-        pad(KeyEvent.KEYCODE_BUTTON_R1)
         rule.onNodeWithTag("home-game-$gameId").assertIsDisplayed()
         screenshot("downloads-landscape")
         rule.onNodeWithTag("home-game-$gameId").performSemanticsAction(SemanticsActions.RequestFocus) { it() }
@@ -212,21 +203,22 @@ class EndToEndTest {
         pad(KeyEvent.KEYCODE_BUTTON_A)
         waitFocused("Annuler")
         pad(KeyEvent.KEYCODE_BUTTON_B)
-        rule.onNodeWithTag("home-game-$gameId").assertIsFocused()
+        waitFocusedTag("home-game-$gameId")
         screenshot("selected-landscape")
         pad(KeyEvent.KEYCODE_BUTTON_SELECT)
-        waitText("Options du jeu")
+        waitText("Fiche du jeu")
         rule.onNodeWithTag("home-overlay").assertDoesNotExist()
         pad(KeyEvent.KEYCODE_BUTTON_B)
+        waitGoneTag("xmb-options-panel")
         rule.onNodeWithTag("header-profile-button").performClick()
-        click("Paramètres")
-        waitFocused("Retour")
-        waitText("Paramètres")
+        rule.onNodeWithTag("control-settings").performClick()
+        rule.waitUntil(10_000) { rule.onAllNodesWithTag("console-settings").fetchSemanticsNodes().isNotEmpty() }
+        waitFocusedTag("settings-section-account")
         pad(KeyEvent.KEYCODE_BUTTON_B)
-        waitText("Jouer")
+        waitHome()
         instrumentation.setInTouchMode(true)
         rule.onNodeWithTag("header-profile-button").performClick()
-        waitText("Paramètres")
+        rule.onNodeWithTag("profile-menu").assertIsDisplayed()
         screenshot("profile-menu-landscape")
         val originalTheme = container.settings.settings.value.theme
         for (mode in listOf(ThemeMode.LIGHT, ThemeMode.DARK)) {
@@ -237,12 +229,13 @@ class EndToEndTest {
         runBlocking { container.settings.updateNow { it.copy(theme = originalTheme) } }
         rule.waitForIdle()
         pad(KeyEvent.KEYCODE_BUTTON_B)
-        waitGone("Mon compte")
+        waitGoneTag("profile-menu")
         instrumentation.setInTouchMode(false)
-        waitFocused("Jouer")
+        rule.onNodeWithTag("home-game-$gameId").performSemanticsAction(SemanticsActions.RequestFocus) { it() }
+        waitFocusedTag("home-game-$gameId")
         device.waitForIdle()
         pad(KeyEvent.KEYCODE_BUTTON_START)
-        click("Options du jeu")
+        click("Fiche du jeu")
         waitText("Rotation de l’image")
         screenshot("game-options-landscape")
         device.setOrientationNatural()
@@ -290,17 +283,17 @@ class EndToEndTest {
         instrumentation.sendKeySync(KeyEvent(0, 0, KeyEvent.ACTION_UP, KeyEvent.KEYCODE_BUTTON_A, 0, 0, 0, 0, 0, InputDevice.SOURCE_GAMEPAD))
         rule.onNodeWithTag("touch-key-b").assertIsNotSelected()
         pad(KeyEvent.KEYCODE_BUTTON_MODE)
-        waitFocused("Reprendre")
+        waitFocused("Touches de la console")
         focusDownTo("Image et écrans")
         pad(KeyEvent.KEYCODE_BUTTON_A)
         waitFocused("Retour")
         pad(KeyEvent.KEYCODE_BUTTON_B)
-        waitFocused("Reprendre")
+        waitFocused("Image et écrans")
         focusDownTo("Options de l’émulateur")
         pad(KeyEvent.KEYCODE_BUTTON_A)
         waitFocused("Retour")
         pad(KeyEvent.KEYCODE_BUTTON_B)
-        waitFocused("Reprendre")
+        waitFocused("Options de l’émulateur")
         pad(KeyEvent.KEYCODE_BUTTON_B)
         waitFrames((GameActivity.current?.get()?.frames?.value ?: 0) + 10)
         val gameIntent = android.content.Intent(GameActivity.current!!.get()!!.intent)
@@ -416,9 +409,8 @@ class EndToEndTest {
         device.setOrientationLandscape()
         rule.waitForIdle()
         Thread.sleep(350)
-        val address = rule.onNode(hasSetTextAction() and hasText("Adresse du serveur"))
-        address.performTextInput(serverUrl)
-        address.performImeAction()
+        typeInto("server-field", serverUrl)
+        rule.onNodeWithTag("server-field").performImeAction()
         waitText("Relier ce téléphone")
         // Denial leaves manual entry available; then exercise the registered camera-result flow.
         click("Scanner un code QR")
@@ -446,9 +438,8 @@ class EndToEndTest {
         } finally {
             instrumentation.removeMonitor(monitor)
         }
-        val name = rule.onNode(hasSetTextAction() and hasText("Nom de cet appareil"))
-        name.performTextClearance()
-        name.performTextInput(deviceName)
+        typeInto("device-name-field", deviceName, clear = true)
+        rule.onNodeWithTag("device-name-field").performImeAction()
         click("Relier cet appareil")
     }
 
@@ -484,14 +475,16 @@ class EndToEndTest {
     private fun checkSettingsAndBackGesture() {
         waitHome()
         rule.onNodeWithTag("header-profile-button").performClick()
-        click("Paramètres")
-        click("Réglages des consoles")
+        rule.onNodeWithTag("control-settings").performClick()
+        rule.waitUntil(10_000) { rule.onAllNodesWithTag("console-settings").fetchSemanticsNodes().isNotEmpty() }
+        rule.onNodeWithTag("settings-section-consoles").performScrollTo().performClick()
         click("Nintendo DS")
         device.setOrientationNatural()
         screenshot("settings-ds-portrait")
         shell("cmd overlay enable-exclusive --category com.android.internal.systemui.navbar.gestural")
-        Thread.sleep(500)
-        immersiveBackGesture("Consoles")
+        // After a rotation, the system only accepts edge gestures once its navigation insets settle.
+        Thread.sleep(6_000)
+        // In landscape the sections live in one page: back from the console lands on the settings.
         immersiveBackGesture("Paramètres")
         click("Apparence")
         click("Thème")
@@ -519,7 +512,8 @@ class EndToEndTest {
         val target = catalogue["avatars"]!!.jsonArray.map { it.jsonObject }.first { it["id"]!!.jsonPrimitive.content != defaultId }
         val targetId = target["id"]!!.jsonPrimitive.content
         rule.onNodeWithTag("header-profile-button").performClick()
-        click("Mon compte")
+        rule.onNodeWithTag("control-account").performClick()
+        click("Ouvrir le compte")
         click("Photo de profil")
         waitText("Par défaut")
         rule.onNodeWithTag("account-avatar-$targetId").performScrollTo().performClick()
@@ -535,8 +529,7 @@ class EndToEndTest {
         rule.waitUntil(10_000) { container.account.account?.avatar?.id == defaultId }
         waitGone("Enregistrer")
         assertEquals(defaultId, backend.accountAvatar()["id"]!!.jsonPrimitive.content)
-        pad(KeyEvent.KEYCODE_BUTTON_B)
-        rule.onNodeWithTag("home-content").assertIsDisplayed()
+        closePages()
     }
 
     private fun waitPauseLayout(portrait: Boolean) {
@@ -583,7 +576,7 @@ class EndToEndTest {
             pad(KeyEvent.KEYCODE_BUTTON_A)
             rule.waitUntil(5_000) { container.settings.settings.value.console("nes").touchPreset == preset }
             pad(KeyEvent.KEYCODE_BUTTON_B)
-            waitFocused("Reprendre")
+            waitFocused("Image et écrans")
             pad(KeyEvent.KEYCODE_BUTTON_B)
             waitFrames((GameActivity.current?.get()?.frames?.value ?: 0) + 10)
             val dock = rule.onNodeWithTag("game-utility-dock", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
@@ -649,8 +642,8 @@ class EndToEndTest {
     }
 
     private fun immersiveBackGesture(expected: String) {
-        // Android can consume the first edge swipe to reveal transient system bars.
-        repeat(3) {
+        // Android can consume the first edge swipes to reveal transient system bars.
+        repeat(8) {
             device.swipe(1, device.displayHeight / 2, device.displayWidth / 3, device.displayHeight / 2, 25)
             try {
                 rule.waitUntil(1500) { rule.onAllNodesWithText(expected).fetchSemanticsNodes().isNotEmpty() }
@@ -660,13 +653,60 @@ class EndToEndTest {
         waitText(expected)
     }
 
+    /** Console text fields: A (here a tap) starts typing, then the field takes the text. */
+    private fun typeInto(tag: String, text: String, clear: Boolean = false, open: Boolean = true) {
+        try {
+            rule.waitUntil(15_000) { rule.onAllNodesWithTag(tag, useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty() }
+        } catch (error: Throwable) {
+            screenshot("echec-champ")
+            val texts = runCatching {
+                rule.onAllNodes(SemanticsMatcher("any") { true }, useUnmergedTree = true).fetchSemanticsNodes()
+                    .mapNotNull { node ->
+                        node.config.getOrElseNullable(SemanticsProperties.TestTag) { null }
+                            ?: node.config.getOrElseNullable(SemanticsProperties.Text) { null }?.joinToString()
+                    }
+            }.getOrDefault(emptyList())
+            throw AssertionError("Champ absent : $tag. À l’écran : $texts", error)
+        }
+        if (open) rule.onNodeWithTag(tag).performScrollTo().performClick()
+        rule.waitUntil(5_000) { rule.onAllNodes(hasTestTag(tag) and hasSetTextAction()).fetchSemanticsNodes().isNotEmpty() }
+        val field = rule.onNode(hasTestTag(tag) and hasSetTextAction())
+        if (clear) field.performTextClearance()
+        field.performTextInput(text)
+    }
+
+    private fun waitFocusedTag(tag: String) {
+        try {
+            rule.waitUntil(5_000) {
+                runCatching { rule.onNodeWithTag(tag, useUnmergedTree = true).fetchSemanticsNode().config[SemanticsProperties.Focused] }.getOrDefault(false)
+            }
+        } catch (error: Throwable) {
+            screenshot("echec-focus")
+            throw AssertionError("Focus absent : $tag", error)
+        }
+    }
+
+    private fun waitGoneTag(tag: String) = rule.waitUntil(15_000) { rule.onAllNodesWithTag(tag).fetchSemanticsNodes().isEmpty() }
+
     private fun waitGone(text: String, substring: Boolean = false) = rule.waitUntil(15_000) {
         rule.onAllNodesWithText(text, substring = substring, useUnmergedTree = true).fetchSemanticsNodes().isEmpty()
     }
 
+    /** B until no page covers the home (a settings section takes two: section, then page). */
+    private fun closePages() {
+        repeat(4) {
+            if (rule.onAllNodesWithTag("home-overlay").fetchSemanticsNodes().isEmpty()) return@repeat
+            pad(KeyEvent.KEYCODE_BUTTON_B)
+            rule.waitForIdle()
+        }
+        waitHome()
+    }
+
     private fun waitHome(console: Boolean = true) {
         rule.waitUntil(15_000) {
-            rule.onAllNodesWithTag("home-content", useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty() &&
+            // The home stays composed under pages: it is only « back » once no page covers it.
+            rule.onAllNodesWithTag("home-overlay").fetchSemanticsNodes().isEmpty() &&
+                rule.onAllNodesWithTag("home-content", useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty() &&
                 rule.onAllNodesWithTag("home-categories").fetchSemanticsNodes().isNotEmpty() == console
         }
     }

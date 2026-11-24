@@ -7,6 +7,7 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -208,7 +209,7 @@ fun GameScreen(
     }
     LaunchedEffect(backRequests) { backRequests.collect { handleBack() } }
     BoxWithConstraints(
-        Modifier.fillMaxSize().background(Color.Black).onKeyEvent { event ->
+        Modifier.fillMaxSize().background(Palette.Deep).onKeyEvent { event ->
             if (ui.paused && event.key in listOf(Key.ButtonB, Key.Escape)) {
                 if (event.type == KeyEventType.KeyUp) handleBack()
                 true
@@ -218,6 +219,7 @@ fun GameScreen(
         }.then(if (!plan.useDisplayCutout) Modifier.windowInsetsPadding(WindowInsets.displayCutout) else Modifier),
     ) {
         val density = LocalDensity.current
+        val touchDensity = ovh.verbois.retrohub.ui.components.LocalBaseDensity.current ?: density
         val portrait = maxHeight > maxWidth
         val dsLayout = if (portrait) dsPortrait else dsLandscape
         val aspect = rotation.aspect(if (spec.dualScreen) GameLayouts.dsAspect(dsLayout, spec.id, plan.dsSwapScreens) else plan.displayAspect ?: spec.aspect)
@@ -231,7 +233,8 @@ fun GameScreen(
                     showTouch || editing,
                     native = if (plan.integerScale) Consoles.nativeSize(plan.console, if (spec.dualScreen) dsLayout else null)?.let(rotation::native) else null,
                     portraitCentered = plan.portraitPosition == PortraitPosition.CENTER,
-                    controlsUnit = (48.dp * plan.touchScale).toPx(),
+                    // Touch controls keep the real screen density, even when the console menus shrink.
+                    controlsUnit = with(touchDensity) { (48.dp * plan.touchScale).toPx() },
                     portraitControlRows = if (pad.leftStick && pad.dpad) 6.6f else 5.5f,
                     preset = touchPreset,
                 )
@@ -301,66 +304,68 @@ fun GameScreen(
             }
         }
         key(touchPreset, portrait, dsLayout) {
-            if (editing) {
-                TouchControls(
-                    padSpec(spec.pad).let { if (plan.analog) it.copy(leftStick = true) else it },
-                    layout.controls,
-                    maxOf(plan.touchOpacity, 0.8f),
-                    plan.touchScale,
-                    onKey = { _, _ -> },
-                    onStick = { _, _, _ -> },
-                    onScreenTouch = {},
-                    onHaptic = {},
-                    modifier = controlsModifier,
-                    gameBottom = safeGameBottom,
-                    gameLeft = safeGameLeft,
-                    layout = groupLayout,
-                    editing = true,
-                    onLayout = { id, place -> touchLayout = touchLayout + (id + suffix to place) },
-                )
-                TouchEditorBar(
-                    Modifier.align(Alignment.TopCenter).windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top)).padding(top = 8.dp),
-                    onReset = {
-                        touchLayout =
-                            touchLayout.filterKeys {
-                                !it.endsWith(suffix) &&
-                                    !(touchPreset == TouchPreset.COMFORT && it.endsWith(orientationSuffix) && it.count { char -> char == '@' } == 1)
+            androidx.compose.runtime.CompositionLocalProvider(LocalDensity provides touchDensity) {
+                if (editing) {
+                    TouchControls(
+                        padSpec(spec.pad).let { if (plan.analog) it.copy(leftStick = true) else it },
+                        layout.controls,
+                        maxOf(plan.touchOpacity, 0.8f),
+                        plan.touchScale,
+                        onKey = { _, _ -> },
+                        onStick = { _, _, _ -> },
+                        onScreenTouch = {},
+                        onHaptic = {},
+                        modifier = controlsModifier,
+                        gameBottom = safeGameBottom,
+                        gameLeft = safeGameLeft,
+                        layout = groupLayout,
+                        editing = true,
+                        onLayout = { id, place -> touchLayout = touchLayout + (id + suffix to place) },
+                    )
+                    TouchEditorBar(
+                        Modifier.align(Alignment.TopCenter).windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top)).padding(top = 8.dp),
+                        onReset = {
+                            touchLayout =
+                                touchLayout.filterKeys {
+                                    !it.endsWith(suffix) &&
+                                        !(touchPreset == TouchPreset.COMFORT && it.endsWith(orientationSuffix) && it.count { char -> char == '@' } == 1)
+                                }
+                        },
+                        onDone = {
+                            editing = false
+                            val saved = touchLayout
+                            onConsoleSettings { it.copy(touchLayout = saved) }
+                            session.resume()
+                        },
+                    )
+                } else if (showTouch && !ui.paused) {
+                    TouchControls(
+                        padSpec(spec.pad).let { if (plan.analog) it.copy(leftStick = true) else it },
+                        layout.controls,
+                        plan.touchOpacity,
+                        plan.touchScale,
+                        onKey = { key, down -> router.key(key, down) },
+                        onStick = { stick, x, y -> router.stick(stick, x, y) },
+                        onScreenTouch = { point ->
+                            val x = point?.x?.plus(controlsLeft)
+                            val y = point?.y?.plus(controlsTop)
+                            val game = layout.game
+                            if (x == null || y == null || x < game.left * screenWidth || x > game.right * screenWidth || y < game.top * screenHeight ||
+                                y > game.bottom * screenHeight
+                            ) {
+                                engine.touch(null, null)
+                            } else {
+                                val (u, v) = rotation.unrotate((x / screenWidth - game.left) / game.width, (y / screenHeight - game.top) / game.height)
+                                engine.touch((game.left + u * game.width) * screenWidth, (game.top + v * game.height) * screenHeight)
                             }
-                    },
-                    onDone = {
-                        editing = false
-                        val saved = touchLayout
-                        onConsoleSettings { it.copy(touchLayout = saved) }
-                        session.resume()
-                    },
-                )
-            } else if (showTouch && !ui.paused) {
-                TouchControls(
-                    padSpec(spec.pad).let { if (plan.analog) it.copy(leftStick = true) else it },
-                    layout.controls,
-                    plan.touchOpacity,
-                    plan.touchScale,
-                    onKey = { key, down -> router.key(key, down) },
-                    onStick = { stick, x, y -> router.stick(stick, x, y) },
-                    onScreenTouch = { point ->
-                        val x = point?.x?.plus(controlsLeft)
-                        val y = point?.y?.plus(controlsTop)
-                        val game = layout.game
-                        if (x == null || y == null || x < game.left * screenWidth || x > game.right * screenWidth || y < game.top * screenHeight ||
-                            y > game.bottom * screenHeight
-                        ) {
-                            engine.touch(null, null)
-                        } else {
-                            val (u, v) = rotation.unrotate((x / screenWidth - game.left) / game.width, (y / screenHeight - game.top) / game.height)
-                            engine.touch((game.left + u * game.width) * screenWidth, (game.top + v * game.height) * screenHeight)
-                        }
-                    },
-                    onHaptic = { if (plan.haptics) haptic() },
-                    modifier = controlsModifier,
-                    gameBottom = safeGameBottom,
-                    gameLeft = safeGameLeft,
-                    layout = groupLayout,
-                )
+                        },
+                        onHaptic = { if (plan.haptics) haptic() },
+                        modifier = controlsModifier,
+                        gameBottom = safeGameBottom,
+                        gameLeft = safeGameLeft,
+                        layout = groupLayout,
+                    )
+                }
             }
         }
         if (!ui.paused && !editing) {
@@ -405,95 +410,103 @@ fun GameScreen(
                 }
             }
         }
-        AnimatedVisibility(
-            ui.paused && !editing && !ui.failed,
-            enter = fadeIn() + slideInHorizontally { -it / 6 },
-            exit =
-            fadeOut() + slideOutHorizontally { -it / 6 },
-        ) {
-            PauseMenu(
-                session,
-                physicalInput,
-                ui.fastForward,
-                ui.slots,
-                page,
-                { page = it },
-                dualScreen = spec.dualScreen,
-                dsLayout = dsLayout,
-                onDsLayout = { if (portrait) dsPortrait = it else dsLandscape = it },
-                rotation = rotation,
-                touchPreset = touchPreset,
-                onTouchPreset = { value ->
-                    touchPreset = value
-                    onConsoleSettings { it.copy(touchPreset = value) }
-                },
-                onRotation = { value ->
-                    rotation = value
-                    onRotation(value)
-                },
-                onReset = { confirmReset = true },
-                onSaveSlot = { slot ->
-                    if (plan.confirmOverwrite && !slot.empty) {
-                        overwrite = slot.slot
-                    } else {
-                        scope.launch { if (session.saveState(slot.slot)) session.resume() }
-                    }
-                },
-                onEditControls = if (showTouch) ({ editing = true }) else null,
-                cheats = cheats,
-                onCheats = { updated ->
-                    cheats = updated
-                    session.applyCheats(updated)
-                    onCheats(updated)
-                },
-                engine = engine,
-                onOption = { key, value ->
-                    engine.setOptions(mapOf(key to value))
-                    onConsoleSettings { it.copy(optionsByCore = it.optionsByCore + (plan.core to (it.optionsByCore[plan.core].orEmpty() + (key to value)))) }
-                },
-                onQuit = { confirmQuit = true },
-                onReport = onReport,
-            )
-        }
-        if (ui.failed) GameFailurePanel(ui.message, onQuit, onReport)
-        overwrite?.takeIf { !ui.failed }?.let { slot ->
-            ConfirmDialog(
-                "Remplacer l’emplacement $slot ?",
-                "La partie de cet emplacement sera remplacée.",
-                "Remplacer",
-                onConfirm = {
-                    overwrite = null
-                    scope.launch { if (session.saveState(slot)) session.resume() }
-                },
-                onDismiss = { overwrite = null },
-            )
-        }
-        if (confirmQuit && !ui.failed) {
-            ConfirmDialog(
-                "Quitter la partie ?",
-                if (ui.failed) "Votre dernière sauvegarde valide est conservée." else "Votre partie est sauvegardée automatiquement.",
-                "Quitter",
-                onConfirm = {
-                    confirmQuit = false
-                    scope.launch {
-                        session.finish()
-                        onQuit()
-                    }
-                },
-                onDismiss = { confirmQuit = false },
-            )
-        }
-        if (confirmReset && !ui.failed) {
-            ConfirmDialog(
-                "Redémarrer le jeu ?",
-                "Pensez à sauvegarder avant.",
-                "Redémarrer",
-                onConfirm = {
-                    confirmReset = false
-                    scope.launch { session.reset() }
-                },
-                onDismiss = { confirmReset = false },
-            )
+        // Landscape: the menu and its confirmations take the compact console look.
+        ovh.verbois.retrohub.ui.components.ConsoleDensity(!portrait) {
+            CompositionLocalProvider(ovh.verbois.retrohub.ui.components.LocalConsoleStyle provides !portrait) {
+                AnimatedVisibility(
+                    ui.paused && !editing && !ui.failed,
+                    enter = fadeIn() + slideInHorizontally { -it / 6 },
+                    exit =
+                    fadeOut() + slideOutHorizontally { -it / 6 },
+                ) {
+                    PauseMenu(
+                        portrait,
+                        session,
+                        physicalInput,
+                        ui.fastForward,
+                        ui.slots,
+                        page,
+                        { page = it },
+                        dualScreen = spec.dualScreen,
+                        dsLayout = dsLayout,
+                        onDsLayout = { if (portrait) dsPortrait = it else dsLandscape = it },
+                        rotation = rotation,
+                        touchPreset = touchPreset,
+                        onTouchPreset = { value ->
+                            touchPreset = value
+                            onConsoleSettings { it.copy(touchPreset = value) }
+                        },
+                        onRotation = { value ->
+                            rotation = value
+                            onRotation(value)
+                        },
+                        onReset = { confirmReset = true },
+                        onSaveSlot = { slot ->
+                            if (plan.confirmOverwrite && !slot.empty) {
+                                overwrite = slot.slot
+                            } else {
+                                scope.launch { if (session.saveState(slot.slot)) session.resume() }
+                            }
+                        },
+                        onEditControls = if (showTouch) ({ editing = true }) else null,
+                        cheats = cheats,
+                        onCheats = { updated ->
+                            cheats = updated
+                            session.applyCheats(updated)
+                            onCheats(updated)
+                        },
+                        engine = engine,
+                        onOption = { key, value ->
+                            engine.setOptions(mapOf(key to value))
+                            onConsoleSettings {
+                                it.copy(optionsByCore = it.optionsByCore + (plan.core to (it.optionsByCore[plan.core].orEmpty() + (key to value))))
+                            }
+                        },
+                        onQuit = { confirmQuit = true },
+                        onReport = onReport,
+                    )
+                }
+                if (ui.failed) GameFailurePanel(ui.message, onQuit, onReport)
+                overwrite?.takeIf { !ui.failed }?.let { slot ->
+                    ConfirmDialog(
+                        "Remplacer l’emplacement $slot ?",
+                        "La partie de cet emplacement sera remplacée.",
+                        "Remplacer",
+                        onConfirm = {
+                            overwrite = null
+                            scope.launch { if (session.saveState(slot)) session.resume() }
+                        },
+                        onDismiss = { overwrite = null },
+                    )
+                }
+                if (confirmQuit && !ui.failed) {
+                    ConfirmDialog(
+                        "Quitter la partie ?",
+                        if (ui.failed) "Votre dernière sauvegarde valide est conservée." else "Votre partie est sauvegardée automatiquement.",
+                        "Quitter",
+                        onConfirm = {
+                            confirmQuit = false
+                            scope.launch {
+                                session.finish()
+                                onQuit()
+                            }
+                        },
+                        onDismiss = { confirmQuit = false },
+                    )
+                }
+                if (confirmReset && !ui.failed) {
+                    ConfirmDialog(
+                        "Redémarrer le jeu ?",
+                        "Pensez à sauvegarder avant.",
+                        "Redémarrer",
+                        onConfirm = {
+                            confirmReset = false
+                            scope.launch { session.reset() }
+                        },
+                        onDismiss = { confirmReset = false },
+                    )
+                }
+            }
         }
     }
 }
@@ -528,7 +541,9 @@ private fun InGameButtons(fastForward: Boolean, onMenu: () -> Unit, onFastForwar
 @Composable
 private fun SmallRound(icon: ImageVector, label: String, onClick: () -> Unit, active: Boolean = false) {
     Box(
-        Modifier.size(48.dp).semantics { contentDescription = label }.consoleFocus(CircleShape, onClick, focusScale = 1f),
+        // Touch only: a controller opens the menu with its own buttons, so no focus ring stays on screen.
+        Modifier.size(48.dp).semantics { contentDescription = label }.focusProperties { canFocus = false }
+            .consoleFocus(CircleShape, onClick, focusScale = 1f),
         contentAlignment = Alignment.Center,
     ) {
         if (active) Box(Modifier.size(28.dp).clip(CircleShape).background(Palette.Accent))
@@ -558,6 +573,7 @@ private fun FpsText(frames: StateFlow<Long>, modifier: Modifier) {
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun PauseMenu(
+    portrait: Boolean,
     session: GameSession,
     physicalInput: ovh.verbois.retrohub.game.ControllerInput,
     fastForward: Boolean,
@@ -583,63 +599,11 @@ private fun PauseMenu(
 ) {
     val scope = rememberCoroutineScope()
     val first = remember { FocusRequester() }
-    if (page == MenuPage.CONTROLS) {
-        Column(Modifier.fillMaxSize().background(Palette.Deep).windowInsetsPadding(WindowInsets.safeDrawing).padding(16.dp)) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                BackEntry(Modifier.focusRequester(first)) { onPage(MenuPage.MAIN) }
-                Text("Touches · ${Consoles.name(session.plan.console)}", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
-            }
-            Box(Modifier.weight(1f).fillMaxWidth().testTag("controller-inspector")) {
-                val spec = padSpec(Consoles[session.plan.console]!!.pad).let {
-                    it.copy(
-                        dpad = true,
-                        leftStick = it.leftStick || session.plan.analog,
-                        stickButtons = if (session.plan.console == "gamecube") emptyList() else it.stickButtons,
-                    )
-                }
-                TouchControls(
-                    spec, ovh.verbois.retrohub.emulation.ControlsPlacement.OVERLAY, 1f, 0.8f,
-                    onKey = { _, _ -> }, onStick = { _, _, _ -> }, onScreenTouch = {}, onHaptic = {}, physicalInput = physicalInput,
-                )
-                if (session.plan.console != "psp" && (session.plan.analog || session.plan.console == "gamecube")) {
-                    Column(
-                        Modifier.align(Alignment.Center),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        AnalogStick(56.dp, androidx.compose.ui.geometry.Offset(physicalInput.rightX, physicalInput.rightY), Modifier, "controller-right-stick")
-                        Text(if (session.plan.console == "gamecube") "Stick C" else "Stick droit", style = MaterialTheme.typography.labelSmall)
-                        if (session.plan.analog) {
-                            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                listOf(PadKey.L3 to "L3", PadKey.R3 to "R3").forEach { (key, label) ->
-                                    Box(
-                                        Modifier.size(40.dp).consoleButtonSurface(CircleShape, primary = key in physicalInput.keys),
-                                        contentAlignment = Alignment.Center,
-                                    ) {
-                                        Text(
-                                            label,
-                                            color = if (key in
-                                                physicalInput.keys
-                                            ) {
-                                                Palette.OnAccent
-                                            } else {
-                                                Palette.Text
-                                            },
-                                            style = MaterialTheme.typography.labelMedium,
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            Text("Bouton central : retour", style = MaterialTheme.typography.bodySmall, color = Palette.TextDim)
-        }
-        ovh.verbois.retrohub.ui.components.AutoFocus(first)
-        return
-    }
-    CompositionLocalProvider(ovh.verbois.retrohub.ui.components.LocalOverlayControls provides true) {
+    var lastAction by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(0) }
+    CompositionLocalProvider(
+        ovh.verbois.retrohub.ui.components.LocalOverlayControls provides true,
+        ovh.verbois.retrohub.ui.components.LocalConsoleStyle provides !portrait,
+    ) {
         BoxWithConstraints(
             Modifier.fillMaxSize().background(Palette.Scrim.copy(alpha = 0.8f))
                 .pointerInput(Unit) { detectTapGestures { session.resume() } }
@@ -662,7 +626,7 @@ private fun PauseMenu(
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     if (page != MenuPage.MAIN) {
-                        BackEntry(Modifier.focusRequester(first)) {
+                        BackEntry(Modifier) {
                             onPage(if (page in listOf(MenuPage.VIDEO, MenuPage.AUDIO, MenuPage.SYSTEM, MenuPage.ADVANCED)) MenuPage.OPTIONS else MenuPage.MAIN)
                         }
                     }
@@ -691,12 +655,15 @@ private fun PauseMenu(
                 androidx.compose.material3.HorizontalDivider(color = Palette.Line)
                 key(page) {
                     Column(
-                        Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()).padding(12.dp),
+                        Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState())
+                            // A sub-page opens on its first choice, never on the back button.
+                            .then(if (page != MenuPage.MAIN) Modifier.focusRequester(first).focusGroup() else Modifier)
+                            .padding(12.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         when (page) {
                             MenuPage.MAIN -> PauseActions(
-                                columns, session, fastForward, first, onPage, onEditControls, onReset, onReport, onQuit,
+                                columns, session, fastForward, first, lastAction, { lastAction = it }, onPage, onEditControls, onReset, onReport, onQuit,
                             )
 
                             MenuPage.SAVE, MenuPage.LOAD -> {
@@ -710,9 +677,13 @@ private fun PauseMenu(
                                     },
                                     style = MaterialTheme.typography.titleMedium,
                                 )
+                                val shownSlots = if (page == MenuPage.LOAD) slots.filter { !it.empty } else slots.filter { it.slot > 0 }
+                                if (shownSlots.isEmpty()) {
+                                    Text("Aucune partie sauvegardée.", style = MaterialTheme.typography.bodyMedium, color = Palette.TextDim)
+                                }
                                 FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                                    slots.filter { page == MenuPage.LOAD || it.slot > 0 }.forEach { slot ->
-                                        SlotCard(slot, enabled = page == MenuPage.SAVE || !slot.empty) {
+                                    shownSlots.forEach { slot ->
+                                        SlotCard(slot, enabled = true) {
                                             if (page == MenuPage.SAVE) {
                                                 onSaveSlot(slot)
                                             } else {
@@ -724,11 +695,27 @@ private fun PauseMenu(
                             }
 
                             MenuPage.CHEATS -> {
-                                if (cheats.isEmpty()) {
-                                    Text(
-                                        "Aucun code. Ajoutez-en dans les options du jeu.",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = Palette.TextDim,
+                                var adding by remember { mutableStateOf(false) }
+                                MenuEntry(Lucide.Plus, "Ajouter un code") { adding = true }
+                                if (adding) {
+                                    ovh.verbois.retrohub.ui.components.FormDialog(
+                                        "Nouveau code",
+                                        null,
+                                        listOf(
+                                            ovh.verbois.retrohub.ui.components.DialogField("Nom (facultatif)"),
+                                            ovh.verbois.retrohub.ui.components.DialogField("Code", singleLine = false),
+                                        ),
+                                        "Ajouter",
+                                        onConfirm = { (name, code) ->
+                                            if (code.isBlank()) {
+                                                "Saisissez le code."
+                                            } else {
+                                                onCheats(cheats + Cheat(name.trim(), code.trim(), true))
+                                                adding = false
+                                                null
+                                            }
+                                        },
+                                        onDismiss = { adding = false },
                                     )
                                 }
                                 cheats.forEachIndexed { index, cheat ->
@@ -742,13 +729,20 @@ private fun PauseMenu(
                                 }
                             }
 
-                            MenuPage.CONTROLS -> Unit
+                            MenuPage.CONTROLS -> {
+                                ControllerInspector(session, physicalInput)
+                                Text(
+                                    "Les boutons s’allument quand vous les pressez. Bouton Guide : retour.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = Palette.TextDim,
+                                )
+                            }
 
                             MenuPage.OPTIONS -> {
-                                MenuEntry(Lucide.Monitor, "Image") { onPage(MenuPage.SCREENS) }
-                                MenuEntry(Lucide.SlidersHorizontal, "Audio") { onPage(MenuPage.AUDIO) }
+                                // Picture options live in « Image et écrans ».
+                                MenuEntry(Lucide.Volume2, "Audio") { onPage(MenuPage.AUDIO) }
                                 MenuEntry(Lucide.Settings2, "Système") { onPage(MenuPage.SYSTEM) }
-                                MenuEntry(Lucide.SlidersHorizontal, "Avancé") { onPage(MenuPage.ADVANCED) }
+                                MenuEntry(Lucide.Cpu, "Avancé") { onPage(MenuPage.ADVANCED) }
                             }
 
                             MenuPage.VIDEO, MenuPage.AUDIO, MenuPage.SYSTEM, MenuPage.ADVANCED -> {
@@ -789,9 +783,65 @@ private fun PauseMenu(
             }
         }
     }
-    LaunchedEffect(page) {
+    // Rotating swaps the entries' look (phone or console): give the focus back to the current action.
+    LaunchedEffect(page, portrait) {
         delay(80)
         runCatching { first.requestFocus() }
+    }
+}
+
+/** Live view of the controller: each button lights up while pressed. */
+@Composable
+private fun ControllerInspector(session: GameSession, physicalInput: ovh.verbois.retrohub.game.ControllerInput) {
+    Box(Modifier.fillMaxWidth().height(250.dp).testTag("controller-inspector")) {
+        val spec = padSpec(Consoles[session.plan.console]!!.pad).let {
+            it.copy(
+                dpad = true,
+                leftStick = it.leftStick || session.plan.analog,
+                stickButtons = if (session.plan.console == "gamecube") emptyList() else it.stickButtons,
+            )
+        }
+        TouchControls(
+            spec, ovh.verbois.retrohub.emulation.ControlsPlacement.OVERLAY, 1f, 0.8f,
+            onKey = { _, _ -> }, onStick = { _, _, _ -> }, onScreenTouch = {}, onHaptic = {}, physicalInput = physicalInput,
+        )
+        if (session.plan.console != "psp" && (session.plan.analog || session.plan.console == "gamecube")) {
+            Column(
+                Modifier.align(Alignment.Center),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                AnalogStick(
+                    56.dp,
+                    androidx.compose.ui.geometry.Offset(physicalInput.rightX, physicalInput.rightY),
+                    Modifier,
+                    "controller-right-stick",
+                )
+                Text(if (session.plan.console == "gamecube") "Stick C" else "Stick droit", style = MaterialTheme.typography.labelSmall)
+                if (session.plan.analog) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        listOf(PadKey.L3 to "L3", PadKey.R3 to "R3").forEach { (key, label) ->
+                            Box(
+                                Modifier.size(40.dp).consoleButtonSurface(CircleShape, primary = key in physicalInput.keys),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Text(
+                                    label,
+                                    color = if (key in
+                                        physicalInput.keys
+                                    ) {
+                                        Palette.OnAccent
+                                    } else {
+                                        Palette.Text
+                                    },
+                                    style = MaterialTheme.typography.labelMedium,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -806,6 +856,37 @@ private fun MenuEntry(
     selected: Boolean? = null,
     onClick: () -> Unit,
 ) {
+    if (ovh.verbois.retrohub.ui.components.LocalConsoleStyle.current) {
+        ovh.verbois.retrohub.ui.components.FocusFill(
+            onClick,
+            modifier.fillMaxWidth().heightIn(min = 52.dp).semantics { if (selected != null) this.selected = selected },
+            shape = RoundedCornerShape(14.dp),
+            rest = if (primary) Color(0x3DFFFFFF) else Color(0x14FFFFFF),
+            restContent = if (tint == Palette.Text) Color.White else tint,
+            focusScale = 1.03f,
+        ) {
+            Row(
+                Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Icon(icon, null, Modifier.size(20.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(label, style = MaterialTheme.typography.titleSmall)
+                    subtitle?.let {
+                        Text(it, style = MaterialTheme.typography.bodySmall, color = androidx.compose.material3.LocalContentColor.current.copy(alpha = 0.72f))
+                    }
+                }
+                if (selected == true) {
+                    Box(
+                        Modifier.size(20.dp).clip(CircleShape).background(ovh.verbois.retrohub.ui.components.ConsoleTone.Selected),
+                        contentAlignment = Alignment.Center,
+                    ) { Icon(Lucide.Check, null, Modifier.size(13.dp), tint = ovh.verbois.retrohub.ui.components.ConsoleTone.OnSelected) }
+                }
+            }
+        }
+        return
+    }
     val foreground = if (primary) Palette.OnAccent else tint
     Row(
         modifier.fillMaxWidth().heightIn(min = 48.dp).semantics { if (selected != null) this.selected = selected }.consoleFocus(
@@ -831,10 +912,30 @@ private fun BackEntry(modifier: Modifier, onClick: () -> Unit) {
 }
 
 @Composable
-private fun SlotCard(slot: SlotInfo, enabled: Boolean, onClick: () -> Unit) {
+private fun SlotCard(slot: SlotInfo, enabled: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val shape = RoundedCornerShape(16.dp)
+    if (ovh.verbois.retrohub.ui.components.LocalConsoleStyle.current) {
+        ovh.verbois.retrohub.ui.components.FocusFill(
+            onClick,
+            modifier.width(150.dp),
+            shape = shape,
+            rest = if (slot.slot == 0) Color(0x33FFFFFF) else Color(0x1AFFFFFF),
+            enabled = enabled,
+            focusScale = 1.05f,
+        ) {
+            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(if (slot.slot == 0) "Automatique" else "Emplacement ${slot.slot}", style = MaterialTheme.typography.titleSmall)
+                Text(
+                    slot.save?.localPlayedAt?.let { parseInstant(it) }?.let { formatDate(it) } ?: "Vide",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = androidx.compose.material3.LocalContentColor.current.copy(alpha = 0.72f),
+                )
+            }
+        }
+        return
+    }
     Column(
-        Modifier.width(
+        modifier.width(
             140.dp,
         ).consoleFocus(
             shape,
@@ -879,13 +980,31 @@ private fun CoreOptionChoices(engine: EmulatorEngine, core: String, category: Me
     if (shown.isEmpty()) Text("Aucun réglage supplémentaire.", style = MaterialTheme.typography.bodySmall, color = Palette.TextDim)
     shown.forEach { variable ->
         var open by remember(core, variable.key) { mutableStateOf(false) }
+        val label = CoreOptionText.label(variable.key, variable.label)
+        if (ovh.verbois.retrohub.ui.components.LocalConsoleStyle.current) {
+            MenuEntry(Lucide.SlidersHorizontal, label, subtitle = CoreOptionText.value(variable.value)) { open = true }
+            if (open) {
+                ovh.verbois.retrohub.ui.components.ConsoleChoiceDialog(
+                    label,
+                    variable.values,
+                    variable.value,
+                    { CoreOptionText.value(it) },
+                    onDismiss = { open = false },
+                ) { value ->
+                    onOption(variable.key, value)
+                    variables = variables.map { if (it.key == variable.key) it.copy(value = value) else it }
+                    open = false
+                }
+            }
+            return@forEach
+        }
         Box {
-            MenuEntry(Lucide.SlidersHorizontal, variable.label, subtitle = variable.value) { open = true }
+            MenuEntry(Lucide.SlidersHorizontal, label, subtitle = CoreOptionText.value(variable.value)) { open = true }
             ovh.verbois.retrohub.ui.components.ConsoleDropdownMenu(open, {
                 open = false
             }, modifier = Modifier.controllerDialog({ open = false })) {
                 variable.values.forEach { value ->
-                    ovh.verbois.retrohub.ui.components.ConsoleMenuItem(value, selected = value == variable.value, onClick = {
+                    ovh.verbois.retrohub.ui.components.ConsoleMenuItem(CoreOptionText.value(value), selected = value == variable.value, onClick = {
                         onOption(variable.key, value)
                         variables = variables.map { if (it.key == variable.key) it.copy(value = value) else it }
                         open = false
@@ -905,6 +1024,8 @@ private fun PauseActions(
     session: GameSession,
     fastForward: Boolean,
     first: FocusRequester,
+    lastAction: Int,
+    onAction: (Int) -> Unit,
     onPage: (MenuPage) -> Unit,
     onEditControls: (() -> Unit)?,
     onReset: () -> Unit,
@@ -918,14 +1039,16 @@ private fun PauseActions(
         add(PauseCommand(Lucide.FastForward, "Avance rapide", { session.toggleFastForward() }, selected = fastForward))
         add(PauseCommand(Lucide.Gamepad2, "Touches de la console", { onPage(MenuPage.CONTROLS) }))
         add(PauseCommand(Lucide.Monitor, "Image et écrans", { onPage(MenuPage.SCREENS) }))
-        if (onEditControls != null) add(PauseCommand(Lucide.Gamepad2, "Déplacer les commandes", onEditControls))
+        if (onEditControls != null) add(PauseCommand(Lucide.Move, "Déplacer les commandes", onEditControls))
         add(PauseCommand(Lucide.Sparkles, "Codes de triche", { onPage(MenuPage.CHEATS) }))
         add(PauseCommand(Lucide.SlidersHorizontal, "Options de l’émulateur", { onPage(MenuPage.OPTIONS) }))
         add(PauseCommand(Lucide.RotateCcw, "Redémarrer le jeu", onReset))
         if (onReport != null) add(PauseCommand(Lucide.Share2, "Signaler un problème", onReport))
         add(PauseCommand(Lucide.LogOut, "Quitter", onQuit, destructive = true))
     }
-    val focus = remember(actions.size) { List(actions.size) { if (it == 0) first else FocusRequester() } }
+    // The action used last gets the focus back when returning from one of its pages.
+    val remembered = lastAction.coerceIn(0, actions.lastIndex)
+    val focus = remember(actions.size, remembered) { List(actions.size) { if (it == remembered) first else FocusRequester() } }
     Column(Modifier.fillMaxWidth().testTag("pause-actions"), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         actions.chunked(columns).forEachIndexed { row, entries ->
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -943,7 +1066,10 @@ private fun PauseActions(
                         tint = if (action.destructive) Palette.Danger else Palette.Text,
                         primary = index == 0,
                         selected = action.selected,
-                        onClick = action.run,
+                        onClick = {
+                            onAction(index)
+                            action.run()
+                        },
                     )
                 }
                 repeat(columns - entries.size) { Box(Modifier.weight(1f)) }

@@ -11,7 +11,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.InputMode
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalInputModeManager
@@ -35,16 +34,13 @@ import ovh.verbois.retrohub.ui.components.AnimatedBackground
 import ovh.verbois.retrohub.ui.components.LocalServer
 import ovh.verbois.retrohub.ui.components.PinDialog
 import ovh.verbois.retrohub.ui.components.ProvideHaptics
-import ovh.verbois.retrohub.ui.game.ConflictScreen
-import ovh.verbois.retrohub.ui.game.ProgressionScreen
-import ovh.verbois.retrohub.ui.home.HomeScreen
-import ovh.verbois.retrohub.ui.library.DownloadsScreen
-import ovh.verbois.retrohub.ui.library.LibraryScreen
+import ovh.verbois.retrohub.ui.components.trackFocus
+import ovh.verbois.retrohub.ui.console.kit.Hint
+import ovh.verbois.retrohub.ui.console.kit.Pad
+import ovh.verbois.retrohub.ui.console.kit.StandaloneHints
 import ovh.verbois.retrohub.ui.nav.Route
 import ovh.verbois.retrohub.ui.onboarding.Onboarding
 import ovh.verbois.retrohub.ui.onboarding.SetupWizard
-import ovh.verbois.retrohub.ui.settings.SettingsScreen
-import ovh.verbois.retrohub.ui.shell.ConsoleShell
 import ovh.verbois.retrohub.ui.theme.RetroHubTheme
 import ovh.verbois.retrohub.ui.theme.consoleColor
 
@@ -98,7 +94,7 @@ fun RetroHubRoot(container: AppContainer, onExit: () -> Unit = {}, onController:
                 LocalServer provides (auth as? AuthState.SignedIn)?.account?.server,
                 LocalDensity provides Density(density.density, density.fontScale * settings.textSize.scale),
             ) {
-                BoxWithConstraints(Modifier.fillMaxSize()) {
+                BoxWithConstraints(Modifier.fillMaxSize().trackFocus()) {
                     val portrait = maxHeight > maxWidth
                     LaunchedEffect(portrait) { controller.portrait = portrait }
                     AnimatedBackground(
@@ -109,116 +105,51 @@ fun RetroHubRoot(container: AppContainer, onExit: () -> Unit = {}, onController:
                         reducedMotion = settings.reduceMotion || container.platform.reducedMotion,
                         paused = controller.homeMoving,
                     )
-                    if (controller.exitRequested) {
-                        ovh.verbois.retrohub.ui.components.ConfirmDialog(
-                            "Quitter RetroHub ?",
-                            "Votre progression est conservée.",
-                            "Quitter",
-                            onConfirm = {
-                                controller.exitRequested = false
-                                onExit()
-                            },
-                            onDismiss = { controller.exitRequested = false },
-                            focusDismiss = true,
-                        )
-                    }
-                    when (val state = auth) {
-                        AuthState.Loading -> Box(Modifier.fillMaxSize())
+                    InterfaceStyle(portrait) {
+                        if (controller.exitRequested) {
+                            ovh.verbois.retrohub.ui.components.ConfirmDialog(
+                                "Quitter RetroHub ?",
+                                "Votre progression est conservée.",
+                                "Quitter",
+                                onConfirm = {
+                                    controller.exitRequested = false
+                                    onExit()
+                                },
+                                onDismiss = { controller.exitRequested = false },
+                                focusDismiss = true,
+                            )
+                        }
+                        when (val state = auth) {
+                            AuthState.Loading -> Box(Modifier.fillMaxSize())
 
-                        is AuthState.SignedOut -> Onboarding(container, state)
-
-                        is AuthState.SignedIn ->
-                            if (!settings.setupDone) {
-                                SetupWizard(container, state.account.username)
-                            } else {
-                                LaunchedEffect(Unit) {
-                                    // La bibliothèque locale se charge vite ; on attend qu’elle soit là.
-                                    container.library.games.first { it.isNotEmpty() }
-                                    controller.autoStart()
-                                }
-                                ConsoleShell(controller, state.account) { route -> Screen(controller, route) }
-                                controller.pinRequest?.let { (reason, action) ->
-                                    PinDialog(settings.pinHash, reason, onUnlocked = {
-                                        controller.pinRequest = null
-                                        action()
-                                    }, onDismiss = { controller.pinRequest = null })
-                                }
+                            is AuthState.SignedOut -> StandaloneHints(!portrait, listOf(Hint(Pad.A, "Choisir"), Hint(Pad.B, "Retour"))) {
+                                Onboarding(container, state)
                             }
+
+                            is AuthState.SignedIn ->
+                                if (!settings.setupDone) {
+                                    StandaloneHints(!portrait, listOf(Hint(Pad.A, "Choisir"), Hint(Pad.START, "Continuer"), Hint(Pad.B, "Retour"))) {
+                                        SetupWizard(container, state.account.username)
+                                    }
+                                } else {
+                                    LaunchedEffect(Unit) {
+                                        // La bibliothèque locale se charge vite ; on attend qu’elle soit là.
+                                        container.library.games.first { it.isNotEmpty() }
+                                        controller.autoStart()
+                                    }
+                                    AppShell(controller, state.account) { route -> AppScreen(controller, route) }
+                                    controller.pinRequest?.let { (reason, action) ->
+                                        PinDialog(settings.pinHash, reason, onUnlocked = {
+                                            controller.pinRequest = null
+                                            action()
+                                        }, onDismiss = { controller.pinRequest = null })
+                                    }
+                                }
+                        }
+                        ovh.verbois.retrohub.ui.components.ReportDialogs(container)
                     }
-                    ovh.verbois.retrohub.ui.components.ReportDialogs(container)
                 }
             }
         }
     }
-}
-
-@Composable
-private fun Screen(controller: UiController, route: Route) {
-    when (route) {
-        Route.Home -> HomeScreen(controller)
-
-        is Route.Game -> WithBack(controller) { ovh.verbois.retrohub.ui.home.GameDetailsScreen(controller, route.id) }
-
-        is Route.Library -> LibraryScreen(controller, route.console, favoritesOnly = false)
-
-        is Route.Folder -> {
-            LaunchedEffect(route.id) { controller.returnHome() }
-            HomeScreen(controller)
-        }
-
-        Route.Favorites -> LibraryScreen(controller, null, favoritesOnly = true)
-
-        Route.Downloads -> DownloadsScreen(controller)
-
-        Route.Catalogue -> ovh.verbois.retrohub.ui.catalogue.CatalogueScreen(controller)
-
-        is Route.CatalogueGame -> WithBack(controller) { ovh.verbois.retrohub.ui.catalogue.CatalogueGameScreen(controller, route.id) }
-
-        Route.Search, Route.User -> Unit
-
-        // Rendered by the shell, with the section bar.
-
-        is Route.Conflict -> WithBack(controller) { ConflictScreen(controller, route.gameId) }
-
-        is Route.Progression -> WithBack(controller) { ProgressionScreen(controller, route.gameId) }
-
-        is Route.Settings -> {
-            val settings by controller.container.settings.settings.collectAsState()
-            if (settings.pinHash.isNotEmpty() && settings.lockSettings && !controller.settingsUnlocked) {
-                LaunchedEffect(Unit) {
-                    controller.pinRequest = "Les réglages sont protégés par le code parental." to { controller.settingsUnlocked = true }
-                }
-                androidx.compose.foundation.layout.Column(Modifier.fillMaxSize()) {
-                    ovh.verbois.retrohub.ui.components.PageHeader("Réglages", { controller.nav.back() })
-                    ovh.verbois.retrohub.ui.components.CenteredMessage(
-                        "Réglages verrouillés",
-                        "Entrez le code parental pour les modifier.",
-                        ovh.verbois.retrohub.ui.icons.Lucide.Lock,
-                    ) {
-                        ovh.verbois.retrohub.ui.components.PrimaryButton(
-                            "Entrer le code",
-                            { controller.pinRequest = "Les réglages sont protégés par le code parental." to { controller.settingsUnlocked = true } },
-                        )
-                    }
-                }
-            } else {
-                SettingsScreen(controller, route.page, route.console)
-            }
-        }
-    }
-}
-
-/** Pages hors sections : un simple retour en haut, le titre est dans la page. */
-@Composable
-private fun WithBack(controller: UiController, content: @Composable () -> Unit) {
-    val parent = ovh.verbois.retrohub.ui.components.LocalNavigationFocus.current
-    val navigation = remember { ovh.verbois.retrohub.ui.components.NavigationFocus() }
-    androidx.compose.runtime.SideEffect { parent.content = navigation.header }
-    androidx.compose.foundation.layout.Column(Modifier.fillMaxSize()) {
-        ovh.verbois.retrohub.ui.components.PageHeader(null, { controller.nav.back() }, backModifier = Modifier.focusRequester(navigation.header))
-        CompositionLocalProvider(ovh.verbois.retrohub.ui.components.LocalNavigationFocus provides navigation) {
-            Box(Modifier.weight(1f).fillMaxSize()) { content() }
-        }
-    }
-    ovh.verbois.retrohub.ui.components.AutoFocus(navigation.header)
 }

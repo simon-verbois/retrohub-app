@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -77,6 +78,21 @@ internal fun ConsolesPage(controller: UiController) {
             consoles.forEachIndexed { index, spec ->
                 if (index > 0) GroupDivider()
                 val custom = settings.consoles[spec.id]?.let { it != ConsoleSettings() } == true
+                if (ovh.verbois.retrohub.ui.components.LocalConsoleStyle.current) {
+                    // Console look: the console's icon, and only what the player can act on.
+                    SettingRow(
+                        spec.name,
+                        icon = ovh.verbois.retrohub.ui.icons.ConsoleIcons.forConsole(spec.id),
+                        value = when {
+                            spec.cores.none { it in cores } -> "Indisponible"
+                            spec.id in settings.hiddenConsoles -> "Masquée"
+                            custom -> "Personnalisée"
+                            else -> null
+                        },
+                        onClick = { controller.nav.go(Route.Settings(SettingsPage.CONSOLE, spec.id)) },
+                    ) { Icon(ovh.verbois.retrohub.ui.icons.Lucide.ChevronRight, null, Modifier.size(18.dp)) }
+                    return@forEachIndexed
+                }
                 SettingRow(
                     spec.name,
                     subtitle =

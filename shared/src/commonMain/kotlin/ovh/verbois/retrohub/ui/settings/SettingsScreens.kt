@@ -100,29 +100,35 @@ fun SettingsScreen(controller: UiController, page: SettingsPage, console: String
             ).fillMaxWidth().controllerVerticalScroll(rememberScrollState()).padding(start = 24.dp, end = 24.dp, bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            when (page) {
-                SettingsPage.ROOT -> RootPage(controller)
-                SettingsPage.ACCOUNT -> AccountPage(controller)
-                SettingsPage.SECURITY -> SecurityPage(controller)
-                SettingsPage.SYNC -> SyncPage(controller)
-                SettingsPage.APPEARANCE -> AppearancePage(controller)
-                SettingsPage.DISPLAY -> DisplayPage(controller)
-                SettingsPage.CONTROLS -> ControlsPage(controller)
-                SettingsPage.AUDIO -> AudioPage(controller)
-                SettingsPage.PERFORMANCE -> PerformancePage(controller)
-                SettingsPage.STORAGE -> StoragePage(controller)
-                SettingsPage.PARENTAL -> ParentalPage(controller)
-                SettingsPage.CONSOLES -> ConsolesPage(controller)
-                SettingsPage.CONSOLE -> ConsolePage(controller, console ?: "nes")
-                SettingsPage.REMAP -> RemapPage(controller, console ?: "nes")
-                SettingsPage.GAME -> GameOptionsPage(controller, console.orEmpty())
-                SettingsPage.MODS -> ModsPage(controller, console.orEmpty())
-                SettingsPage.ABOUT -> AboutPage(controller)
-                SettingsPage.CHANGELOG -> ChangelogPage()
-            }
+            SettingsPageBody(controller, page, console)
         }
     }
     AutoFocus(first)
+}
+
+/** The content of a settings page, without its header or scrolling (each interface frames it). */
+@Composable
+fun SettingsPageBody(controller: UiController, page: SettingsPage, console: String?) {
+    when (page) {
+        SettingsPage.ROOT -> RootPage(controller)
+        SettingsPage.ACCOUNT -> AccountPage(controller)
+        SettingsPage.SECURITY -> SecurityPage(controller)
+        SettingsPage.SYNC -> SyncPage(controller)
+        SettingsPage.APPEARANCE -> AppearancePage(controller)
+        SettingsPage.DISPLAY -> DisplayPage(controller)
+        SettingsPage.CONTROLS -> ControlsPage(controller)
+        SettingsPage.AUDIO -> AudioPage(controller)
+        SettingsPage.PERFORMANCE -> PerformancePage(controller)
+        SettingsPage.STORAGE -> StoragePage(controller)
+        SettingsPage.PARENTAL -> ParentalPage(controller)
+        SettingsPage.CONSOLES -> ConsolesPage(controller)
+        SettingsPage.CONSOLE -> ConsolePage(controller, console ?: "nes")
+        SettingsPage.REMAP -> RemapPage(controller, console ?: "nes")
+        SettingsPage.GAME -> GameOptionsPage(controller, console.orEmpty())
+        SettingsPage.MODS -> ModsPage(controller, console.orEmpty())
+        SettingsPage.ABOUT -> AboutPage(controller)
+        SettingsPage.CHANGELOG -> ChangelogPage()
+    }
 }
 
 @Composable

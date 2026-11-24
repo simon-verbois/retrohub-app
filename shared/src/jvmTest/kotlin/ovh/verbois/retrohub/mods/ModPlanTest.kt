@@ -114,6 +114,40 @@ class ModPlanTest {
     }
 
     @Test
+    fun extendedHeaderIsInstalledBesideTheExefsFolder() {
+        val patch = modRelease(
+            "camera",
+            ModPlanner.EXEFS,
+            listOf(ModFile("code.ips", 3, "b".repeat(64)), ModFile("exheader.bin", 3, "c".repeat(64))),
+        )
+        assertNull(ModPlanner.compatibility(patch, modEnvironment))
+        val plan = ModPlanner.plan(listOf(patch.selection), listOf(patch), modEnvironment)
+        assertEquals(
+            setOf("mods/0004000000033600/exefs/code.ips", "mods/0004000000033600/exheader.bin"),
+            plan.files.map { it.destination }.toSet(),
+        )
+        val unsupported = modRelease("other", ModPlanner.EXEFS, listOf(ModFile("main.bin", 3, "b".repeat(64))))
+        assertNotNull(ModPlanner.compatibility(unsupported, modEnvironment))
+    }
+
+    @Test
+    fun anExtendedHeaderNeverMeetsAnotherModsProgram() {
+        fun exefs(id: String, vararg files: String) = modRelease(id, ModPlanner.EXEFS, files.map { ModFile(it, 3, "b".repeat(64)) })
+        fun rejected(a: ModRelease, b: ModRelease) =
+            assertFailsWith<ModProblem> { ModPlanner.plan(listOf(a.selection, b.selection), listOf(a, b), modEnvironment) }
+        // A header from one mod and the code of another describe different programs.
+        rejected(exefs("header", "exheader.bin"), exefs("patch", "code.ips"))
+        rejected(exefs("single-screen", "code.ips", "exheader.bin"), exefs("patch", "code.bps"))
+        // Two headers replace the same file.
+        rejected(exefs("first", "exheader.bin"), exefs("second", "exheader.bin"))
+        // A header with its own code, beside visual files from another mod, is fine.
+        val program = exefs("single-screen", "code.ips", "exheader.bin")
+        val banner = exefs("banner", "banner.bin")
+        val plan = ModPlanner.plan(listOf(program.selection, banner.selection), listOf(program, banner), modEnvironment)
+        assertEquals(3, plan.files.size)
+    }
+
+    @Test
     fun cheatNamesAndCodeLinesCannotInjectConfiguration() {
         val first = modRelease().copy(
             romSha256 = listOf(modEnvironment.romSha),

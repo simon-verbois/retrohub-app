@@ -48,19 +48,6 @@ internal fun XmbTheme(content: @Composable () -> Unit) {
     MaterialTheme(typography = type, content = content)
 }
 
-/** A cached radial brush supplies the soft selection halo without a full-screen blur pass. */
-internal fun Modifier.xmbHalo(intensity: () -> Float): Modifier = drawWithCache {
-    val radius = size.minDimension * 0.7f
-    val halo = Brush.radialGradient(
-        0f to Color.White.copy(alpha = 0.26f),
-        0.45f to Color.White.copy(alpha = 0.10f),
-        1f to Color.Transparent,
-        center = Offset(size.width / 2, size.height / 2),
-        radius = radius,
-    )
-    onDrawBehind { drawCircle(halo, radius, alpha = intensity()) }
-}
-
 /** One modal focus boundary, with a visible parent at the left and a reversible entrance. */
 @Composable
 internal fun XmbSidePanel(

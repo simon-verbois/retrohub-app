@@ -1,4 +1,4 @@
-package ovh.verbois.retrohub.ui.home
+package ovh.verbois.retrohub.ui.console.home
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.animateFloatAsState
@@ -36,9 +36,15 @@ import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
+import ovh.verbois.retrohub.library.DownloadState
 import ovh.verbois.retrohub.ui.Backdrop
 import ovh.verbois.retrohub.ui.UiController
 import ovh.verbois.retrohub.ui.components.*
+import ovh.verbois.retrohub.ui.console.kit.Hint
+import ovh.verbois.retrohub.ui.console.kit.Pad
+import ovh.verbois.retrohub.ui.console.kit.ProvideHints
+import ovh.verbois.retrohub.ui.console.xmbHalo
+import ovh.verbois.retrohub.ui.home.*
 import ovh.verbois.retrohub.ui.icons.ConsoleIcons
 import ovh.verbois.retrohub.ui.icons.Lucide
 import ovh.verbois.retrohub.ui.icons.XmbIcons
@@ -85,7 +91,33 @@ fun ConsoleHome(controller: UiController) {
             if (controller.homeGame != game?.id) controller.homeGame = game?.id
         }
     }
-    LaunchedEffect(column.key, game?.id) { controller.backdrop = Backdrop(null, column.console ?: game?.console) }
+    val primary = when {
+        column.key == "catalogue" -> Hint(Pad.A, "Ouvrir") { controller.nav.go(Route.Catalogue) }
+
+        // A only promises what it can do: no hint for a game that cannot be played or downloaded yet.
+        game != null && game.supported && (game.downloaded || game.remote.rom != null) && downloadState(controller, game) !is DownloadState.Running ->
+            Hint(Pad.A, gameAction(controller, game, downloadState(controller, game)).label) { controller.activateHomeGame() }
+
+        else -> null
+    }
+    ProvideHints(
+        *listOfNotNull(
+            primary,
+            Hint(Pad.START, "Options") { controller.gameMenu = true }.takeIf { game != null && column.key != "catalogue" },
+            Hint(Pad.Y, "Rechercher") { controller.searching = true },
+            Hint(Pad.GUIDE, "Menu") { controller.menuOpen = true },
+        ).toTypedArray(),
+    )
+    // PS5: the background takes the focused game's art only once the focus rests (never during a fast
+    // scroll); while moving, the previous background stays.
+    LaunchedEffect(column.key, game?.id, game?.remote?.coverUrl) {
+        if (game == null) {
+            controller.backdrop = Backdrop(null, column.console)
+        } else {
+            delay(PREVIEW_DELAY_MS)
+            controller.backdrop = Backdrop(game.remote.coverUrl, game.console)
+        }
+    }
     LaunchedEffect(column.key, game?.id, categoryLane, active, inputMode, windowFocused) {
         if ((ownsFocus || inputMode == InputMode.Keyboard) && active && windowFocused && !controller.searching && !controller.menuOpen &&
             controller.nav.contentRoute == Route.Home
@@ -286,6 +318,7 @@ fun ConsoleHome(controller: UiController) {
                             val icon = when {
                                 item.console != null -> ConsoleIcons.forConsole(item.console)
                                 item.key == "favorites" -> Lucide.HeartFilled
+                                item.key == "recent" -> Lucide.History
                                 else -> XmbIcons.Catalogue
                             }
                             Icon(
@@ -314,7 +347,5 @@ fun ConsoleHome(controller: UiController) {
                 }
             }
         }
-        // Keep the modal outside the animated column: it cannot be recreated by an outgoing scene.
-        if (game != null) GameMenu(controller, game)
     }
 }

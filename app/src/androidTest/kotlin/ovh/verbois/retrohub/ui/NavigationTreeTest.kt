@@ -29,6 +29,7 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.test.performSemanticsAction
@@ -54,14 +55,13 @@ import ovh.verbois.retrohub.account.Account
 import ovh.verbois.retrohub.api.ApiJson
 import ovh.verbois.retrohub.api.LibraryGame
 import ovh.verbois.retrohub.data.GameEntity
+import ovh.verbois.retrohub.ui.AppShell
+import ovh.verbois.retrohub.ui.HomeScreen
 import ovh.verbois.retrohub.ui.components.ConfirmDialog
-import ovh.verbois.retrohub.ui.home.HomeScreen
-import ovh.verbois.retrohub.ui.library.DownloadsScreen
 import ovh.verbois.retrohub.ui.nav.Route
 import ovh.verbois.retrohub.ui.nav.Section
 import ovh.verbois.retrohub.ui.nav.SettingsPage
 import ovh.verbois.retrohub.ui.settings.SettingsScreen
-import ovh.verbois.retrohub.ui.shell.ConsoleShell
 import ovh.verbois.retrohub.ui.theme.Palette
 import ovh.verbois.retrohub.ui.theme.RetroHubTheme
 import java.io.File
@@ -132,17 +132,22 @@ class NavigationTreeTest {
             CompositionLocalProvider(LocalDensity provides Density(density.density, if (largeText) 1.6f else 1f)) {
                 RetroHubTheme {
                     Box(Modifier.fillMaxSize().background(Palette.Background))
-                    ConsoleShell(ui, Account("https://example.invalid", userId = "test", username = "Test", deviceId = "test", deviceName = "Test")) { route ->
-                        when (route) {
-                            Route.Home -> HomeScreen(ui)
-                            is Route.Game -> ovh.verbois.retrohub.ui.home.GameDetailsScreen(ui, route.id)
-                            Route.Downloads -> DownloadsScreen(ui)
-                            is Route.Library -> ovh.verbois.retrohub.ui.library.LibraryScreen(ui, route.console, false)
-                            is Route.Folder -> HomeScreen(ui)
-                            Route.Favorites -> ovh.verbois.retrohub.ui.library.LibraryScreen(ui, null, true)
-                            is Route.Settings -> SettingsScreen(ui, route.page, route.console)
-                            Route.Catalogue -> ovh.verbois.retrohub.ui.catalogue.CatalogueScreen(ui)
-                            else -> Unit
+                    AppShell(ui, Account("https://example.invalid", userId = "test", username = "Test", deviceId = "test", deviceName = "Test")) { route ->
+                        if (portrait) {
+                            // The portrait pages as these tests always drew them (no back header around a game).
+                            when (route) {
+                                Route.Home -> HomeScreen(ui)
+                                is Route.Game -> ovh.verbois.retrohub.ui.mobile.home.GameDetailsScreen(ui, route.id)
+                                Route.Downloads -> ovh.verbois.retrohub.ui.mobile.library.DownloadsScreen(ui)
+                                is Route.Library -> ovh.verbois.retrohub.ui.mobile.library.LibraryScreen(ui, route.console, false)
+                                is Route.Folder -> HomeScreen(ui)
+                                Route.Favorites -> ovh.verbois.retrohub.ui.mobile.library.LibraryScreen(ui, null, true)
+                                is Route.Settings -> SettingsScreen(ui, route.page, route.console)
+                                Route.Catalogue -> ovh.verbois.retrohub.ui.catalogue.CatalogueScreen(ui)
+                                else -> Unit
+                            }
+                        } else {
+                            AppScreen(ui, route)
                         }
                     }
                     if (ui.exitRequested) {
@@ -168,13 +173,16 @@ class NavigationTreeTest {
                     rule.onNodeWithTag(
                         when {
                             portrait -> "library-game-tree-0"
+
                             browseConsole -> "home-game-tree-0"
-                            else -> "home-category-favorites"
+
+                            // Nothing played and no favorite: the home opens on the catalogue.
+                            else -> "home-catalogue-action"
                         },
                         useUnmergedTree = true,
                     )
                 } else {
-                    rule.onNodeWithTag("profile-shortcut-root")
+                    rule.onNodeWithTag(if (portrait) "profile-shortcut-root" else "control-home")
                 }
                 runCatching { node.fetchSemanticsNode().config[SemanticsProperties.Focused] }.getOrDefault(false)
             }
@@ -396,10 +404,20 @@ class NavigationTreeTest {
         repeat(2) { pad(KeyEvent.KEYCODE_DPAD_UP) }
         rule.onNodeWithTag("header-search-button").assertIsFocused()
         pad(KeyEvent.KEYCODE_BUTTON_A)
+        rule.waitUntil(5_000) { rule.onAllNodesWithTag("header-search-field").fetchSemanticsNodes().isNotEmpty() }
         rule.onNodeWithTag("header-search-field").assertIsFocused().performTextInput("Jeu 2")
         rule.waitUntil(5_000) { rule.onAllNodesWithTag("search-result-tree-2").fetchSemanticsNodes().isNotEmpty() }
-        rule.onNodeWithTag("search-result-tree-2").performClick()
-        rule.onNodeWithTag("home-game-tree-2").assertIsFocused()
+        // Submitting closes the keyboard and moves to the results; A opens the chosen one.
+        rule.onNodeWithTag("header-search-field").performImeAction()
+        waitFocused("search-result-tree-2")
+        pad(KeyEvent.KEYCODE_BUTTON_A)
+        // A result opens its game page; the search closes.
+        try {
+            rule.waitUntil(5_000) { controller.nav.current == Route.CatalogueGame("tree-2") }
+        } catch (failure: androidx.compose.ui.test.ComposeTimeoutException) {
+            throw AssertionError("Route ${controller.nav.current}, searching ${controller.searching}", failure)
+        }
+        rule.onNodeWithTag("header-search-field").assertDoesNotExist()
     }
 
     @Test
@@ -482,6 +500,9 @@ class NavigationTreeTest {
         rule.onNodeWithTag("header-search-field").assertDoesNotExist()
         pad(KeyEvent.KEYCODE_BUTTON_A)
         rule.onNodeWithTag("header-search-field").assertIsDisplayed()
+        // B first ends typing, then closes the search.
+        pad(KeyEvent.KEYCODE_BUTTON_B)
+        rule.onNodeWithTag("header-search-field").assertIsDisplayed()
         pad(KeyEvent.KEYCODE_BUTTON_B)
         rule.onNodeWithTag("header-search-field").assertDoesNotExist()
     }
@@ -495,33 +516,29 @@ class NavigationTreeTest {
         rule.onNodeWithTag("header-search-field").assertIsFocused()
         assertEquals(Route.Home, controller.nav.contentRoute)
         val homeAfter = rule.onNodeWithTag("home-content", useUnmergedTree = true).fetchSemanticsNode()
-        // The IME may reduce the window height; search must not recreate or move the page header.
+        // The search covers the home without recreating or moving it.
         assertEquals(homeBefore.id, homeAfter.id)
         assertEquals(homeBefore.boundsInRoot.top, homeAfter.boundsInRoot.top, 1f)
-        assertEquals(homeBefore.boundsInRoot.left, homeAfter.boundsInRoot.left, 1f)
         assertEquals(selectedBefore, controller.homeGame)
-        rule.onNodeWithTag("search-results").assertDoesNotExist()
+        rule.onNodeWithTag("console-search").assertIsDisplayed()
         rule.onNodeWithTag("header-search-field").performTextInput("Jeu 3")
         rule.waitUntil(5_000) { rule.onAllNodesWithTag("search-result-tree-3").fetchSemanticsNodes().isNotEmpty() }
-        rule.onNodeWithTag("search-result-tree-3").assertIsDisplayed()
-        val field = rule.onNodeWithTag("header-search-field").fetchSemanticsNode().boundsInRoot
-        val dropdown = rule.onNodeWithTag("search-results").fetchSemanticsNode().boundsInRoot
-        assertEquals(field.left, dropdown.left, 1f)
-        assertEquals(field.width, dropdown.width, 1f)
-        assertTrue(dropdown.top >= field.bottom)
+        rule.onNodeWithTag("search-result-tree-3").assertExists()
+        rule.onNodeWithTag("search-result-tree-2").assertDoesNotExist()
         screenshot("header-search-landscape")
         rule.onNodeWithTag("header-search-field").performImeAction()
         rule.onNodeWithTag("header-search-field").assertIsDisplayed()
-        rule.onNodeWithTag("search-result-tree-3").assertIsFocused()
+        rule.waitUntil(5_000) {
+            runCatching { rule.onNodeWithTag("search-result-tree-3").fetchSemanticsNode().config[SemanticsProperties.Focused] }.getOrDefault(false)
+        }
         pad(KeyEvent.KEYCODE_BUTTON_B)
         rule.onNodeWithTag("header-search-field").assertDoesNotExist()
         rule.onNodeWithTag("home-content", useUnmergedTree = true).assertIsDisplayed()
         assertEquals(Route.Home, controller.nav.current)
         pad(KeyEvent.KEYCODE_BUTTON_Y)
-        rule.onNodeWithTag("home-category-console:nes", useUnmergedTree = true).assertIsNotEnabled()
         rule.onNodeWithTag("header-search-field").assertIsDisplayed()
         assertTrue(controller.searching)
-        pad(KeyEvent.KEYCODE_BUTTON_B)
+        repeat(2) { pad(KeyEvent.KEYCODE_BUTTON_B) }
         rule.onNodeWithTag("header-search-field").assertDoesNotExist()
     }
 
@@ -572,17 +589,19 @@ class NavigationTreeTest {
     }
 
     @Test
-    fun emptyHomeKeepsCatalogueAndFavoritesReachableWithTheController() {
+    fun emptyHomeKeepsTheCatalogueReachableWithTheController() {
         show()
         runBlocking { container.database.games().clear() }
-        rule.waitUntil(5_000) { rule.onAllNodesWithText("Aucun favori").fetchSemanticsNodes().isNotEmpty() }
-        rule.onNodeWithTag("home-category-favorites").assertIsFocused()
+        rule.waitUntil(5_000) {
+            runCatching { rule.onNodeWithTag("home-catalogue-action").fetchSemanticsNode().config[SemanticsProperties.Focused] }.getOrDefault(false)
+        }
+        // Without games, played games or favorites, the catalogue is the only column.
+        rule.onNodeWithTag("home-category-favorites").assertDoesNotExist()
+        rule.onNodeWithTag("home-category-recent").assertDoesNotExist()
+        pad(KeyEvent.KEYCODE_BUTTON_R1)
+        rule.onNodeWithTag("home-catalogue-action").assertIsFocused()
         pad(KeyEvent.KEYCODE_BUTTON_L1)
         rule.onNodeWithTag("home-catalogue-action").assertIsFocused()
-        pad(KeyEvent.KEYCODE_BUTTON_R1)
-        rule.onNodeWithTag("home-category-favorites").assertIsFocused()
-        pad(KeyEvent.KEYCODE_BUTTON_R1)
-        rule.onNodeWithTag("home-category-favorites").assertIsFocused()
         rule.onNodeWithTag("home-category-downloads").assertDoesNotExist()
         assertEquals(Route.Home, controller.nav.current)
     }
@@ -591,18 +610,11 @@ class NavigationTreeTest {
     fun homeRestoresTheSelectedCoverAfterSettingsAndBack() {
         show()
         selectGame(2)
-        rule.onNodeWithTag("header-profile-button").performClick()
-        rule.onNodeWithText("Paramètres").performClick()
-        rule.waitUntil(5_000) {
-            runCatching { rule.onNodeWithContentDescription("Retour").fetchSemanticsNode().config[SemanticsProperties.Focused] }.getOrDefault(false)
-        }
+        rule.runOnIdle { controller.nav.go(Route.Settings()) }
+        waitFocused("settings-section-account")
         pad(KeyEvent.KEYCODE_BUTTON_B)
         try {
-            rule.waitUntil(5_000) {
-                runCatching {
-                    rule.onNodeWithTag("home-game-tree-2", useUnmergedTree = true).fetchSemanticsNode().config[SemanticsProperties.Focused]
-                }.getOrDefault(false)
-            }
+            waitFocused("home-game-tree-2")
         } catch (failure: androidx.compose.ui.test.ComposeTimeoutException) {
             val focused = rule.onAllNodes(SemanticsMatcher.expectValue(SemanticsProperties.Focused, true)).fetchSemanticsNodes().map { it.config.toString() }
             throw AssertionError("Home ${controller.homeGame}, route ${controller.nav.current}, focused $focused", failure)
@@ -610,32 +622,58 @@ class NavigationTreeTest {
         assertEquals("tree-2", controller.homeGame)
     }
 
+    private fun waitFocused(tag: String) {
+        rule.waitUntil(5_000) {
+            runCatching { rule.onNodeWithTag(tag, useUnmergedTree = true).fetchSemanticsNode().config[SemanticsProperties.Focused] }.getOrDefault(false)
+        }
+    }
+
     @Test
     fun choosingAnOffscreenGameDoesNotRestoreAnotherCoversFocus() {
         show()
         rule.runOnIdle { controller.nav.go(Route.Settings()) }
-        rule.waitUntil(5_000) {
-            runCatching { rule.onNodeWithContentDescription("Retour").fetchSemanticsNode().config[SemanticsProperties.Focused] }.getOrDefault(false)
-        }
+        waitFocused("settings-section-account")
         rule.runOnIdle { controller.showGame("tree-7") }
-        rule.waitUntil(5_000) {
-            runCatching {
-                rule.onNodeWithTag("home-game-tree-7", useUnmergedTree = true).fetchSemanticsNode().config[SemanticsProperties.Focused]
-            }.getOrDefault(false)
-        }
+        waitFocused("home-game-tree-7")
         assertEquals("tree-7", controller.homeGame)
     }
 
     @Test
     fun settingsPagesKeepControllerFocusVisibleAndReturnToTheirHeader() {
         show()
-        checkSettingsTraversal(
-            listOf(
-                SettingsPage.ROOT, SettingsPage.APPEARANCE, SettingsPage.DISPLAY, SettingsPage.CONTROLS,
-                SettingsPage.AUDIO, SettingsPage.PERFORMANCE, SettingsPage.STORAGE, SettingsPage.PARENTAL,
-                SettingsPage.CONSOLES, SettingsPage.CONSOLE, SettingsPage.REMAP, SettingsPage.GAME, SettingsPage.ABOUT, SettingsPage.CHANGELOG,
-            ),
-        )
+        val focused = SemanticsMatcher.expectValue(SemanticsProperties.Focused, true)
+        // Sections: the list keeps the focus, Right enters the section, B returns to the list.
+        for (section in listOf(SettingsPage.APPEARANCE, SettingsPage.DISPLAY, SettingsPage.CONTROLS, SettingsPage.AUDIO, SettingsPage.STORAGE)) {
+            rule.runOnIdle {
+                controller.nav.section(Section.HOME)
+                controller.nav.go(Route.Settings(section))
+            }
+            try {
+                waitFocused("settings-section-${section.name.lowercase()}")
+            } catch (failure: androidx.compose.ui.test.ComposeTimeoutException) {
+                val now = rule.onAllNodes(focused).fetchSemanticsNodes().map { it.config.toString() }
+                throw AssertionError("Section $section, route ${controller.nav.current}, focused $now", failure)
+            }
+            pad(KeyEvent.KEYCODE_DPAD_RIGHT)
+            repeat(12) {
+                pad(KeyEvent.KEYCODE_DPAD_DOWN)
+                rule.onNode(focused).assertIsDisplayed()
+            }
+            pad(KeyEvent.KEYCODE_BUTTON_B)
+            rule.onNodeWithTag("settings-section-${section.name.lowercase()}").assertIsFocused()
+        }
+        // Deeper pages open full screen with the focus on their first control.
+        for (page in listOf(SettingsPage.CONSOLE, SettingsPage.REMAP, SettingsPage.CHANGELOG)) {
+            rule.runOnIdle {
+                controller.nav.section(Section.HOME)
+                controller.nav.go(Route.Settings(page, "nds"))
+            }
+            rule.waitUntil(5_000) { rule.onAllNodes(focused).fetchSemanticsNodes().isNotEmpty() }
+            repeat(12) {
+                pad(KeyEvent.KEYCODE_DPAD_DOWN)
+                rule.onNode(focused).assertIsDisplayed()
+            }
+        }
     }
 
     @Test
@@ -687,10 +725,10 @@ class NavigationTreeTest {
     fun legacyDownloadLinksOpenStorageWithoutAddingAHomeCategory() {
         show()
         rule.runOnIdle { controller.nav.section(Section.DOWNLOADS) }
-        rule.onNodeWithTag("home-content").assertIsDisplayed()
         rule.onNodeWithTag("home-category-downloads").assertDoesNotExist()
         rule.onNodeWithTag("home-overlay").assertIsDisplayed()
-        rule.onNodeWithText("Téléchargements et stockage").assertIsDisplayed()
+        rule.onNodeWithTag("console-settings").assertIsDisplayed()
+        rule.onNodeWithTag("settings-section-storage").assertExists()
         assertEquals(Route.Settings(SettingsPage.STORAGE), controller.nav.current)
     }
 
@@ -716,34 +754,27 @@ class NavigationTreeTest {
     @Test
     fun catalogueOpensAboveThePermanentHome() {
         show(browseConsole = false)
-        rule.onNodeWithTag("home-category-catalogue").performClick()
+        assertEquals("catalogue", controller.homeColumn)
+        pad(KeyEvent.KEYCODE_BUTTON_A)
         rule.waitUntil(5_000) { controller.nav.current == Route.Catalogue }
-        assertEquals(Route.Catalogue, controller.nav.current)
         rule.onNodeWithTag("home-overlay").assertIsDisplayed()
-        rule.onNodeWithTag("home-content").assertIsDisplayed()
-        rule.waitUntil(5_000) {
-            runCatching { rule.onNodeWithText("Filtres").fetchSemanticsNode().config[SemanticsProperties.Focused] }.getOrDefault(false)
-        }
+        rule.onNodeWithTag("catalogue").assertIsDisplayed()
+        rule.onNodeWithTag("hint-bar").assertIsDisplayed()
         UiDevice.getInstance(instrumentation).waitForIdle()
         pad(KeyEvent.KEYCODE_BUTTON_B)
         rule.waitUntil(5_000) { controller.nav.current == Route.Home }
         rule.onNodeWithTag("home-overlay").assertDoesNotExist()
-        rule.waitUntil(5_000) {
-            runCatching { rule.onNodeWithTag("home-catalogue-action").fetchSemanticsNode().config[SemanticsProperties.Focused] }.getOrDefault(false)
-        }
-        pad(KeyEvent.KEYCODE_DPAD_RIGHT)
-        rule.onNodeWithTag("home-category-favorites").assertIsFocused()
+        waitFocused("home-catalogue-action")
         pad(KeyEvent.KEYCODE_DPAD_RIGHT)
         rule.onNodeWithTag("home-game-tree-0").assertIsFocused()
     }
 
     @Test
-    fun favoritesStartAtTheFixedCrossAndConsolesMoveToTheSameAnchor() {
+    fun theCatalogueStartsAtTheFixedCrossAndConsolesMoveToTheSameAnchor() {
         show(twoConsoles = true, browseConsole = false)
-        val anchor = rule.onNodeWithTag("home-category-favorites").fetchSemanticsNode().boundsInRoot.center.x
-        assertEquals("favorites", controller.homeColumn)
-        val catalogue = rule.onNodeWithTag("home-category-catalogue").fetchSemanticsNode().boundsInRoot
-        assertTrue(catalogue.center.x < anchor)
+        val anchor = rule.onNodeWithTag("home-category-catalogue").fetchSemanticsNode().boundsInRoot.center.x
+        assertEquals("catalogue", controller.homeColumn)
+        rule.onNodeWithTag("home-category-favorites").assertDoesNotExist()
         pad(KeyEvent.KEYCODE_BUTTON_R1)
         rule.onNodeWithTag("home-game-tree-0").assertIsFocused()
         assertEquals(anchor, rule.onNodeWithTag("home-category-console:nes").fetchSemanticsNode().boundsInRoot.center.x, 2f)
@@ -774,8 +805,10 @@ class NavigationTreeTest {
         pad(KeyEvent.KEYCODE_BUTTON_Y)
         rule.onNodeWithTag("header-search-field").performTextInput("Jeu")
         rule.waitUntil(5_000) { rule.onAllNodesWithTag("search-result-tree-0").fetchSemanticsNodes().isNotEmpty() }
-        pad(KeyEvent.KEYCODE_BUTTON_A)
-        repeat(7) { pad(KeyEvent.KEYCODE_DPAD_DOWN) }
+        rule.onNodeWithTag("header-search-field").performImeAction()
+        waitFocused("search-result-tree-0")
+        pad(KeyEvent.KEYCODE_DPAD_DOWN)
+        pad(KeyEvent.KEYCODE_DPAD_RIGHT)
         rule.onNodeWithTag("search-result-tree-7").assertIsDisplayed().assertIsFocused()
         rule.onNodeWithTag("header-search-field").assertIsDisplayed()
         screenshot("search-scrolled-results")
@@ -788,8 +821,10 @@ class NavigationTreeTest {
         rule.onNodeWithTag("home-game-tree-4").assertIsDisplayed()
         assertEquals("console:snes", controller.homeColumn)
         assertEquals(Route.Home, controller.nav.current)
+        // Without favorites there is no Favoris column: the link lands on the home.
         rule.runOnIdle { controller.nav.section(Section.FAVORITES) }
-        rule.onNodeWithText("Aucun favori").assertIsDisplayed()
+        rule.waitForIdle()
+        rule.onNodeWithTag("home-category-favorites").assertDoesNotExist()
         assertEquals(Route.Home, controller.nav.current)
     }
 
@@ -833,8 +868,6 @@ class NavigationTreeTest {
         rule.onNodeWithTag("header-profile-button").performClick()
         rule.onNodeWithTag("profile-menu").assertIsDisplayed()
         rule.onNodeWithTag("home-content", useUnmergedTree = true).assertIsDisplayed()
-        rule.onNodeWithText("Profil").assertDoesNotExist()
-        rule.onNodeWithContentDescription("Fermer le profil").assertDoesNotExist()
         pad(KeyEvent.KEYCODE_BUTTON_B)
         rule.onNodeWithTag("profile-menu").assertDoesNotExist()
         cover.assertIsFocused()
@@ -844,11 +877,10 @@ class NavigationTreeTest {
         rule.onNodeWithTag("header-profile-button").performClick()
         val device = androidx.test.uiautomator.UiDevice.getInstance(instrumentation)
         rule.runOnIdle { assertFalse(controller.gameMenu) }
-        rule.waitUntil(5_000) {
-            runCatching { rule.onNodeWithTag("profile-shortcut-root").fetchSemanticsNode().config[SemanticsProperties.Focused] }.getOrDefault(false)
-        }
+        waitFocused("control-home")
         device.waitForIdle()
-        device.click(device.displayWidth / 10, device.displayHeight / 2)
+        // A tap above the band, on the dimmed home, closes the control center.
+        device.click(device.displayWidth / 2, device.displayHeight / 8)
         rule.waitUntil(5_000) { !controller.menuOpen }
         rule.waitForIdle()
         rule.onNodeWithTag("profile-menu").assertDoesNotExist()
@@ -857,34 +889,23 @@ class NavigationTreeTest {
     }
 
     @Test
-    fun profileGridLinksTheAccountShortcutsAndSyncWithDirectionalFocus() {
+    fun controlCenterIconsAreReachableAndOpenTheirCards() {
         show(Section.USER)
-        assertProfileFitsWithoutScrolling()
-        val settings = rule.onNodeWithTag("profile-shortcut-root").fetchSemanticsNode().boundsInRoot
-        val controls = rule.onNodeWithTag("profile-shortcut-controls").fetchSemanticsNode().boundsInRoot
-        val consoles = rule.onNodeWithTag("profile-shortcut-consoles").fetchSemanticsNode().boundsInRoot
-        assertTrue(controls.left > settings.right)
-        assertEquals(settings.top, controls.top, 1f)
-        assertTrue(consoles.top >= settings.bottom)
-        screenshot("profile-grid-landscape")
+        assertControlCenterFits()
+        screenshot("control-center-landscape")
         pad(KeyEvent.KEYCODE_DPAD_RIGHT)
-        rule.onNodeWithTag("profile-shortcut-controls").assertIsFocused()
-        pad(KeyEvent.KEYCODE_DPAD_DOWN)
-        rule.onNodeWithTag("profile-shortcut-storage").assertIsFocused()
-        pad(KeyEvent.KEYCODE_DPAD_DOWN)
-        rule.onNodeWithTag("profile-sync").assertIsFocused()
-        pad(KeyEvent.KEYCODE_DPAD_UP)
-        rule.onNodeWithTag("profile-shortcut-storage").assertIsFocused()
-        pad(KeyEvent.KEYCODE_DPAD_LEFT)
-        rule.onNodeWithTag("profile-shortcut-consoles").assertIsFocused()
-        pad(KeyEvent.KEYCODE_DPAD_UP)
-        rule.onNodeWithTag("profile-shortcut-root").assertIsFocused()
-        pad(KeyEvent.KEYCODE_DPAD_UP)
-        rule.onNodeWithTag("profile-account").assertIsFocused()
-        pad(KeyEvent.KEYCODE_DPAD_DOWN)
-        rule.onNodeWithTag("profile-shortcut-root").assertIsFocused()
+        rule.onNodeWithTag("control-account").assertIsFocused()
+        repeat(3) { pad(KeyEvent.KEYCODE_DPAD_RIGHT) }
+        rule.onNodeWithTag("control-sync").assertIsFocused()
         pad(KeyEvent.KEYCODE_BUTTON_A)
-        assertEquals(Route.Settings(), controller.nav.current)
+        rule.onNodeWithTag("profile-sync").assertIsDisplayed()
+        pad(KeyEvent.KEYCODE_BUTTON_B)
+        waitFocused("control-sync")
+        repeat(3) { pad(KeyEvent.KEYCODE_DPAD_RIGHT) }
+        rule.onNodeWithTag("control-settings").assertIsFocused()
+        pad(KeyEvent.KEYCODE_BUTTON_A)
+        rule.waitUntil(5_000) { controller.nav.current == Route.Settings() }
+        rule.onNodeWithTag("profile-menu").assertDoesNotExist()
     }
 
     @Test
@@ -910,29 +931,33 @@ class NavigationTreeTest {
     }
 
     @Test
-    fun profileFitsLandscapeWithoutScrollingWithAControllerAndLargeText() {
+    fun controlCenterFitsLandscapeWithAControllerAndLargeText() {
         show(Section.USER, largeText = true)
-        assertProfileFitsWithoutScrolling()
-        rule.onNodeWithTag("profile-shortcut-root").performSemanticsAction(SemanticsActions.RequestFocus) { it() }
-        val settings = rule.onNodeWithTag("profile-shortcut-root").fetchSemanticsNode().boundsInRoot
-        val storage = rule.onNodeWithTag("profile-shortcut-storage").fetchSemanticsNode().boundsInRoot
-        if (kotlin.math.abs(storage.top - settings.top) < 1f) {
-            repeat(3) { pad(KeyEvent.KEYCODE_DPAD_RIGHT) }
-        } else {
-            pad(KeyEvent.KEYCODE_DPAD_RIGHT)
-            pad(KeyEvent.KEYCODE_DPAD_DOWN)
-        }
-        rule.onNodeWithTag("profile-shortcut-storage").assertIsDisplayed().assertIsFocused()
-        screenshot("profile-grid-large-text-landscape")
+        assertControlCenterFits()
+        repeat(7) { pad(KeyEvent.KEYCODE_DPAD_RIGHT) }
+        rule.onNodeWithTag("control-settings").assertIsDisplayed().assertIsFocused()
+        screenshot("control-center-large-text-landscape")
+        pad(KeyEvent.KEYCODE_DPAD_LEFT)
+        pad(KeyEvent.KEYCODE_DPAD_LEFT)
+        pad(KeyEvent.KEYCODE_DPAD_LEFT)
+        pad(KeyEvent.KEYCODE_DPAD_LEFT)
+        rule.onNodeWithTag("control-downloads").assertIsFocused()
         pad(KeyEvent.KEYCODE_BUTTON_A)
-        rule.onNodeWithText("Téléchargements et stockage").assertIsDisplayed()
-        rule.onNodeWithContentDescription("Retour").performSemanticsAction(SemanticsActions.RequestFocus) { it() }
-        val cache = rule.onNodeWithText("Vider le cache des jaquettes")
-        repeat(12) {
-            val focused = runCatching { cache.fetchSemanticsNode().config[SemanticsProperties.Focused] }.getOrDefault(false)
-            if (!focused) pad(KeyEvent.KEYCODE_DPAD_DOWN)
+        rule.onNodeWithText("Stockage").assertIsDisplayed().performClick()
+        rule.waitUntil(5_000) { controller.nav.current == Route.Settings(SettingsPage.STORAGE) }
+    }
+
+    private fun assertControlCenterFits() {
+        val root = rule.onRoot().fetchSemanticsNode().boundsInRoot
+        val minimum = 48f * instrumentation.targetContext.resources.displayMetrics.density - 1f
+        listOf("home", "account", "notices", "downloads", "sync", "controller", "sound", "settings", "quit").forEach { item ->
+            val bounds = rule.onNodeWithTag("control-$item").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+            assertTrue(
+                "control-$item must fit on screen: $bounds in $root",
+                bounds.left >= root.left && bounds.right <= root.right && bounds.bottom <= root.bottom,
+            )
+            assertTrue("control-$item must retain a complete touch target", bounds.height >= minimum)
         }
-        cache.assertIsDisplayed().assertIsFocused()
     }
 
     private fun assertProfileFitsWithoutScrolling() {

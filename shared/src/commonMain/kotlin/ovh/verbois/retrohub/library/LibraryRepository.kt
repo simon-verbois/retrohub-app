@@ -34,7 +34,7 @@ import ovh.verbois.retrohub.sync.SaveSync
 import kotlin.time.Instant
 
 /** Une fiche telle que l’interface l’affiche : le catalogue du serveur et l’état sur l’appareil. */
-data class Game(val remote: LibraryGame, val local: LocalRomEntity?) {
+data class Game(val remote: LibraryGame, val local: LocalRomEntity?, val localPlayed: Instant? = null) {
     val id: String get() = remote.id
     val playGameId: String get() = remote.playGameId
     val title: String get() = remote.title
@@ -46,7 +46,9 @@ data class Game(val remote: LibraryGame, val local: LocalRomEntity?) {
     val downloaded: Boolean get() = local != null
     val updateAvailable: Boolean get() = local != null && remote.rom != null && remote.rom.sha256 != local.sha256
     val downloadable: Boolean get() = remote.rom != null && supported
-    val lastPlayed: Instant? = parseInstant(remote.lastPlayedAt)
+
+    /** The server's date, or a later game on this device that the server has not heard of yet (offline, short). */
+    val lastPlayed: Instant? = listOfNotNull(parseInstant(remote.lastPlayedAt), localPlayed).maxOrNull()
     val sortTitle: String = title.lowercase()
     val searchText: String by lazy { searchKey(title + " " + Consoles.name(console) + " " + (remote.genre ?: "")) }
     val favorite: Boolean get() = remote.favorite
@@ -69,9 +71,10 @@ class LibraryRepository(
     }.flowOn(Dispatchers.Default)
 
     val games: StateFlow<List<Game>> =
-        combine(catalog, db.roms().observeAll().distinctUntilChanged()) { catalog, roms ->
+        combine(catalog, db.roms().observeAll().distinctUntilChanged(), db.saves().observeAll().distinctUntilChanged()) { catalog, roms, saves ->
             val local = roms.associateBy { it.playGameId }
-            catalog.map { Game(it, local[it.playGameId]) }
+            val played = saves.groupBy { it.gameId }.mapValues { (_, list) -> list.mapNotNull { parseInstant(it.localPlayedAt) }.maxOrNull() }
+            catalog.map { Game(it, local[it.playGameId], played[it.playGameId]) }
         }.flowOn(Dispatchers.Default).stateIn(scope, SharingStarted.Eagerly, emptyList())
 
     suspend fun saveEpoch(): String = kv.string(EPOCH) ?: "initial"

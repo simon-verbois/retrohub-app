@@ -18,10 +18,15 @@ import ovh.verbois.retrohub.ui.home.*
 import ovh.verbois.retrohub.ui.nav.Navigator
 import ovh.verbois.retrohub.ui.nav.Route
 
+/** A message kept for the notification list of the control center. */
+data class Notice(val id: Long, val text: String, val at: kotlin.time.Instant, val route: Route? = null)
+
 /** Artwork and console palette behind the current screen. */
 data class Backdrop(val url: String?, val console: String?)
 
 /** État partagé de l’interface : navigation, fond, messages et lancement des jeux. */
+private const val MAX_NOTICES = 30
+
 class UiController(val container: AppContainer, private val scope: CoroutineScope) {
     val nav = Navigator()
     val home: StateFlow<HomeLibrary> = combine(
@@ -46,7 +51,7 @@ class UiController(val container: AppContainer, private val scope: CoroutineScop
     fun homeSelection(model: HomeLibrary = home.value): HomeSelection {
         val column = model.byColumn[homeColumn]
             ?: model.byId[homeGame]?.let { model.byColumn["console:${it.console}"] }
-            ?: model.byColumn.getValue("favorites")
+            ?: model.columns.first()
         return HomeSelection(column, model.columnIndices.getValue(column.key), column.indices[homeGame] ?: 0)
     }
 
@@ -125,7 +130,7 @@ class UiController(val container: AppContainer, private val scope: CoroutineScop
 
     fun cycleHomeColumn(step: Int) {
         val columns = home.value.columns
-        val index = columns.indexOfFirst { it.key == (homeColumn ?: "favorites") }.coerceAtLeast(0)
+        val index = columns.indexOfFirst { it.key == homeSelection().column.key }.coerceAtLeast(0)
         columns.getOrNull((index + step).coerceIn(0, columns.lastIndex))?.let { selectHomeColumn(it.key) }
     }
 
@@ -188,7 +193,53 @@ class UiController(val container: AppContainer, private val scope: CoroutineScop
     private var autoStarted = false
     private var toastJob: Job? = null
 
+    /** Latest messages first; the control center lists them. */
+    val notices = androidx.compose.runtime.mutableStateListOf<Notice>()
+    var unreadNotices by mutableStateOf(0)
+        private set
+    private var noticeId = 0L
+
+    fun notify(text: String, route: Route? = null) {
+        notices.add(0, Notice(noticeId++, text, container.clock.now(), route))
+        while (notices.size > MAX_NOTICES) notices.removeAt(notices.lastIndex)
+        unreadNotices++
+    }
+
+    fun markNoticesRead() {
+        unreadNotices = 0
+    }
+
+    fun clearNotices() {
+        notices.clear()
+        unreadNotices = 0
+    }
+
+    init {
+        // Finished and failed downloads become notices, so they are not missed while browsing.
+        scope.launch {
+            var previous = emptyMap<String, ovh.verbois.retrohub.library.DownloadState>()
+            container.downloads.states.collect { states ->
+                previous.forEach { (id, before) ->
+                    val after = states[id]
+                    if (before !is ovh.verbois.retrohub.library.DownloadState.Running ||
+                        after is ovh.verbois.retrohub.library.DownloadState.Running
+                    ) {
+                        return@forEach
+                    }
+                    val game = container.library.games.value.firstOrNull { it.playGameId == id } ?: return@forEach
+                    when (after) {
+                        null -> notify("« ${game.title} » est prêt à jouer.", Route.Game(game.id))
+                        is ovh.verbois.retrohub.library.DownloadState.Failed -> notify(after.message, Route.Game(game.id))
+                        else -> Unit
+                    }
+                }
+                previous = states
+            }
+        }
+    }
+
     fun show(message: String) {
+        notify(message)
         toast = message
         toastJob?.cancel()
         toastJob =

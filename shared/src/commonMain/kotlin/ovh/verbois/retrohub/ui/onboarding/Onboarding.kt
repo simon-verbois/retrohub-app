@@ -45,6 +45,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -55,6 +56,7 @@ import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextRange
@@ -85,9 +87,11 @@ import ovh.verbois.retrohub.resources.qr_scan
 import ovh.verbois.retrohub.resources.welcome_description
 import ovh.verbois.retrohub.resources.welcome_title
 import ovh.verbois.retrohub.ui.components.AutoFocus
+import ovh.verbois.retrohub.ui.components.ControllerTextField
 import ovh.verbois.retrohub.ui.components.FilterChip
 import ovh.verbois.retrohub.ui.components.GlassButton
 import ovh.verbois.retrohub.ui.components.GlassPanel
+import ovh.verbois.retrohub.ui.components.LocalConsoleStyle
 import ovh.verbois.retrohub.ui.components.MessageBanner
 import ovh.verbois.retrohub.ui.components.MessageKind
 import ovh.verbois.retrohub.ui.components.PrimaryButton
@@ -227,8 +231,13 @@ private fun Brand(modifier: Modifier, compact: Boolean) {
 
 @Composable
 private fun FormCard(content: @Composable () -> Unit) {
+    // Landscape keeps the whole card on one screen: tighter padding and gaps.
+    val console = LocalConsoleStyle.current
     GlassPanel(Modifier.widthIn(max = 480.dp).fillMaxWidth()) {
-        Column(Modifier.background(MaterialTheme.colorScheme.surface).padding(22.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) { content() }
+        Column(
+            Modifier.background(MaterialTheme.colorScheme.surface).padding(if (console) 18.dp else 22.dp),
+            verticalArrangement = Arrangement.spacedBy(if (console) 10.dp else 14.dp),
+        ) { content() }
     }
 }
 
@@ -283,24 +292,38 @@ private fun ServerStep(server: String, onChange: (String) -> Unit, checking: Boo
     val focus = remember { FocusRequester() }
     FormCard {
         Text("Votre serveur", style = MaterialTheme.typography.headlineMedium)
-        Text(
-            "L’adresse de votre RetroHub, celle que vous ouvrez dans le navigateur.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = Palette.TextDim,
-        )
-        OutlinedTextField(
-            server,
-            onChange,
-            Modifier.fillMaxWidth().focusRequester(focus),
-            label = { Text("Adresse du serveur") },
-            placeholder = { Text("retrohub.mondomaine.fr") },
-            leadingIcon = { Icon(Lucide.Globe, null) },
-            singleLine = true,
-            shape = RoundedCornerShape(16.dp),
-            colors = FieldColors(),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Go, autoCorrectEnabled = false),
-            keyboardActions = KeyboardActions(onGo = { onContinue() }),
-        )
+        if (LocalConsoleStyle.current) {
+            ControllerTextField(
+                server,
+                onChange,
+                "Adresse du serveur",
+                Modifier.fillMaxWidth().focusRequester(focus),
+                icon = Lucide.Globe,
+                keyboardType = KeyboardType.Uri,
+                imeAction = ImeAction.Go,
+                onDone = onContinue,
+                tag = "server-field",
+            )
+        } else {
+            Text(
+                "L’adresse de votre RetroHub, celle que vous ouvrez dans le navigateur.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = Palette.TextDim,
+            )
+            OutlinedTextField(
+                server,
+                onChange,
+                Modifier.fillMaxWidth().focusRequester(focus).testTag("server-field"),
+                label = { Text("Adresse du serveur") },
+                placeholder = { Text("retrohub.mondomaine.fr") },
+                leadingIcon = { Icon(Lucide.Globe, null) },
+                singleLine = true,
+                shape = RoundedCornerShape(16.dp),
+                colors = FieldColors(),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Go, autoCorrectEnabled = false),
+                keyboardActions = KeyboardActions(onGo = { onContinue() }),
+            )
+        }
         error?.let { MessageBanner(it, MessageKind.ERROR, Modifier.fillMaxWidth()) }
         PrimaryButton(
             "Continuer",
@@ -370,87 +393,137 @@ private fun LoginStep(container: AppContainer, server: String, message: String?,
             GlassButton("Changer", onChangeServer, height = 38.dp)
         }
         message?.let { MessageBanner(it, MessageKind.WARNING, Modifier.fillMaxWidth()) }
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        val console = LocalConsoleStyle.current
+        val codeTab = remember { FocusRequester() }
+        val passwordTab = remember { FocusRequester() }
+        // Up from the first field always returns to the chosen tab, never to « Changer ».
+        val belowTabs = Modifier.focusProperties { up = if (withCode) codeTab else passwordTab }
+        val scan: @Composable (Modifier) -> Unit = { modifier ->
+            GlassButton(
+                if (console) "Code QR" else stringResource(if (scanning) Res.string.qr_opening else Res.string.qr_scan),
+                {
+                    if (!scanning) {
+                        focusManager.clearFocus()
+                        keyboard?.hide()
+                        scope.launch {
+                            scanning = true
+                            error = null
+                            try {
+                                container.platform.scanQrCode()?.let { payload ->
+                                    val scanned = pairingCodeFromQr(payload)
+                                    if (scanned == null) error = invalidQr else codeField = TextFieldValue(scanned, TextRange(scanned.length))
+                                }
+                            } catch (e: CancellationException) {
+                                throw e
+                            } catch (e: QrCameraException) {
+                                error = cameraDenied
+                            } catch (e: Exception) {
+                                error = cameraDenied
+                            } finally {
+                                scanning = false
+                            }
+                        }
+                    }
+                },
+                modifier,
+                icon = Lucide.Camera,
+                enabled = !busy && !scanning,
+            )
+        }
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            itemVerticalAlignment = Alignment.CenterVertically,
+        ) {
             FilterChip("Code d’appairage", withCode, {
                 withCode = true
                 error = null
-            })
+            }, Modifier.focusRequester(codeTab))
             FilterChip("Mot de passe", !withCode, {
                 withCode = false
                 error = null
-            })
+            }, Modifier.focusRequester(passwordTab))
+            // In landscape the QR scanner sits beside the tabs, so the card fits the screen height.
+            if (console && withCode && container.platform.canScanQrCode) scan(Modifier)
         }
         if (withCode) {
-            if (container.platform.canScanQrCode) {
-                GlassButton(
-                    stringResource(if (scanning) Res.string.qr_opening else Res.string.qr_scan),
+            if (!console && container.platform.canScanQrCode) scan(Modifier.fillMaxWidth())
+            if (LocalConsoleStyle.current) {
+                ControllerTextField(
+                    code,
+                    { codeField = TextFieldValue(formatPairingCode(it)) },
+                    "Code d’appairage",
+                    Modifier.fillMaxWidth().focusRequester(focus).then(belowTabs),
+                    icon = Lucide.KeyRound,
+                    keyboardType = KeyboardType.Ascii,
+                    capitalization = KeyboardCapitalization.Characters,
+                    onDone = { if (ready) submit() },
+                    tag = "pairing-code-field",
+                )
+            } else {
+                Text(
+                    "Sur le web : Paramètres → Applications et appareils → Relier un appareil. Le code est valable 10 minutes.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Palette.TextDim,
+                )
+                OutlinedTextField(
+                    codeField,
                     {
-                        if (!scanning) {
-                            focusManager.clearFocus()
-                            keyboard?.hide()
-                            scope.launch {
-                                scanning = true
-                                error = null
-                                try {
-                                    container.platform.scanQrCode()?.let { payload ->
-                                        val scanned = pairingCodeFromQr(payload)
-                                        if (scanned == null) error = invalidQr else codeField = TextFieldValue(scanned, TextRange(scanned.length))
-                                    }
-                                } catch (e: CancellationException) {
-                                    throw e
-                                } catch (e: QrCameraException) {
-                                    error = cameraDenied
-                                } catch (e: Exception) {
-                                    error = cameraDenied
-                                } finally {
-                                    scanning = false
-                                }
-                            }
-                        }
+                        // Le tiret s’insère tout seul ; le curseur reste en fin de saisie.
+                        val formatted = formatPairingCode(it.text)
+                        codeField = TextFieldValue(formatted, TextRange(formatted.length))
                     },
-                    Modifier.fillMaxWidth(),
-                    icon = Lucide.Camera,
-                    enabled = !busy && !scanning,
+                    Modifier.fillMaxWidth().focusRequester(focus).testTag("pairing-code-field"),
+                    label = { Text("Code d’appairage") },
+                    placeholder = { Text("ABCD-EFGH") },
+                    singleLine = true,
+                    shape = RoundedCornerShape(16.dp),
+                    colors = FieldColors(),
+                    textStyle = TextStyle(
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 26.sp,
+                        letterSpacing = 4.sp,
+                        color = Palette.Text,
+                        textAlign = TextAlign.Center,
+                    ),
+                    keyboardOptions = KeyboardOptions(
+                        capitalization = KeyboardCapitalization.Characters,
+                        keyboardType = KeyboardType.Ascii,
+                        imeAction = ImeAction.Done,
+                        autoCorrectEnabled = false,
+                    ),
+                    keyboardActions = KeyboardActions(onDone = { if (ready) submit() }),
                 )
             }
-            Text(
-                "Sur le web : Paramètres → Applications et appareils → Relier un appareil. Le code est valable 10 minutes.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = Palette.TextDim,
-            )
-            OutlinedTextField(
-                codeField,
+        } else if (LocalConsoleStyle.current) {
+            ControllerTextField(
+                username,
                 {
-                    // Le tiret s’insère tout seul ; le curseur reste en fin de saisie.
-                    val formatted = formatPairingCode(it.text)
-                    codeField = TextFieldValue(formatted, TextRange(formatted.length))
+                    username = it
                 },
-                Modifier.fillMaxWidth().focusRequester(focus),
-                label = { Text("Code d’appairage") },
-                placeholder = { Text("ABCD-EFGH") },
-                singleLine = true,
-                shape = RoundedCornerShape(16.dp),
-                colors = FieldColors(),
-                textStyle = TextStyle(
-                    fontFamily = FontFamily.Monospace,
-                    fontSize = 26.sp,
-                    letterSpacing = 4.sp,
-                    color = Palette.Text,
-                    textAlign = TextAlign.Center,
-                ),
-                keyboardOptions = KeyboardOptions(
-                    capitalization = KeyboardCapitalization.Characters,
-                    keyboardType = KeyboardType.Ascii,
-                    imeAction = ImeAction.Done,
-                    autoCorrectEnabled = false,
-                ),
-                keyboardActions = KeyboardActions(onDone = { if (ready) submit() }),
+                "Nom du compte",
+                Modifier.fillMaxWidth().focusRequester(
+                    focus,
+                ).then(belowTabs),
+                icon = Lucide.User,
+                imeAction = ImeAction.Next,
+                tag = "username-field",
+            )
+            ControllerTextField(
+                password,
+                { password = it },
+                "Mot de passe",
+                Modifier.fillMaxWidth(),
+                icon = Lucide.KeyRound,
+                password = true,
+                onDone = { if (ready) submit() },
+                tag = "password-field",
             )
         } else {
             OutlinedTextField(
                 username,
                 { username = it },
-                Modifier.fillMaxWidth().focusRequester(focus),
+                Modifier.fillMaxWidth().focusRequester(focus).testTag("username-field"),
                 label = { Text("Nom du compte") },
                 leadingIcon = { Icon(Lucide.User, null) },
                 singleLine = true,
@@ -461,7 +534,7 @@ private fun LoginStep(container: AppContainer, server: String, message: String?,
             OutlinedTextField(
                 password,
                 { password = it },
-                Modifier.fillMaxWidth(),
+                Modifier.fillMaxWidth().testTag("password-field"),
                 label = { Text("Mot de passe") },
                 leadingIcon = { Icon(Lucide.KeyRound, null) },
                 singleLine = true,
@@ -472,17 +545,23 @@ private fun LoginStep(container: AppContainer, server: String, message: String?,
                 keyboardActions = KeyboardActions(onDone = { if (ready) submit() }),
             )
         }
-        OutlinedTextField(
-            device,
-            { device = it.take(80) },
-            Modifier.fillMaxWidth(),
-            label = { Text("Nom de cet appareil") },
-            leadingIcon = { Icon(Lucide.Smartphone, null) },
-            supportingText = { Text("Affiché à côté de vos sauvegardes et dans la liste des appareils.") },
-            singleLine = true,
-            shape = RoundedCornerShape(16.dp),
-            colors = FieldColors(),
-        )
+        if (LocalConsoleStyle.current) {
+            ControllerTextField(device, {
+                device = it.take(80)
+            }, "Nom de cet appareil", Modifier.fillMaxWidth(), icon = Lucide.Smartphone, tag = "device-name-field")
+        } else {
+            OutlinedTextField(
+                device,
+                { device = it.take(80) },
+                Modifier.fillMaxWidth().testTag("device-name-field"),
+                label = { Text("Nom de cet appareil") },
+                leadingIcon = { Icon(Lucide.Smartphone, null) },
+                supportingText = { Text("Affiché à côté de vos sauvegardes et dans la liste des appareils.") },
+                singleLine = true,
+                shape = RoundedCornerShape(16.dp),
+                colors = FieldColors(),
+            )
+        }
         error?.let { MessageBanner(it, MessageKind.ERROR, Modifier.fillMaxWidth()) }
         PrimaryButton("Relier cet appareil", { submit() }, Modifier.fillMaxWidth(), loading = busy, enabled = ready, icon = Lucide.Link)
     }

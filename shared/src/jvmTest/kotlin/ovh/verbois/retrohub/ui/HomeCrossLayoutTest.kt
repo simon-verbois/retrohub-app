@@ -1,9 +1,9 @@
 package ovh.verbois.retrohub.ui
 
 import org.junit.Test
-import ovh.verbois.retrohub.ui.home.HOME_GAME_TEXT_PADDING
-import ovh.verbois.retrohub.ui.home.HOME_PREVIEW_ASPECT
-import ovh.verbois.retrohub.ui.home.HomeCrossLayout
+import ovh.verbois.retrohub.ui.console.home.HOME_GAME_TEXT_PADDING
+import ovh.verbois.retrohub.ui.console.home.HOME_PREVIEW_ASPECT
+import ovh.verbois.retrohub.ui.console.home.HomeCrossLayout
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 

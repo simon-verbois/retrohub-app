@@ -6,6 +6,7 @@ import android.os.Build
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createEmptyComposeRule
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -149,7 +150,7 @@ class NotificationNavigationTest {
         rule.onNodeWithText("Annuler").performClick()
         waitForWindow()
         scenario!!.recreate()
-        waitText("Jeu Alpha")
+        waitHome()
         rule.onNodeWithText("Quelle partie reprendre ?").assertDoesNotExist()
     }
 
@@ -196,7 +197,12 @@ class NotificationNavigationTest {
 
     private fun launch(conflict: Boolean = false) {
         scenario = ActivityScenario.launch(Notifications.openIntent(context, if (conflict) AppContainer.NOTIFY_CONFLICT else Notifications.DOWNLOAD_BASE))
-        if (!conflict) waitText("Jeu Alpha")
+        if (!conflict) waitHome()
+    }
+
+    /** The landscape home opens on the catalogue when nothing was played yet: wait for the home itself. */
+    private fun waitHome() {
+        rule.waitUntil(5000) { rule.onAllNodesWithTag("home-content").fetchSemanticsNodes().isNotEmpty() }
     }
 
     private fun waitForWindow() {

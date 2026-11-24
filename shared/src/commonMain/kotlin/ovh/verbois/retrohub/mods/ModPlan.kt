@@ -68,7 +68,13 @@ object ModPlanner {
                     EXEFS -> "mods/$title/exefs/"
                     else -> ""
                 }
-                component.artifact?.let { artifact -> artifact.files.map { ModPlannedFile(artifact.sha256.lowercase(), it.path, prefix + it.path) } }
+                component.artifact?.let { artifact ->
+                    artifact.files.map {
+                        // Azahar reads the extended header beside exefs/, not inside it.
+                        val destination = if (component.installer == EXEFS && it.path == "exheader.bin") "mods/$title/exheader.bin" else prefix + it.path
+                        ModPlannedFile(artifact.sha256.lowercase(), it.path, destination)
+                    }
+                }
                     ?: emptyList()
             }
         }
@@ -89,6 +95,14 @@ object ModPlanner {
         }
         val executable = files.filter { it.destination.startsWith("mods/$title/exefs/code.") }
         check(executable.size <= 1, "Plusieurs mods modifient le programme du jeu. Désactivez-en un.")
+        // The extended header describes the program's memory layout: it must come with the code change
+        // it was made for, never meet another mod's code.
+        val program = ordered.filter { release ->
+            release.components.any { component ->
+                component.installer == EXEFS && component.artifact?.files.orEmpty().any { it.path == "exheader.bin" || it.path.startsWith("code.") }
+            }
+        }
+        check(program.size <= 1, "Plusieurs mods modifient le programme du jeu. Désactivez-en un.")
         check(
             ordered.flatMap { it.components }.mapNotNull { it.artifact }.distinctBy { it.sha256 }.sumOf { it.files.sumOf { f -> f.size } } <= MAX_EXPANDED,
             "Ces mods prennent trop de place. Choisissez une combinaison plus légère.",
@@ -166,7 +180,7 @@ object ModPlanner {
                 ) {
                     check(
                         artifact.files.all {
-                            it.path in setOf("code.ips", "code.bps", "code.bin", "icon.bin", "banner.bin", "logo.bin")
+                            it.path in setOf("code.ips", "code.bps", "code.bin", "exheader.bin", "icon.bin", "banner.bin", "logo.bin")
                         },
                         "Ce correctif contient des fichiers non pris en charge.",
                     )

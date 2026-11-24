@@ -24,11 +24,13 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -37,10 +39,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -101,6 +105,10 @@ import ovh.verbois.retrohub.ui.components.ActionButtons
 import ovh.verbois.retrohub.ui.components.AutoFocus
 import ovh.verbois.retrohub.ui.components.Badge
 import ovh.verbois.retrohub.ui.components.ChoiceRow
+import ovh.verbois.retrohub.ui.components.ConsoleToggle
+import ovh.verbois.retrohub.ui.components.ConsoleTone
+import ovh.verbois.retrohub.ui.components.FocusFill
+import ovh.verbois.retrohub.ui.components.LocalConsoleStyle
 import ovh.verbois.retrohub.ui.components.consoleFocus
 import ovh.verbois.retrohub.ui.icons.Lucide
 import ovh.verbois.retrohub.ui.theme.Palette
@@ -118,178 +126,197 @@ fun SetupWizard(container: AppContainer, username: String) {
     var style by rememberSaveable { mutableStateOf(PlayStyle.BOTH) }
     val scope = rememberCoroutineScope()
     val steps = 4
-    BoxWithConstraints(
-        Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Palette.SkyTop, Palette.SkyLow)))
-            .windowInsetsPadding(WindowInsets.safeDrawing).onKeyEvent { event ->
-                if (step > 0 && event.key in listOf(Key.ButtonB, Key.Escape)) {
-                    if (event.type == KeyEventType.KeyUp) step--
-                    true
-                } else {
-                    false
-                }
-            },
-        contentAlignment = Alignment.Center,
-    ) {
-        val compact = maxHeight < 480.dp
-        val wide = maxWidth >= 760.dp && LocalDensity.current.fontScale <= 1.3f
-        Column(
-            Modifier.widthIn(max = 960.dp).fillMaxSize().padding(horizontal = 24.dp, vertical = if (compact) 12.dp else 24.dp),
-            verticalArrangement = Arrangement.spacedBy(if (compact) 12.dp else 20.dp),
-        ) {
-            val progress = stringResource(Res.string.setup_progress, step + 1, steps)
-            Row(Modifier.semantics { contentDescription = progress }, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                repeat(steps) { index ->
-                    Box(
-                        Modifier.height(5.dp).width(
-                            if (index ==
-                                step
-                            ) {
-                                36.dp
-                            } else {
-                                16.dp
-                            },
-                        ).clip(CircleShape).background(if (index <= step) Palette.Accent else Palette.Line),
-                    )
-                }
+    val next = remember { FocusRequester() }
+    val advance: () -> Unit = {
+        if (step == 0) {
+            repo.update {
+                it.copy(
+                    hideTouchWithGamepad = style != PlayStyle.TOUCH,
+                    hints = if (style == PlayStyle.GAMEPAD) HintsMode.ALWAYS else HintsMode.AUTO,
+                )
             }
-            Crossfade(
-                step,
-                Modifier.weight(1f).fillMaxWidth(),
-                label = "setup",
-            ) { current ->
-                BoxWithConstraints(Modifier.fillMaxSize()) {
-                    val availableHeight = maxHeight
-                    Column(
-                        Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).heightIn(min = availableHeight).padding(4.dp),
-                        verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
-                    ) {
-                        when (current) {
-                            0 -> {
-                                SetupTitle(stringResource(Res.string.setup_greeting, username), compact)
-                                Options(
-                                    PlayStyle.entries,
-                                    style,
-                                    { style = it },
-                                    { playStyleLabel(it) },
-                                    { playStyleDescription(it) },
-                                    { playStyleIcon(it) },
-                                    PlayStyle.BOTH,
-                                    wide,
-                                )
-                                ChoiceRow("Orientation de l’interface", InterfaceOrientation.entries, settings.interfaceOrientation, { it.label }, { value ->
-                                    repo.update { it.copy(interfaceOrientation = value) }
-                                }, icon = Lucide.Smartphone, recommended = InterfaceOrientation.SYSTEM)
-                            }
+        }
+        if (step < steps - 1) {
+            step++
+        } else {
+            scope.launch { repo.updateNow { it.copy(setupDone = true) } }
+        }
+    }
+    run {
+        BoxWithConstraints(
+            Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Palette.SkyTop, Palette.SkyLow)))
+                .windowInsetsPadding(WindowInsets.safeDrawing).onKeyEvent { event ->
+                    when {
+                        step > 0 && event.key in listOf(Key.ButtonB, Key.Escape) -> {
+                            if (event.type == KeyEventType.KeyUp) step--
+                            true
+                        }
 
-                            1 -> {
-                                SetupTitle(stringResource(Res.string.setup_performance), compact)
-                                Options(
-                                    PerformanceProfile.entries,
-                                    settings.performance,
-                                    { v -> repo.update { it.copy(performance = v) } },
-                                    { performanceLabel(it) },
-                                    { performanceDescription(it) },
-                                    { Lucide.Gauge },
-                                    PerformanceProfile.BALANCED,
-                                    wide,
-                                )
-                            }
+                        // Start continues, like on a console's first-run screens.
+                        event.key == Key.ButtonStart -> {
+                            if (event.type == KeyEventType.KeyUp) advance()
+                            true
+                        }
 
-                            2 -> {
-                                SetupTitle(stringResource(Res.string.setup_comfort), compact)
-                                Toggles(
-                                    listOf(
-                                        Toggle(
-                                            stringResource(Res.string.setup_haptics),
-                                            stringResource(Res.string.setup_haptics_description),
-                                            Lucide.Vibrate,
-                                            settings.haptics,
-                                        ) { v ->
-                                            repo.update { it.copy(haptics = v) }
-                                        },
-                                        Toggle(
-                                            stringResource(Res.string.setup_background),
-                                            stringResource(Res.string.setup_background_description),
-                                            Lucide.Sparkles,
-                                            settings.animatedBackground,
-                                        ) { v ->
-                                            repo.update { it.copy(animatedBackground = v) }
-                                        },
-                                        Toggle(
-                                            stringResource(Res.string.setup_resume),
-                                            stringResource(Res.string.setup_resume_description),
-                                            Lucide.History,
-                                            settings.resumeLastState,
-                                        ) { v ->
-                                            repo.update { it.copy(resumeLastState = v) }
-                                        },
-                                        Toggle(
-                                            stringResource(Res.string.setup_cellular),
-                                            stringResource(Res.string.setup_cellular_description),
-                                            Lucide.Globe,
-                                            settings.cellularDownloads,
-                                        ) { v ->
-                                            repo.update { it.copy(cellularDownloads = v) }
-                                        },
-                                    ),
-                                    wide,
-                                )
-                            }
-
-                            else -> {
-                                Column(
-                                    Modifier.fillMaxWidth().padding(vertical = 16.dp),
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    verticalArrangement = Arrangement.spacedBy(20.dp),
+                        else -> false
+                    }
+                },
+            contentAlignment = Alignment.Center,
+        ) {
+            val compact = maxHeight < 480.dp
+            val wide = maxWidth >= 760.dp && LocalDensity.current.fontScale <= 1.3f
+            Column(
+                Modifier.widthIn(max = 960.dp).fillMaxSize().padding(horizontal = 24.dp, vertical = if (compact) 12.dp else 24.dp),
+                verticalArrangement = Arrangement.spacedBy(if (compact) 12.dp else 20.dp),
+            ) {
+                val progress = stringResource(Res.string.setup_progress, step + 1, steps)
+                Row(Modifier.semantics { contentDescription = progress }, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    repeat(steps) { index ->
+                        Box(
+                            Modifier.height(5.dp).width(
+                                if (index ==
+                                    step
                                 ) {
-                                    Box(Modifier.size(80.dp).clip(CircleShape).background(Palette.Accent), contentAlignment = Alignment.Center) {
-                                        Icon(Lucide.Check, null, Modifier.size(36.dp), tint = Palette.OnAccent)
+                                    36.dp
+                                } else {
+                                    16.dp
+                                },
+                            ).clip(CircleShape).background(if (index <= step) Palette.Accent else Palette.Line),
+                        )
+                    }
+                }
+                Crossfade(
+                    step,
+                    Modifier.weight(1f).fillMaxWidth(),
+                    label = "setup",
+                ) { current ->
+                    BoxWithConstraints(Modifier.fillMaxSize()) {
+                        val availableHeight = maxHeight
+                        Column(
+                            Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).heightIn(min = availableHeight).padding(4.dp),
+                            verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
+                        ) {
+                            when (current) {
+                                0 -> {
+                                    SetupTitle(stringResource(Res.string.setup_greeting, username), compact)
+                                    Options(
+                                        PlayStyle.entries,
+                                        style,
+                                        { style = it },
+                                        { playStyleLabel(it) },
+                                        { playStyleDescription(it) },
+                                        { playStyleIcon(it) },
+                                        PlayStyle.BOTH,
+                                        wide,
+                                    )
+                                    ChoiceRow(
+                                        "Orientation de l’interface",
+                                        InterfaceOrientation.entries,
+                                        settings.interfaceOrientation,
+                                        { it.label },
+                                        { value -> repo.update { it.copy(interfaceOrientation = value) } },
+                                        icon = Lucide.Smartphone,
+                                        recommended = InterfaceOrientation.SYSTEM,
+                                    )
+                                }
+
+                                1 -> {
+                                    SetupTitle(stringResource(Res.string.setup_performance), compact)
+                                    Options(
+                                        PerformanceProfile.entries,
+                                        settings.performance,
+                                        { v -> repo.update { it.copy(performance = v) } },
+                                        { performanceLabel(it) },
+                                        { performanceDescription(it) },
+                                        { performanceIcon(it) },
+                                        PerformanceProfile.BALANCED,
+                                        wide,
+                                    )
+                                }
+
+                                2 -> {
+                                    SetupTitle(stringResource(Res.string.setup_comfort), compact)
+                                    Toggles(
+                                        listOf(
+                                            Toggle(
+                                                stringResource(Res.string.setup_haptics),
+                                                stringResource(Res.string.setup_haptics_description),
+                                                Lucide.Vibrate,
+                                                settings.haptics,
+                                            ) { v ->
+                                                repo.update { it.copy(haptics = v) }
+                                            },
+                                            Toggle(
+                                                stringResource(Res.string.setup_background),
+                                                stringResource(Res.string.setup_background_description),
+                                                Lucide.Sparkles,
+                                                settings.animatedBackground,
+                                            ) { v ->
+                                                repo.update { it.copy(animatedBackground = v) }
+                                            },
+                                            Toggle(
+                                                stringResource(Res.string.setup_resume),
+                                                stringResource(Res.string.setup_resume_description),
+                                                Lucide.History,
+                                                settings.resumeLastState,
+                                            ) { v ->
+                                                repo.update { it.copy(resumeLastState = v) }
+                                            },
+                                            Toggle(
+                                                stringResource(Res.string.setup_cellular),
+                                                stringResource(Res.string.setup_cellular_description),
+                                                Lucide.Globe,
+                                                settings.cellularDownloads,
+                                            ) { v ->
+                                                repo.update { it.copy(cellularDownloads = v) }
+                                            },
+                                        ),
+                                        wide,
+                                    )
+                                }
+
+                                else -> {
+                                    // Nothing to choose here: the focus goes to « Découvrir ma bibliothèque ».
+                                    AutoFocus(next)
+                                    Column(
+                                        Modifier.fillMaxWidth().padding(vertical = 16.dp),
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        verticalArrangement = Arrangement.spacedBy(20.dp),
+                                    ) {
+                                        Box(Modifier.size(80.dp).clip(CircleShape).background(Palette.Accent), contentAlignment = Alignment.Center) {
+                                            Icon(Lucide.Check, null, Modifier.size(36.dp), tint = Palette.OnAccent)
+                                        }
+                                        Text(
+                                            stringResource(Res.string.setup_ready),
+                                            style = MaterialTheme.typography.displayMedium,
+                                            textAlign = TextAlign.Center,
+                                            modifier = Modifier.semantics {
+                                                heading()
+                                            },
+                                        )
+                                        Text(
+                                            stringResource(Res.string.setup_ready_description),
+                                            Modifier.widthIn(max = 440.dp),
+                                            style = MaterialTheme.typography.bodyLarge,
+                                            color = Palette.TextDim,
+                                            textAlign = TextAlign.Center,
+                                        )
                                     }
-                                    Text(
-                                        stringResource(Res.string.setup_ready),
-                                        style = MaterialTheme.typography.displayMedium,
-                                        textAlign = TextAlign.Center,
-                                        modifier = Modifier.semantics {
-                                            heading()
-                                        },
-                                    )
-                                    Text(
-                                        stringResource(Res.string.setup_ready_description),
-                                        Modifier.widthIn(max = 440.dp),
-                                        style = MaterialTheme.typography.bodyLarge,
-                                        color = Palette.TextDim,
-                                        textAlign = TextAlign.Center,
-                                    )
                                 }
                             }
                         }
                     }
                 }
+                ActionButtons(
+                    stringResource(if (step == steps - 1) Res.string.setup_discover else Res.string.action_continue),
+                    advance,
+                    secondary = if (step > 0) stringResource(Res.string.action_back) else null,
+                    primaryModifier = Modifier.focusRequester(next),
+                    onSecondary = { step-- },
+                    primaryIcon = if (step == steps - 1) Lucide.Play else Lucide.ChevronRight,
+                    secondaryIcon = Lucide.ChevronLeft,
+                )
             }
-            ActionButtons(
-                stringResource(if (step == steps - 1) Res.string.setup_discover else Res.string.action_continue),
-                {
-                    if (step == 0) {
-                        repo.update {
-                            it.copy(
-                                hideTouchWithGamepad = style != PlayStyle.TOUCH,
-                                hints = if (style ==
-                                    PlayStyle.GAMEPAD
-                                ) {
-                                    HintsMode.ALWAYS
-                                } else {
-                                    HintsMode.AUTO
-                                },
-                            )
-                        }
-                    }
-                    if (step < steps - 1) step++ else scope.launch { repo.updateNow { it.copy(setupDone = true) } }
-                },
-                secondary = if (step > 0) stringResource(Res.string.action_back) else null,
-                onSecondary = { step-- },
-                primaryIcon = if (step == steps - 1) Lucide.Play else Lucide.ChevronRight,
-                secondaryIcon = Lucide.ChevronLeft,
-            )
         }
     }
 }
@@ -317,9 +344,37 @@ private fun <T> Options(
     wide: Boolean,
 ) {
     val first = remember { FocusRequester() }
-    val card: @Composable (T, Modifier) -> Unit = { option, modifier ->
+    val console = LocalConsoleStyle.current
+    // The focus starts on the current choice, not on the first card.
+    val initial = remember { if (selected in options) selected else options.first() }
+    val card: @Composable (T, Modifier) -> Unit = card@{ option, modifier ->
         val active = option == selected
         val shape = RoundedCornerShape(20.dp)
+        if (console) {
+            FocusFill(
+                { onSelect(option) },
+                modifier.heightIn(min = 112.dp).semantics { this.selected = active },
+                shape = shape,
+                rest = if (active) ConsoleTone.Selected.copy(alpha = 0.28f) else ConsoleTone.Rest,
+                role = Role.RadioButton,
+                contentAlignment = Alignment.TopStart,
+            ) {
+                Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Icon(icon(option), null, Modifier.size(24.dp))
+                        Text(label(option), Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
+                        if (active) {
+                            Box(Modifier.size(22.dp).clip(CircleShape).background(ConsoleTone.Selected), contentAlignment = Alignment.Center) {
+                                Icon(Lucide.Check, null, Modifier.size(14.dp), tint = ConsoleTone.OnSelected)
+                            }
+                        }
+                    }
+                    Text(description(option), style = MaterialTheme.typography.bodyMedium, color = LocalContentColor.current.copy(alpha = 0.75f))
+                    if (option == recommended) Badge(stringResource(Res.string.recommended), Palette.Success)
+                }
+            }
+            return@card
+        }
         Column(
             modifier.heightIn(min = 112.dp).semantics { this.selected = active }
                 .consoleFocus(shape, { onSelect(option) }, role = Role.RadioButton, focusScale = 1.01f)
@@ -337,11 +392,11 @@ private fun <T> Options(
     }
     if (wide) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            options.forEachIndexed { i, option -> card(option, Modifier.weight(1f).then(if (i == 0) Modifier.focusRequester(first) else Modifier)) }
+            options.forEach { option -> card(option, Modifier.weight(1f).then(if (option == initial) Modifier.focusRequester(first) else Modifier)) }
         }
     } else {
         Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            options.forEachIndexed { i, option -> card(option, Modifier.fillMaxWidth().then(if (i == 0) Modifier.focusRequester(first) else Modifier)) }
+            options.forEach { option -> card(option, Modifier.fillMaxWidth().then(if (option == initial) Modifier.focusRequester(first) else Modifier)) }
         }
     }
     AutoFocus(first)
@@ -350,8 +405,29 @@ private fun <T> Options(
 @Composable
 private fun Toggles(items: List<Toggle>, wide: Boolean) {
     val first = remember { FocusRequester() }
-    val tile: @Composable (Toggle, Modifier) -> Unit = { item, modifier ->
+    val console = LocalConsoleStyle.current
+    val tile: @Composable (Toggle, Modifier) -> Unit = tile@{ item, modifier ->
         val shape = RoundedCornerShape(20.dp)
+        if (console) {
+            FocusFill(
+                { item.onChange(!item.checked) },
+                modifier.heightIn(min = 96.dp).semantics { toggleableState = ToggleableState(item.checked) },
+                shape = shape,
+                rest = ConsoleTone.Rest,
+                role = Role.Switch,
+                contentAlignment = Alignment.TopStart,
+            ) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Icon(item.icon, null, Modifier.size(24.dp))
+                        Text(item.title, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
+                        ConsoleToggle(item.checked)
+                    }
+                    Text(item.subtitle, style = MaterialTheme.typography.bodyMedium, color = LocalContentColor.current.copy(alpha = 0.75f))
+                }
+            }
+            return@tile
+        }
         Column(
             modifier.heightIn(min = 96.dp).semantics { toggleableState = ToggleableState(item.checked) }
                 .consoleFocus(shape, { item.onChange(!item.checked) }, role = Role.Switch, focusScale = 1.01f)
@@ -422,6 +498,12 @@ private fun playStyleDescription(style: PlayStyle): String = stringResource(
         PlayStyle.BOTH -> Res.string.setup_both_description
     },
 )
+
+private fun performanceIcon(profile: PerformanceProfile): ImageVector = when (profile) {
+    PerformanceProfile.BATTERY -> Lucide.Battery
+    PerformanceProfile.BALANCED -> Lucide.Scale
+    PerformanceProfile.QUALITY -> Lucide.Sparkles
+}
 
 @Composable
 private fun performanceLabel(profile: PerformanceProfile): String = stringResource(

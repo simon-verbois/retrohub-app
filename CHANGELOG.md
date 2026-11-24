@@ -10,6 +10,67 @@ change, in plain text. Never rewrite the notes of a published version.
 
 ## [Unreleased]
 
+## [2026.48.1] - 2026-11-24
+
+### Added
+
+- In-game menu: add a cheat code without leaving the game.
+- Landscape control center: the Guide button (or the avatar) opens a band at the bottom of the screen with the last game, running downloads, save conflicts and notifications, and quick access to the account, synchronization, controller, sound, settings and quitting.
+- Landscape home: a « Récents » column with the last games played comes first, and favorites show a heart.
+
+### Changed
+
+- Landscape: the whole interface is drawn a little smaller on short phone screens, so menus, the game page and the settings sections fit without scrolling (touch controls in a game keep their size).
+- Landscape game page: everything fits on one screen; the game's options are a row of tiles (saves, cheats, rotation, new game, delete…) showing their current value, each opening a side panel or acting directly, and the hint bar names what A does on the focused control.
+- Landscape header and control center: round icons have no text until focused, then turn into a white disc with a short label (« Rechercher », « Compte », « Téléchargements »…).
+- Landscape control center: a compact row of icons centred over the home instead of a dark band, labels above the icons, panels opening right above their icon, and Down from the cards always starts on « Accueil ».
+- Landscape catalogue and search: tiles show only the cover; the focused game shows its name and console over it.
+- Landscape tabs (catalogue): moving onto a tab switches the content at once, the current tab is bold, and Up from the grid returns to the current tab.
+- Landscape home: the background takes the focused game's art once the focus rests, and « Catalogue » previews how many games it holds with a few covers.
+- Landscape first launch and setup: a hint bar shows the controller buttons, the QR code scanner sits beside the login tabs, and the keyboard's « Next » goes on typing in the following field.
+- Landscape: holding a direction in the catalogue and search grids speeds up like on the home.
+- In-game: the area around the camera cutout takes the color of the side panels instead of black, and touch buttons have white labels with a stronger colored ring.
+- Landscape settings: the console list shows each console's icon and only states you can act on (hidden, customized, unavailable); emulator names stay inside each console's page.
+- « Orientation en jeu » has its own icon.
+- Landscape search (Y): full screen over the dimmed home, with the matching games as tiles that open their game page.
+- Landscape confirmations: a compact window whose buttons show their controller button (B cancel, A confirm), the destructive action in red and the focus on the safe one.
+- Landscape messages appear as notifications at the top right and stay in the control center.
+- Landscape first launch: fields open the keyboard only with A (or a tap), the keyboard's action or Back ends typing, and the login card fits the screen with fewer explanations.
+- Landscape setup: choices use the console look, the focus starts on the current choice, and Start continues.
+- The notification permission is asked when the first download starts, not on arrival.
+- Setup: each performance profile has its own icon.
+- In-game menu (landscape): the focused action turns white, returning from a page puts the focus back on the action you used, « Touches de la console » opens in the same window as the other pages, and « Charger une partie » only lists saved games.
+- In-game menu: emulator options are shown in French (« Format de l’image », « Désactivé »…), picture options are only under « Image et écrans », and each action has its own icon.
+- Landscape game page: a big cover, the game's facts and one big main action (play, resume or download, with the progress inside the button), then favorites, version and the game's options (saves, cheats, picture) on the same page. It also works offline for games on the device.
+- Landscape home: Start opens the game's options in a panel sliding in from the right, with « Fiche du jeu » to open the game page.
+- Landscape: a game with a single version downloads without a confirmation.
+- Landscape settings: sections on the left and their settings on the right, like a PS5. Every row has the same look; switches toggle with A, choices open a centered list with a check, sliders change with left and right.
+- Landscape: the focused control turns white instead of being outlined, and a chosen value keeps a cyan check, so selection and focus no longer look alike.
+- Landscape catalogue: a full-screen library with Tous / Sur le serveur / Sur l'appareil tabs (LB/RB), a six-column grid that loads more games as you scroll, a check on games already on the device, and filters and sorting in a side panel (Start).
+- Landscape home: the Favoris column only appears once a game is a favorite, and the app opens on Récents (or the catalogue).
+- Landscape: tools, catalogue and settings open as full-screen pages instead of a side panel, and a hint bar at the bottom shows what each controller button does (tap a hint to perform it).
+
+### Fixed
+
+- Landscape game page: the focus no longer slips under the hint bar onto options you cannot see, and closing a panel returns to the tile that opened it.
+- Typing in a field now continues after the existing text instead of before it.
+- First launch: Up from the first field returns to the Code / Mot de passe tabs instead of « Changer »; the last setup step focuses « Découvrir ma bibliothèque » instead of « Retour ».
+- In-game menu (landscape): a page opens on its first choice instead of the back button, and the quit, restart and overwrite confirmations use the console window with A and B.
+- « Récents » and « Joués récemment » include games played on this device that the server has not counted yet (offline or very short sessions); the search no longer titles unplayed games « Joués récemment ».
+- Landscape: the focus comes back after a system window (such as the notification permission) closes.
+- 3DS mods whose code patch ships an extended header (exheader.bin), such as SingleScreen or the OOT3D 4K pack, install again instead of being refused as unsupported; the file goes beside the exefs folder, where Azahar reads it.
+- 3DS mods: an extended header from one mod can no longer be combined with another mod's code change; the app asks to disable one of them instead of starting a game that could crash.
+- Landscape: Up from the home reaches the header again, settings opened on a section keep that section, sub-pages of the settings focus their first control, and the hint bar no longer covers results while the keyboard is open.
+- Storage: the usage bar shows distinct colors for games, saves and system files, matching its legend.
+- First launch: Escape or Back while typing no longer jumps back to the server step and loses the account and password.
+- In-game: no focus ring stays on the menu button after resuming with a controller.
+- Landscape catalogue: an empty server now says so instead of « Aucun jeu dans cette sélection », and the list refreshes when the library changes.
+- Landscape home no longer shows « moins d'une minute » of play time for a game that was never played.
+
+### Internal
+
+- Split the interface into a portrait package and a landscape console package that never import each other, enforced by a test and described in docs/ui-architecture.md.
+
 ## [2026.47.3] - 2026-11-22
 
 ### Added

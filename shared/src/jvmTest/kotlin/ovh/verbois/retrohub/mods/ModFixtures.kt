@@ -63,3 +63,22 @@ internal fun zipRelease(
     ) to
         bytes
 }
+
+/** A release whose single component ships several small files, as one verified ZIP. */
+internal fun zipReleaseFiles(fs: FileSystem, id: String, installer: String, files: List<String>): Pair<ModRelease, ByteArray> {
+    val sources = files.mapIndexed { index, name ->
+        val source = "/fixture/$id/source-$index".toPath()
+        fs.createDirectories(source.parent!!)
+        fs.write(source) { write(byteArrayOf(index.toByte(), 2, 3)) }
+        name to source
+    }.toMap()
+    val zip = "/fixture/$id/pack.zip".toPath()
+    zipFiles(fs, sources, zip)
+    val bytes = fs.read(zip) { readByteArray() }
+    val hash = sha256(bytes)
+    val described = sources.map { (name, source) -> ModFile(name, 3, sha256(fs.read(source) { readByteArray() })) }
+    val release = modRelease(id, installer, described)
+    return release.copy(
+        components = listOf(ModComponent(installer, ModArtifact(hash, bytes.size.toLong(), "/api/v1/native/mods/objects/$hash", described))),
+    ) to bytes
+}

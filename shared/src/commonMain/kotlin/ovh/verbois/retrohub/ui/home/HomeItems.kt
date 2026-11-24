@@ -21,7 +21,7 @@ class HomeColumn(val key: String, val title: String, val games: List<Game>, val 
     val indices: Map<String, Int> = games.mapIndexed { index, game -> game.id to index }.toMap()
 }
 
-class HomeLibrary(val games: List<Game>, val columns: List<HomeColumn>) {
+class HomeLibrary(val games: List<Game>, val columns: List<HomeColumn>, val favorites: List<Game> = games.filter { it.favorite }) {
     val byId = games.associateBy { it.id }
     val byColumn = columns.associateBy { it.key }
     val columnIndices = columns.mapIndexed { index, column -> column.key to index }.toMap()
@@ -35,14 +35,25 @@ data class HomeSelection(val column: HomeColumn, val categoryIndex: Int, val gam
     val game: Game? get() = column.games.getOrNull(gameIndex)
 }
 
+/** Games in the « Récents » column. */
+const val RECENT_GAMES = 15
+
 fun homeLibrary(games: List<Game>, preferences: HomePreferences): HomeLibrary {
     val ordered = homeOrder(games, preferences.order, preferences.hidden, preferences.downloadedOnly, preferences.activity)
     val consoles = ordered.groupBy { it.console }.map { (console, items) ->
         HomeColumn("console:$console", ovh.verbois.retrohub.emulation.Consoles.name(console), items, console)
     }.sortedBy { it.title }
+    val recent = ordered.filter { it.lastPlayed != null }.sortedByDescending { it.lastPlayed }.take(RECENT_GAMES)
+    val favorites = ordered.filter { it.favorite }
+    // Recent and favorite columns only exist when they have something to show.
     return HomeLibrary(
         ordered,
-        listOf(HomeColumn("catalogue", "Catalogue", emptyList()), HomeColumn("favorites", "Favoris", ordered.filter { it.favorite })) + consoles,
+        listOfNotNull(
+            HomeColumn("recent", "Récents", recent).takeIf { recent.isNotEmpty() },
+            HomeColumn("catalogue", "Catalogue", emptyList()),
+            HomeColumn("favorites", "Favoris", favorites).takeIf { favorites.isNotEmpty() },
+        ) + consoles,
+        favorites,
     )
 }
 

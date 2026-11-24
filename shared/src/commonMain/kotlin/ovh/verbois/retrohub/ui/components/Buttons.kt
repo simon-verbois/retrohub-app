@@ -50,6 +50,70 @@ import ovh.verbois.retrohub.ui.theme.Palette
 
 private val Pill = RoundedCornerShape(28.dp)
 
+/** Console look shared by the common buttons: glass at rest, white with dark content under focus. */
+@Composable
+private fun ConsoleStyleButton(
+    text: String?,
+    onClick: () -> Unit,
+    modifier: Modifier,
+    icon: ImageVector?,
+    enabled: Boolean,
+    primary: Boolean = false,
+    loading: Boolean = false,
+    progress: Float? = null,
+    tint: Color = Color.White,
+    selected: Boolean = false,
+    shape: androidx.compose.ui.graphics.Shape = RoundedCornerShape(percent = 50),
+    minHeight: Dp = 48.dp,
+    label: String? = null,
+) {
+    FocusFill(
+        if (loading) null else onClick,
+        // An icon-only button keeps its spoken name (« Retour », « Fermer »).
+        modifier.heightIn(min = minHeight).then(if (text == null && label != null) Modifier.semantics { contentDescription = label } else Modifier),
+        shape = shape,
+        rest = when {
+            selected -> ConsoleTone.Selected
+            primary -> Color.White.copy(alpha = 0.24f)
+            else -> ConsoleTone.Rest
+        },
+        restContent = if (selected) ConsoleTone.OnSelected else tint,
+        enabled = enabled,
+        label = label,
+        focusScale = 1.04f,
+        contentAlignment = Alignment.Center,
+    ) {
+        Row(
+            Modifier.then(
+                if (progress !=
+                    null
+                ) {
+                    Modifier.drawBehind { drawRect(ConsoleTone.Selected.copy(alpha = 0.35f), size = Size(size.width * progress, size.height)) }
+                } else {
+                    Modifier
+                },
+            )
+                .padding(horizontal = if (text == null) 0.dp else 20.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterHorizontally),
+        ) {
+            if (loading) {
+                CircularProgressIndicator(Modifier.size(18.dp), color = androidx.compose.material3.LocalContentColor.current, strokeWidth = 2.dp)
+            } else if (icon != null) {
+                Icon(icon, null, Modifier.size(20.dp))
+            }
+            if (text != null) {
+                Text(
+                    text,
+                    Modifier.weight(1f, fill = false),
+                    style = MaterialTheme.typography.labelLarge.copy(fontFeatureSettings = "tnum"),
+                    textAlign = TextAlign.Center,
+                )
+            }
+        }
+    }
+}
+
 /** Le gros bouton d’action (Jouer, Reprendre, Continuer), couleur d’accent. */
 @Composable
 fun PrimaryButton(
@@ -62,6 +126,10 @@ fun PrimaryButton(
     progress: Float? = null,
     height: Dp = 52.dp,
 ) {
+    if (LocalConsoleStyle.current) {
+        ConsoleStyleButton(text, onClick, modifier, icon, enabled, primary = true, loading = loading, progress = progress, minHeight = 48.dp)
+        return
+    }
     val compact = LocalOverlayControls.current
     val shape = if (compact) OverlayControlShape else Pill
     // La progression est dessinée derrière le texte : la taille du bouton ne dépend que du libellé.
@@ -156,6 +224,10 @@ fun GlassButton(
     tint: Color = Palette.Text,
     height: Dp = 48.dp,
 ) {
+    if (LocalConsoleStyle.current) {
+        ConsoleStyleButton(text, onClick, modifier, icon, enabled, tint = if (tint == Palette.Text) Color.White else tint, minHeight = 44.dp)
+        return
+    }
     val compact = LocalOverlayControls.current
     val shape = if (compact) OverlayControlShape else Pill
     Row(
@@ -199,6 +271,21 @@ fun RoundButton(
     background: Color = Palette.GlassLight,
     selectedSurface: Boolean = true,
 ) {
+    if (LocalConsoleStyle.current) {
+        ConsoleStyleButton(
+            null,
+            onClick,
+            modifier.size(size).semantics { this.selected = selected },
+            icon,
+            true,
+            tint = if (tint == Palette.Text) Color.White else tint,
+            selected = selected && selectedSurface,
+            shape = CircleShape,
+            minHeight = size,
+            label = label,
+        )
+        return
+    }
     Box(
         modifier
             .size(size)
@@ -224,6 +311,10 @@ fun RoundButton(
 /** Pastille de filtre (consoles, tri), avec un point de couleur facultatif. */
 @Composable
 fun FilterChip(text: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier, dot: Color? = null) {
+    if (LocalConsoleStyle.current) {
+        ConsoleStyleButton(text, onClick, modifier.semantics { this.selected = selected }, null, true, selected = selected, minHeight = 44.dp)
+        return
+    }
     val compact = LocalOverlayControls.current
     val shape = if (compact) OverlayControlShape else Pill
     Row(

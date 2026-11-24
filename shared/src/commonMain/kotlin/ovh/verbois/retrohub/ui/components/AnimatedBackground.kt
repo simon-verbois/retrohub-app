@@ -99,11 +99,22 @@ fun AnimatedBackground(
             }
         },
     ) {
-        Crossfade(artworkUrl to console, animationSpec = tween(if (reducedMotion) 0 else 180), label = "backdrop") { (url, consoleId) ->
+        Crossfade(artworkUrl to console, animationSpec = tween(if (reducedMotion) 0 else 320), label = "backdrop") { (url, consoleId) ->
             val model = resolveArtwork(url)
-            Box(Modifier.fillMaxSize().graphicsLayer { alpha = if (scheme.dark) 0.16f else 0.2f }) {
+            // A game's art fills the screen, softened; a console keeps its discreet pattern.
+            Box(
+                Modifier.fillMaxSize().graphicsLayer {
+                    alpha = if (model != null) {
+                        (if (scheme.dark) 0.3f else 0.34f)
+                    } else if (scheme.dark) {
+                        0.16f
+                    } else {
+                        0.2f
+                    }
+                },
+            ) {
                 if (model != null) {
-                    AsyncImage(model, null, Modifier.fillMaxSize().blur(24.dp), contentScale = ContentScale.Crop)
+                    AsyncImage(model, null, Modifier.fillMaxSize().blur(16.dp), contentScale = ContentScale.Crop)
                 } else if (consoleId != null) {
                     Image(painterResource(artworkResource(consoleId)), null, Modifier.fillMaxSize().blur(12.dp), contentScale = ContentScale.Crop)
                 }

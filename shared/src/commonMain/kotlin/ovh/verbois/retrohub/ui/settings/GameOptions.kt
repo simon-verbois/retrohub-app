@@ -57,14 +57,6 @@ internal fun GameOptionsPage(controller: UiController, gameId: String) {
     val games by container.library.games.collectAsState()
     val settings by container.settings.settings.collectAsState()
     val game = games.firstOrNull { it.id == gameId } ?: return
-    val scope = rememberCoroutineScope()
-    var cheats by remember { mutableStateOf<List<Cheat>>(emptyList()) }
-    var editing by remember { mutableStateOf<Int?>(null) }
-    LaunchedEffect(game.playGameId) { cheats = container.cheats.get(game.playGameId) }
-    val save = { list: List<Cheat> ->
-        cheats = list
-        scope.launch { container.cheats.put(game.playGameId, list) }
-    }
     SettingsColumns(primary = {
         if (game.console == "3ds") {
             SettingsGroup {
@@ -99,17 +91,7 @@ internal fun GameOptionsPage(controller: UiController, gameId: String) {
             }
         }
         SectionLabel("Codes de triche")
-        SettingsGroup {
-            cheats.forEachIndexed { index, cheat ->
-                if (index > 0) GroupDivider()
-                SwitchRow(cheat.name.ifBlank { "Code ${index + 1}" }, cheat.enabled, { v ->
-                    save(cheats.mapIndexed { i, c -> if (i == index) c.copy(enabled = v) else c })
-                }, cheat.code.lines().first() + if (cheat.code.lines().size > 1) " …" else "")
-                SettingRow("Modifier ou supprimer", icon = Lucide.Pencil, onClick = { editing = index })
-            }
-            if (cheats.isNotEmpty()) GroupDivider()
-            SettingRow("Ajouter un code", icon = Lucide.Plus, onClick = { editing = -1 })
-        }
+        CheatList(controller, game.playGameId)
         if (settings.pinHash.isNotEmpty()) {
             SectionLabel("Contrôle parental")
             SettingsGroup {
@@ -123,6 +105,31 @@ internal fun GameOptionsPage(controller: UiController, gameId: String) {
         SaveHistory(controller, game.playGameId, game.console)
         GamePhoneActions(controller, game)
     })
+}
+
+/** The cheat codes of a game: a switch per code, edit, add. Shared by the game options and the console game page. */
+@Composable
+internal fun CheatList(controller: UiController, playGameId: String) {
+    val container = controller.container
+    val scope = rememberCoroutineScope()
+    var cheats by remember { mutableStateOf<List<Cheat>>(emptyList()) }
+    var editing by remember { mutableStateOf<Int?>(null) }
+    LaunchedEffect(playGameId) { cheats = container.cheats.get(playGameId) }
+    val save = { list: List<Cheat> ->
+        cheats = list
+        scope.launch { container.cheats.put(playGameId, list) }
+    }
+    SettingsGroup {
+        cheats.forEachIndexed { index, cheat ->
+            if (index > 0) GroupDivider()
+            SwitchRow(cheat.name.ifBlank { "Code ${index + 1}" }, cheat.enabled, { v ->
+                save(cheats.mapIndexed { i, c -> if (i == index) c.copy(enabled = v) else c })
+            }, cheat.code.lines().first() + if (cheat.code.lines().size > 1) " …" else "")
+            SettingRow("Modifier ou supprimer", icon = Lucide.Pencil, onClick = { editing = index })
+        }
+        if (cheats.isNotEmpty()) GroupDivider()
+        SettingRow("Ajouter un code", icon = Lucide.Plus, onClick = { editing = -1 })
+    }
 
     editing?.let { index ->
         val current = cheats.getOrNull(index)
@@ -166,7 +173,7 @@ internal fun GameOptionsPage(controller: UiController, gameId: String) {
 }
 
 @Composable
-private fun SaveHistory(controller: UiController, playGameId: String, console: String) {
+internal fun SaveHistory(controller: UiController, playGameId: String, console: String) {
     val container = controller.container
     val scope = rememberCoroutineScope()
     var saves by remember { mutableStateOf<List<LocalSave>>(emptyList()) }

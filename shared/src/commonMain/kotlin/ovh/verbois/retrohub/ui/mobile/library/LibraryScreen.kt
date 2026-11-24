@@ -1,4 +1,4 @@
-package ovh.verbois.retrohub.ui.library
+package ovh.verbois.retrohub.ui.mobile.library
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusGroup
@@ -65,6 +65,7 @@ import ovh.verbois.retrohub.ui.components.ProgressLine
 import ovh.verbois.retrohub.ui.components.RoundButton
 import ovh.verbois.retrohub.ui.components.consoleFocus
 import ovh.verbois.retrohub.ui.components.controllerDialog
+import ovh.verbois.retrohub.ui.home.*
 import ovh.verbois.retrohub.ui.home.GameCard
 import ovh.verbois.retrohub.ui.icons.Lucide
 import ovh.verbois.retrohub.ui.theme.Palette
@@ -103,7 +104,7 @@ fun LibraryScreen(controller: UiController, console: String?, favoritesOnly: Boo
         )
     }
     var focusedGame by rememberSaveable { mutableStateOf<String?>(null) }
-    val base = if (favoritesOnly) model.byColumn.getValue("favorites").games else model.games
+    val base = if (favoritesOnly) model.favorites else model.games
     val consoles = remember(base) {
         val present = base.map { it.console }.toSet()
         Consoles.all.filter { it.id in present }
@@ -372,39 +373,6 @@ private fun StorageCard(usage: StorageUsage?, onClick: () -> Unit, modifier: Mod
             Text("Stockage", style = MaterialTheme.typography.titleMedium)
             Text(usage?.let { "${formatBytes(it.free)} libres" } ?: "…", style = MaterialTheme.typography.bodySmall, maxLines = 1)
         }
-    }
-}
-
-@Composable
-fun StorageSummary(usage: StorageUsage) {
-    GlassPanel(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Icon(Lucide.HardDrive, null, Modifier.size(22.dp), tint = Palette.Select)
-                Text("${formatBytes(usage.total)} utilisés par RetroHub", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
-                Text("${formatBytes(usage.free)} libres", style = MaterialTheme.typography.bodyMedium, color = Palette.TextDim)
-            }
-            val all = (usage.total + usage.free).coerceAtLeast(1)
-            Row(Modifier.fillMaxWidth().height(10.dp).clip(RoundedCornerShape(50)).background(Palette.Line)) {
-                if (usage.roms > 0) Box(Modifier.weight(usage.roms.toFloat() / all).height(10.dp).background(Palette.Accent))
-                if (usage.saves > 0) Box(Modifier.weight(usage.saves.toFloat() / all).height(10.dp).background(Palette.Select))
-                if (usage.system > 0) Box(Modifier.weight(usage.system.toFloat() / all).height(10.dp).background(Palette.Success))
-                Box(Modifier.weight((usage.free.toFloat() / all).coerceAtLeast(0.0001f)).height(10.dp))
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) {
-                Legend(Palette.Accent, "Jeux ${formatBytes(usage.roms)}")
-                Legend(Palette.Select, "Sauvegardes ${formatBytes(usage.saves)}")
-                Legend(Palette.Success, "Fichiers système ${formatBytes(usage.system)}")
-            }
-        }
-    }
-}
-
-@Composable
-private fun Legend(color: Color, text: String) {
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        Box(Modifier.size(8.dp).clip(RoundedCornerShape(50)).background(color))
-        Text(text, style = MaterialTheme.typography.bodySmall)
     }
 }
 

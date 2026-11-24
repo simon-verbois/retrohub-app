@@ -28,9 +28,9 @@ import ovh.verbois.retrohub.account.Account
 import ovh.verbois.retrohub.api.ApiJson
 import ovh.verbois.retrohub.api.LibraryGame
 import ovh.verbois.retrohub.data.GameEntity
-import ovh.verbois.retrohub.ui.home.HomeScreen
+import ovh.verbois.retrohub.ui.AppShell
+import ovh.verbois.retrohub.ui.HomeScreen
 import ovh.verbois.retrohub.ui.nav.Route
-import ovh.verbois.retrohub.ui.shell.ConsoleShell
 import ovh.verbois.retrohub.ui.theme.RetroHubTheme
 
 @RunWith(AndroidJUnit4::class)
@@ -63,7 +63,7 @@ class NavigationStateTest {
             val ui = remember { UiController(container, scope).also { controller = it } }
             LocalInputModeManager.current.requestInputMode(InputMode.Keyboard)
             RetroHubTheme {
-                ConsoleShell(ui, Account("https://example.invalid", userId = "test", username = "Test", deviceId = "test", deviceName = "Test")) { route ->
+                AppShell(ui, Account("https://example.invalid", userId = "test", username = "Test", deviceId = "test", deviceName = "Test")) { route ->
                     if (route == Route.Home) HomeScreen(ui) else Text("Outil ouvert")
                 }
             }
@@ -74,16 +74,13 @@ class NavigationStateTest {
         val before = rule.onNodeWithTag("home-game-nav-150").fetchSemanticsNode().boundsInRoot
         rule.runOnIdle { controller.nav.go(Route.Settings()) }
         rule.onNodeWithText("Outil ouvert").assertIsDisplayed()
-        val parentCover = rule.onNodeWithTag("home-cover-nav-150", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
-        val panel = rule.onNodeWithTag("home-overlay").fetchSemanticsNode().boundsInRoot
-        val home = rule.onNodeWithTag("home-content").fetchSemanticsNode().boundsInRoot
-        // Dialog and activity coordinates have different origins; compare widths in pixels.
-        assertTrue("Parent=$parentCover, panel=$panel, home=$home", panel.width <= home.right - parentCover.right)
-        rule.onNodeWithTag("home-content").assertIsDisplayed()
+        // Tools open as full-screen pages; the home stays composed underneath, with its selection.
+        rule.onNodeWithTag("home-overlay").assertIsDisplayed()
+        rule.onNodeWithTag("home-game-nav-150", useUnmergedTree = true).assertExists()
         rule.runOnIdle { controller.back() }
         waitFocused("home-game-nav-150")
         rule.runOnIdle { controller.cycleHomeColumn(-1) }
-        rule.onNodeWithText("Aucun favori").assertIsDisplayed()
+        rule.runOnIdle { assertEquals("catalogue", controller.homeColumn) }
         rule.runOnIdle { controller.cycleHomeColumn(1) }
         waitFocused("home-game-nav-150")
         assertEquals(before, rule.onNodeWithTag("home-game-nav-150").fetchSemanticsNode().boundsInRoot)

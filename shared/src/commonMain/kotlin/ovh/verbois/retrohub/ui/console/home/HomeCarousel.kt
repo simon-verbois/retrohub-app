@@ -1,15 +1,25 @@
-package ovh.verbois.retrohub.ui.home
+package ovh.verbois.retrohub.ui.console.home
 
 import androidx.compose.animation.*
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -33,11 +43,16 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.delay
 import ovh.verbois.retrohub.core.formatPlayTime
 import ovh.verbois.retrohub.library.DownloadState
 import ovh.verbois.retrohub.library.Game
 import ovh.verbois.retrohub.ui.UiController
 import ovh.verbois.retrohub.ui.components.*
+import ovh.verbois.retrohub.ui.components.GameArt
+import ovh.verbois.retrohub.ui.console.xmbHalo
+import ovh.verbois.retrohub.ui.home.*
+import ovh.verbois.retrohub.ui.icons.Lucide
 import ovh.verbois.retrohub.ui.icons.XmbIcons
 import ovh.verbois.retrohub.ui.nav.Route
 import ovh.verbois.retrohub.ui.theme.Palette
@@ -96,9 +111,15 @@ internal fun HomeColumnContent(
                 ) { Icon(XmbIcons.Catalogue, null, Modifier.size((geometry.coverBoxSize * 0.6f).dp), tint = Palette.Text) }
                 Text("Parcourir le catalogue", style = MaterialTheme.typography.titleLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
+            CataloguePreview(
+                controller,
+                current && active && !categoryLane,
+                reduced,
+                Modifier.offset(x = geometry.rowStart.dp, y = (geometry.selectedCenter + geometry.selectedHeight / 2 + 14f).dp).width(laneWidth),
+            )
         } else if (column.games.isEmpty()) {
             Text(
-                "Aucun favori",
+                "Aucun jeu",
                 Modifier.offset(x = geometry.rowStart.dp, y = (geometry.selectedCenter - geometry.selectedHeight / 2).dp).width(laneWidth),
                 style = MaterialTheme.typography.titleLarge,
                 maxLines = 1,
@@ -200,13 +221,19 @@ internal fun HomeColumnContent(
                                 Modifier.padding(horizontal = HOME_GAME_TEXT_PADDING.dp).heightIn(min = geometry.coverBoxSize.dp),
                                 verticalArrangement = Arrangement.spacedBy(2.dp, Alignment.CenterVertically),
                             ) {
-                                Text(
-                                    item.title,
-                                    style = MaterialTheme.typography.titleLarge,
-                                    fontWeight = FontWeight.Normal,
-                                    maxLines = 2,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Text(
+                                        item.title,
+                                        Modifier.weight(1f, fill = false),
+                                        style = MaterialTheme.typography.titleLarge,
+                                        fontWeight = FontWeight.Normal,
+                                        maxLines = 2,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                    if (item.favorite) {
+                                        Icon(Lucide.HeartFilled, "Favori", Modifier.size(16.dp).testTag("home-favorite-${item.id}"), tint = Palette.Text)
+                                    }
+                                }
                                 HomeGameAction(controller, item)
                                 if (current) {
                                     HomeGameInfo(controller, item, index, column.games.size, restingId == item.id)
@@ -252,7 +279,11 @@ private fun HomeGameInfo(controller: UiController, game: Game, index: Int, count
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            listOfNotNull("${index + 1} / $count", game.remote.year?.toString(), formatPlayTime(game.remote.playedSeconds)).joinToString(" · "),
+            listOfNotNull(
+                "${index + 1} / $count",
+                game.remote.year?.toString(),
+                game.remote.playedSeconds.takeIf { it > 0 }?.let { formatPlayTime(it) },
+            ).joinToString(" · "),
             style = MaterialTheme.typography.bodySmall,
             color = Palette.TextDim,
             maxLines = 1,
@@ -281,5 +312,45 @@ private fun HomeGameAction(controller: UiController, game: Game) {
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
         )
+    }
+}
+
+/**
+ * Under « Catalogue », once the focus rests there: what the page holds (counts and a few covers), drawn
+ * where the player will find them, like the PS5 previews a hub under its tile.
+ */
+@Composable
+private fun CataloguePreview(controller: UiController, shown: Boolean, reduced: Boolean, modifier: Modifier) {
+    val games by controller.container.library.games.collectAsState()
+    val settled by produceState(false, shown) {
+        value = false
+        if (shown) {
+            delay(420)
+            value = true
+        }
+    }
+    AnimatedVisibility(settled && games.isNotEmpty(), modifier, enter = fadeIn(tween(if (reduced) 0 else 260)), exit = fadeOut(tween(if (reduced) 0 else 90))) {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            val onDevice = games.count { it.downloaded }
+            Text(
+                listOfNotNull(
+                    if (games.size == 1) "1 jeu" else "${games.size} jeux",
+                    "$onDevice sur l’appareil".takeIf { onDevice > 0 },
+                ).joinToString(" · "),
+                style = MaterialTheme.typography.bodyMedium,
+                color = Palette.TextDim,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                games.take(6).forEach { game ->
+                    GameArt(
+                        game.remote.coverUrl,
+                        game.console,
+                        game.title,
+                        Modifier.size(64.dp).clip(RoundedCornerShape(10.dp)),
+                        showTitleOnFallback = false,
+                    )
+                }
+            }
+        }
     }
 }
